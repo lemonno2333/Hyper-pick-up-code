@@ -80,7 +80,7 @@
         <activity
             android:name=".IdentityChooserActivity"
             android:label="身份码选择"
-            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:theme="@style/Theme.澎湃记.Overlay"
             android:excludeFromRecents="true"
             android:noHistory="true"
             android:exported="false"
@@ -104,7 +104,7 @@
             android:name=".CaptureTileService"
             android:exported="true"
             android:label="截图识别"
-            android:icon="@drawable/note"
+            android:icon="@drawable/note_qs"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
             <intent-filter>
                 <action android:name="android.service.quicksettings.action.QS_TILE" />

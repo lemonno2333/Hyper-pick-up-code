@@ -81,7 +81,8 @@ object AccessibilityShortcutHelper {
     }
 
     fun configureShortcutWithRoot(context: Context): Boolean {
-        if (!RootHelper.hasRootAccess()) return false
+        // User-initiated action; force refresh so a previous denial doesn't block retry.
+        if (!RootHelper.hasRootAccess(forceRefresh = true)) return false
         backupCurrentSettings(context, ::runSettingsGetAsRoot)
         val component = getServiceComponent(context)
 
@@ -110,7 +111,8 @@ object AccessibilityShortcutHelper {
     }
 
     fun disableServiceWithRoot(context: Context): Boolean {
-        if (!RootHelper.hasRootAccess()) return false
+        // User-initiated action; force refresh so a previous denial doesn't block retry.
+        if (!RootHelper.hasRootAccess(forceRefresh = true)) return false
         if (restoreBackedUpSettings(context, ::runSettingsPutAsRoot, ::runSettingsDeleteAsRoot)) {
             return true
         }

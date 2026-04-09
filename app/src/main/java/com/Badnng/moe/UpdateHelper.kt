@@ -241,6 +241,7 @@ object UpdateHelper {
 
         try {
             context.startActivity(intent)
+            StorageCleanupHelper.markUpdateApkForCleanup(context, file.absolutePath)
         } catch (e: Exception) {
             Toast.makeText(context, "无法启动安装器", Toast.LENGTH_SHORT).show()
         }

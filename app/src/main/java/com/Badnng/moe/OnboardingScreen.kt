@@ -74,12 +74,13 @@ fun OnboardingScreen(onComplete: () -> Unit) {
 
     // 定期检查权限状态
     LaunchedEffect(Unit) {
+        // Root 不需要高频检测；只检查一次 su 是否存在，避免在未使用时频繁触发 Magisk 提示。
+        rootReady = withContext(Dispatchers.IO) { RootHelper.isSuAvailable() }
         while (true) {
             hasNotificationPermission = NotificationManagerCompat.from(context).areNotificationsEnabled()
             isIgnoringBattery = checkBatteryOptimization(context)
             hasUsageStatsPermission = checkUsageStatsPermission(context)
             shizukuReady = withContext(Dispatchers.IO) { isShizukuReady() }
-            rootReady = withContext(Dispatchers.IO) { RootHelper.hasRootAccess() }
             keepAliveEnabled = prefs.getBoolean("keep_alive_enabled", false)
             delay(1500)
         }

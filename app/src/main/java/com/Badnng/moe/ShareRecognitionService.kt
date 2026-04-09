@@ -105,64 +105,9 @@ class ShareRecognitionService : Service() {
             val database = OrderDatabase.getDatabase(applicationContext)
             val orderDao = database.orderDao()
             val orderGroupDao = database.orderGroupDao()
-
-            if (multiResult.hasMultipleCodes && recognizedOrders.size > 1) {
-                val firstOrder = recognizedOrders.first()
-                val existingGroups = orderGroupDao.getAllGroupsList()
-                val maxGroupNumber = existingGroups
-                    .map { it.name }
-                    .filter { it.startsWith("\u7ec4") }
-                    .mapNotNull { it.removePrefix("\u7ec4").toIntOrNull() }
-                    .maxOrNull() ?: 0
-                val groupName = "\u7ec4${maxGroupNumber + 1}"
-
-                val orderGroup = OrderGroup(
-                    name = groupName,
-                    orderType = firstOrder.type,
-                    brandName = firstOrder.brand,
-                    screenshotPath = screenshotFile.absolutePath,
-                    recognizedText = recognizedOrders.joinToString("\n") { it.fullText },
-                    sourceApp = "\u5206\u4eab\u8bc6\u522b",
-                    orderCount = recognizedOrders.size
-                )
-                val groupId = orderGroupDao.insertGroup(orderGroup)
-
-                val insertedOrders = mutableListOf<OrderEntity>()
-                for (result in recognizedOrders) {
-                    val code = result.code ?: continue
-                    val order = OrderEntity(
-                        takeoutCode = code,
-                        qrCodeData = result.qr,
-                        screenshotPath = screenshotFile.absolutePath,
-                        recognizedText = "\u5206\u4eab\u8bc6\u522b",
-                        orderType = result.type,
-                        brandName = result.brand,
-                        fullText = result.fullText,
-                        pickupLocation = result.pickupLocation,
-                        sourceApp = "\u5206\u4eab\u8bc6\u522b",
-                        groupId = groupId
-                    )
-                    orderDao.insert(order)
-                    insertedOrders.add(order)
-                }
-
-                val notificationGroup = orderGroup.copy(id = groupId)
-                NotificationHelper(applicationContext)
-                    .showGroupNotification(notificationGroup, insertedOrders)
-
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(
-                        applicationContext,
-                        "\u8bc6\u522b\u5230${recognizedOrders.size}\u4e2a\u53d6\u4ef6\u7801",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                }
-
-                val refreshIntent = Intent("com.Badnng.moe.REFRESH_ORDERS")
-                LocalBroadcastManager.getInstance(applicationContext).sendBroadcast(refreshIntent)
-            } else {
-                val result = recognizedOrders.first()
-                val code = result.code ?: return
+            val insertedOrders = mutableListOf<OrderEntity>()
+            for (result in recognizedOrders) {
+                val code = result.code ?: continue
                 val order = OrderEntity(
                     takeoutCode = code,
                     qrCodeData = result.qr,
@@ -175,16 +120,60 @@ class ShareRecognitionService : Service() {
                     sourceApp = "\u5206\u4eab\u8bc6\u522b"
                 )
                 orderDao.insert(order)
-                NotificationHelper(applicationContext).showPromotedLiveUpdate(order, order.brandName)
+                insertedOrders.add(order)
+            }
+            if (insertedOrders.isEmpty()) return
 
+            // 每次新识别后立即重整分组：不依赖打开 App。
+            DailyExpressGroupingHelper.regroupPendingExpressByDay(orderDao, orderGroupDao)
+            val notificationHelper = NotificationHelper(applicationContext)
+            val refreshedInsertedOrders = insertedOrders.mapNotNull { orderDao.getOrderById(it.id) }
+            val groupedIds = refreshedInsertedOrders.mapNotNull { it.groupId }.toSet()
+            val allOrders = orderDao.getAllOrdersList()
+
+            if (groupedIds.isNotEmpty()) {
+                groupedIds.forEach { groupId ->
+                    val group = orderGroupDao.getGroupById(groupId) ?: return@forEach
+                    val groupOrders = allOrders
+                        .filter { it.groupId == groupId && !it.isCompleted }
+                        .sortedByDescending { it.createdAt }
+                    if (groupOrders.size >= 2) {
+                        groupOrders.forEach { notificationHelper.cancelNotification(it.id) }
+                        orderGroupDao.updateOrderCount(groupId, groupOrders.size)
+                        notificationHelper.showGroupNotification(
+                            group.copy(orderCount = groupOrders.size),
+                            groupOrders
+                        )
+                    }
+                }
                 withContext(Dispatchers.Main) {
                     Toast.makeText(
                         applicationContext,
-                        "\u8bc6\u522b\u6210\u529f: $code",
+                        "\u65b0\u8bc6\u522b\u53d6\u4ef6\u7801\u5df2\u81ea\u52a8\u6574\u7406",
                         Toast.LENGTH_SHORT
                     ).show()
                 }
             }
+
+            refreshedInsertedOrders
+                .filter { it.groupId == null }
+                .forEach { order ->
+                    notificationHelper.showPromotedLiveUpdate(order, order.brandName)
+                }
+
+            if (groupedIds.isEmpty()) {
+                val firstCode = refreshedInsertedOrders.firstOrNull()?.takeoutCode
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        applicationContext,
+                        if (firstCode != null) "\u8bc6\u522b\u6210\u529f: $firstCode" else "\u8bc6\u522b\u6210\u529f",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+
+            val refreshIntent = Intent("com.Badnng.moe.REFRESH_ORDERS")
+            LocalBroadcastManager.getInstance(applicationContext).sendBroadcast(refreshIntent)
         } finally {
             helper.close()
             bitmap.recycle()

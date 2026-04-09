@@ -83,11 +83,6 @@ class ScreenCaptureService : Service() {
         }
 
         if (useRoot) {
-            if (!RootHelper.hasRootAccess()) {
-                Toast.makeText(applicationContext, "Root 不可用，无法执行截图", Toast.LENGTH_SHORT).show()
-                stopSelf()
-                return START_NOT_STICKY
-            }
             startRootCaptureSingleTry()
         } else if (useShizuku) {
             startShizukuCaptureSingleTry()
@@ -361,62 +356,9 @@ class ScreenCaptureService : Service() {
                 val database = OrderDatabase.getDatabase(applicationContext)
                 val orderGroupDao = database.orderGroupDao()
                 val orderDao = database.orderDao()
-
-                if (multiResult.hasMultipleCodes && recognizedOrders.size > 1) {
-                    val existingGroups = orderGroupDao.getAllGroupsList()
-                    val maxGroupNumber = existingGroups
-                        .map { it.name }
-                        .filter { it.startsWith("\u7ec4") }
-                        .mapNotNull { it.removePrefix("\u7ec4").toIntOrNull() }
-                        .maxOrNull() ?: 0
-                    val groupName = "\u7ec4${maxGroupNumber + 1}"
-
-                    val group = OrderGroup(
-                        name = groupName,
-                        orderType = recognizedOrders.first().type,
-                        brandName = recognizedOrders.first().brand,
-                        screenshotPath = screenshotFile.absolutePath,
-                        recognizedText = recognizedOrders.joinToString("\n") { it.fullText },
-                        sourceApp = sourceApp,
-                        sourcePackage = sourcePkg,
-                        createdAt = System.currentTimeMillis(),
-                        isCompleted = false,
-                        orderCount = recognizedOrders.size
-                    )
-                    val groupId = orderGroupDao.insertGroup(group)
-
-                    val insertedOrders = mutableListOf<OrderEntity>()
-                    for (result in recognizedOrders) {
-                        val code = result.code ?: continue
-                        val order = OrderEntity(
-                            takeoutCode = code,
-                            qrCodeData = result.qr,
-                            screenshotPath = screenshotFile.absolutePath,
-                            recognizedText = "\u81ea\u52a8\u8bc6\u522b",
-                            orderType = result.type,
-                            brandName = result.brand,
-                            fullText = result.fullText,
-                            sourceApp = sourceApp,
-                            sourcePackage = sourcePkg,
-                            pickupLocation = result.pickupLocation,
-                            groupId = groupId
-                        )
-                        orderDao.insert(order)
-                        insertedOrders.add(order)
-                    }
-
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(
-                            applicationContext,
-                            "\u8bc6\u522b\u5230${recognizedOrders.size}\u4e2a\u53d6\u4ef6\u7801",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    }
-                    NotificationHelper(applicationContext)
-                        .showGroupNotification(group.copy(id = groupId), insertedOrders)
-                } else {
-                    val result = recognizedOrders.first()
-                    val code = result.code ?: return@launch
+                val insertedOrders = mutableListOf<OrderEntity>()
+                for (result in recognizedOrders) {
+                    val code = result.code ?: continue
                     val order = OrderEntity(
                         takeoutCode = code,
                         qrCodeData = result.qr,
@@ -430,15 +372,56 @@ class ScreenCaptureService : Service() {
                         pickupLocation = result.pickupLocation
                     )
                     orderDao.insert(order)
+                    insertedOrders.add(order)
+                }
+                if (insertedOrders.isEmpty()) return@launch
 
+                // 每次新识别后立即重整分组：不依赖打开 App。
+                DailyExpressGroupingHelper.regroupPendingExpressByDay(orderDao, orderGroupDao)
+                val notificationHelper = NotificationHelper(applicationContext)
+                val refreshedInsertedOrders = insertedOrders.mapNotNull { orderDao.getOrderById(it.id) }
+                val groupedIds = refreshedInsertedOrders.mapNotNull { it.groupId }.toSet()
+                val allOrders = orderDao.getAllOrdersList()
+
+                if (groupedIds.isNotEmpty()) {
+                    groupedIds.forEach { groupId ->
+                        val group = orderGroupDao.getGroupById(groupId) ?: return@forEach
+                        val groupOrders = allOrders
+                            .filter { it.groupId == groupId && !it.isCompleted }
+                            .sortedByDescending { it.createdAt }
+                        if (groupOrders.size >= 2) {
+                            groupOrders.forEach { notificationHelper.cancelNotification(it.id) }
+                            orderGroupDao.updateOrderCount(groupId, groupOrders.size)
+                            notificationHelper.showGroupNotification(
+                                group.copy(orderCount = groupOrders.size),
+                                groupOrders
+                            )
+                        }
+                    }
                     withContext(Dispatchers.Main) {
                         Toast.makeText(
                             applicationContext,
-                            "\u8bc6\u522b\u6210\u529f: $code",
+                            "\u65b0\u8bc6\u522b\u53d6\u4ef6\u7801\u5df2\u81ea\u52a8\u6574\u7406",
                             Toast.LENGTH_SHORT
                         ).show()
                     }
-                    NotificationHelper(applicationContext).showPromotedLiveUpdate(order, order.brandName)
+                }
+
+                refreshedInsertedOrders
+                    .filter { it.groupId == null }
+                    .forEach { order ->
+                        notificationHelper.showPromotedLiveUpdate(order, order.brandName)
+                    }
+
+                if (groupedIds.isEmpty()) {
+                    val firstCode = refreshedInsertedOrders.firstOrNull()?.takeoutCode
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(
+                            applicationContext,
+                            if (firstCode != null) "\u8bc6\u522b\u6210\u529f: $firstCode" else "\u8bc6\u522b\u6210\u529f",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
                 }
             } catch (e: Exception) {
                 Log.e("CaptureLog", "Recognition failed", e)

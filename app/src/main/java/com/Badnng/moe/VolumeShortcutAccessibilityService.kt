@@ -33,7 +33,7 @@ class VolumeShortcutAccessibilityService : AccessibilityService() {
 
         val captureMode = prefs.getString("capture_mode", "media_projection")
         val useShizuku = captureMode == "shizuku" && AccessibilityShortcutHelper.isShizukuReady()
-        val useRoot = captureMode == "root" && RootHelper.hasRootAccess()
+        val useRoot = captureMode == "root"
 
         // 启动截图流程
         val intent = if (useShizuku || useRoot) {

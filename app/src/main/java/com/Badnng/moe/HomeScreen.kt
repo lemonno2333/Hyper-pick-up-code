@@ -494,6 +494,7 @@ fun HomeScreen(
 }
 
 private fun openTaobaoIdentityEntry(context: Context) {
+    (context as? MainActivity)?.clearNotificationLaunchState()
     val pkg = "com.taobao.taobao"
     val lastmile = "https://pages-fast.m.taobao.com/wow/z/uniapp/1100333/last-mile-fe/m-end-school-tab/home"
     val candidates = listOf(
@@ -518,6 +519,7 @@ private fun openTaobaoIdentityEntry(context: Context) {
 }
 
 private fun openPddIdentityEntry(context: Context) {
+    (context as? MainActivity)?.clearNotificationLaunchState()
     val pkg = "com.xunmeng.pinduoduo"
     val schemes = listOf(
         "pinduoduo://com.xunmeng.pinduoduo/mdkd/package",

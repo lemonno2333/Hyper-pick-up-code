@@ -4,10 +4,18 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.drawable.Icon
 import android.service.quicksettings.TileService
 import rikka.shizuku.Shizuku
 
 class CaptureTileService : TileService() {
+    override fun onStartListening() {
+        super.onStartListening()
+        qsTile?.let { tile ->
+            tile.icon = Icon.createWithResource(this, R.drawable.note_qs)
+            tile.updateTile()
+        }
+    }
     
     override fun onClick() {
         super.onClick()
@@ -15,7 +23,7 @@ class CaptureTileService : TileService() {
         val prefs = getSharedPreferences("settings", Context.MODE_PRIVATE)
         val captureMode = prefs.getString("capture_mode", "media_projection")
         val useShizuku = captureMode == "shizuku" && isShizukuReady()
-        val useRoot = captureMode == "root" && RootHelper.hasRootAccess()
+        val useRoot = captureMode == "root"
 
         // 无论哪种模式，都启动 PermissionActivity，利用 startActivityAndCollapse 强制关闭控制中心
         val intent = Intent(this, PermissionActivity::class.java).apply {
