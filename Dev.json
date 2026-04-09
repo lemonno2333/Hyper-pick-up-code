@@ -1,7 +1,7 @@
 {
-  "versionCode": 2026040211,
-  "versionName": "26.4.2.C01-Dev",
-  "releaseNotes": "您正在使用 澎湃记 的测试版本，可能会遇到不稳定，闪退，数据丢失等情况，请谨慎升级\n26.4.2.C01-Dev版本更新如下：\n1.添加 Shizuku服务停止/重启手机时，截图免授权弹窗依然生效的特性（需测试）\n\n2.优化 部分页面在纯黑背景下的可见度\n\n3.修改 部分页面的文字叙述\n\n4.优化 更新卡片的显示\n\n5.修复 部分UI未进行适配纯黑/深色模式\n\n6.添加 引导页面第二步 我知道了 按钮延迟15秒可点\n\n7.添加 主页页面打开拼多多和淘宝身份码\n\n8.优化 主页+号的显示效果\n\n9.修改 小白条沉浸的实现方案（小窗模式也可沉浸）",
-  "downloadUrl": "https://github.com/badnng/Hyper-pick-up-code/releases/download/v26.4.2.C01-Dev/app-release.apk",
-  "md5": "10fcb6a1d346ad22bdcdfff414340646"
+  "versionCode": 2026040911,
+  "versionName": "26.4.9.C01-Dev",
+  "releaseNotes": "您正在使用 澎湃记 的测试版本，可能会遇到不稳定，闪退，数据丢失等情况，请谨慎升级\n\n26.4.9.C01-Dev版本更新如下：\n修复 部分机型无法使用高刷新率（需验证）\n修复 使用magisk进行root实现时，magisk一直弹出toast提示的问题（需验证）\n修复 组卡片通知进入之后无法在主页打开身份码的问题\n\n添加 餐饮餐位叫号获取（未完善）\n添加 已取截图7天后自动清理（需验证）\n添加 更新之后自动清理更新包\n添加 “赞助”子页面（免费软件，酌情支持！时间需要成本！）\n\n优化 部分取餐码/一识多识别规则\n优化 单快递卡片通知的身份码二级页面未沉浸\n优化 身份码二级页面的按钮显示效果\n优化 快捷设置磁贴icon的显示效果\n优化 快递组卡片的显示规则（规则大变化）\n\n移除 内部使用的HyperOS的icon文件",
+  "downloadUrl": "https://github.com/badnng/Hyper-pick-up-code/releases/download/v26.4.9.C01-Dev/app-release.apk",
+  "md5": "dd48123cafd58ae813320802653aa798"
 }
