@@ -64,9 +64,9 @@
 
 ## 📷 动图演示
 <p align="center">
-  <img src="./20260409-205359-6d37e5.gif" width="30%" />
-  <img src="./20260409-205349-68461c.gif" width="30%" />
-  <img src="./20260409-205352-2849ac.gif" width="30%" />
+  <img src="./README/20260409-205359-6d37e5.gif" width="30%" />
+  <img src="./README/20260409-205349-68461c.gif" width="30%" />
+  <img src="./README/20260409-205352-2849ac.gif" width="30%" />
 </p>
 
 ---
@@ -79,6 +79,6 @@
 这个项目完全使用vibe coding，如果介意请勿使用，设计完全是自己的想法，自己不会实现罢了！
 
 <p align="center">
-  <img src="./Alipay.jpg" width="30%" />
-  <img src="./Wechat.png" width="50%" />
+  <img src="./README/Alipay.jpg" width="30%" />
+  <img src="./README/Wechat.png" width="50%" />
 </p>
