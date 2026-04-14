@@ -394,14 +394,44 @@ fun QuickViewDialogContent(order: OrderEntity, onDismiss: () -> Unit) {
                     }
                 }
 
+                if (isExpress) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = { openTaobaoIdentityEntry(context) },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFFFF8A00),
+                                contentColor = Color.White
+                            )
+                        ) {
+                            Text("打开淘宝身份码")
+                        }
+                        Button(
+                            onClick = { openPddIdentityEntry(context) },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFFE53935),
+                                contentColor = Color.White
+                            )
+                        ) {
+                            Text("打开拼多多身份码")
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // 下半部分：已完成和关闭按钮
+                // 下半部分：关闭和已完成按钮（放在身份码按钮下面）
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // 关闭按钮
                     Button(
                         onClick = onDismiss,
                         modifier = Modifier.weight(1f),
@@ -409,8 +439,7 @@ fun QuickViewDialogContent(order: OrderEntity, onDismiss: () -> Unit) {
                     ) {
                         Text("关闭", fontSize = 16.sp)
                     }
-                    
-                    // 已完成按钮
+
                     OutlinedButton(
                         onClick = markCompleted,
                         modifier = Modifier.weight(1f),
@@ -420,29 +449,6 @@ fun QuickViewDialogContent(order: OrderEntity, onDismiss: () -> Unit) {
                         )
                     ) {
                         Text("已完成", fontSize = 16.sp)
-                    }
-                }
-
-                if (isExpress) {
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = { openTaobaoIdentityEntry(context) },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text("打开淘宝身份码")
-                        }
-                        OutlinedButton(
-                            onClick = { openPddIdentityEntry(context) },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text("打开拼多多身份码")
-                        }
                     }
                 }
             }
@@ -616,14 +622,44 @@ fun QuickViewDialogContent(order: OrderEntity, onDismiss: () -> Unit) {
                     }
                 }
 
+                if (isExpress) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = { openTaobaoIdentityEntry(context) },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFFFF8A00),
+                                contentColor = Color.White
+                            )
+                        ) {
+                            Text("打开淘宝身份码")
+                        }
+                        Button(
+                            onClick = { openPddIdentityEntry(context) },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFFE53935),
+                                contentColor = Color.White
+                            )
+                        ) {
+                            Text("打开拼多多身份码")
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // 关闭和已完成按钮
+                // 关闭和已完成按钮（放在身份码按钮下面）
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // 关闭按钮
                     Button(
                         onClick = onDismiss,
                         modifier = Modifier.weight(1f),
@@ -631,8 +667,7 @@ fun QuickViewDialogContent(order: OrderEntity, onDismiss: () -> Unit) {
                     ) {
                         Text("关闭", fontSize = 16.sp)
                     }
-                    
-                    // 已完成按钮
+
                     OutlinedButton(
                         onClick = markCompleted,
                         modifier = Modifier.weight(1f),
@@ -642,29 +677,6 @@ fun QuickViewDialogContent(order: OrderEntity, onDismiss: () -> Unit) {
                         )
                     ) {
                         Text("已完成", fontSize = 16.sp)
-                    }
-                }
-
-                if (isExpress) {
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = { openTaobaoIdentityEntry(context) },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text("打开淘宝身份码")
-                        }
-                        OutlinedButton(
-                            onClick = { openPddIdentityEntry(context) },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text("打开拼多多身份码")
-                        }
                     }
                 }
             }

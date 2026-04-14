@@ -60,12 +60,40 @@ class ProcessTextRecognitionService : Service() {
                 pickupLocation = result.pickupLocation,
                 sourceApp = "文字选择"
             )
-            
-            OrderDatabase.getDatabase(applicationContext).orderDao().insert(order)
-            NotificationHelper(applicationContext).showPromotedLiveUpdate(order, result.brand)
-            
-            withContext(Dispatchers.Main) {
-                Toast.makeText(applicationContext, "识别成功：${result.code}", Toast.LENGTH_SHORT).show()
+
+            val db = OrderDatabase.getDatabase(applicationContext)
+            val orderDao = db.orderDao()
+            val groupDao = db.orderGroupDao()
+            orderDao.insert(order)
+
+            DailyExpressGroupingHelper.regroupPendingExpressByDay(orderDao, groupDao)
+
+            val notificationHelper = NotificationHelper(applicationContext)
+            val refreshedOrder = orderDao.getOrderById(order.id)
+            val groupId = refreshedOrder?.groupId
+            if (groupId != null) {
+                val group = groupDao.getGroupById(groupId)
+                val groupOrders = orderDao.getAllOrdersList()
+                    .filter { it.groupId == groupId && !it.isCompleted }
+                    .sortedByDescending { it.createdAt }
+                if (group != null && groupOrders.size >= 2) {
+                    groupOrders.forEach { notificationHelper.cancelNotification(it.id) }
+                    groupDao.updateOrderCount(groupId, groupOrders.size)
+                    notificationHelper.showGroupNotification(group.copy(orderCount = groupOrders.size), groupOrders)
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(applicationContext, "新识别取件码已自动整理", Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    notificationHelper.showPromotedLiveUpdate(order, result.brand)
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(applicationContext, "识别成功：${result.code}", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } else {
+                notificationHelper.showPromotedLiveUpdate(order, result.brand)
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(applicationContext, "识别成功：${result.code}", Toast.LENGTH_SHORT).show()
+                }
             }
         } else {
             withContext(Dispatchers.Main) {

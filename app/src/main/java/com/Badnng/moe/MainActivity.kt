@@ -24,6 +24,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.Badnng.moe.ui.theme.澎湃记Theme
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -59,6 +60,17 @@ class MainActivity : ComponentActivity() {
         settingsPrefs.registerOnSharedPreferenceChangeListener(settingsListener)
 
         LogManager.startCollecting()
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            StorageCleanupHelper.runStartupCleanup(applicationContext)
+            runCatching {
+                val db = OrderDatabase.getDatabase(applicationContext)
+                DailyExpressGroupingHelper.regroupPendingExpressByDay(
+                    orderDao = db.orderDao(),
+                    groupDao = db.orderGroupDao()
+                )
+            }
+        }
 
         // 检查是否从通知进入
         isFromNotification = intent?.getBooleanExtra("from_notification", false) == true
@@ -142,4 +154,9 @@ class MainActivity : ComponentActivity() {
     }
 
     fun isFromNotification(): Boolean = isFromNotification
+
+    // 外部跳转（如身份码）前调用，避免 onUserLeaveHint 抢先把任务移除导致跳转失败。
+    fun clearNotificationLaunchState() {
+        isFromNotification = false
+    }
 }

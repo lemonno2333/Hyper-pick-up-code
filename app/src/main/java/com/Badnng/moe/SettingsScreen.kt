@@ -7,6 +7,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.BitmapFactory
 import android.graphics.drawable.Icon
 import android.net.Uri
 import android.os.Build
@@ -76,7 +77,7 @@ import com.Badnng.moe.OrderDatabase
 import java.io.File
 
 enum class SettingsPage {
-    Main, Preference, Permission, Screenshot, KeepAlive, Storage, About
+    Main, Preference, Permission, Screenshot, KeepAlive, Storage, About, Sponsor
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -146,10 +147,17 @@ fun SettingsScreen(
                 SettingsPage.KeepAlive -> "保活设置"
                 SettingsPage.Storage -> "清理空间"
                 SettingsPage.About -> "关于"
+                SettingsPage.Sponsor -> "赞助"
                 else -> ""
             }
             Box(modifier = Modifier.fillMaxSize().graphicsLayer { scaleX = currentScale; scaleY = currentScale; translationX = currentTranslationX; shape = RoundedCornerShape(currentCornerRadius); clip = true }.border(width = if (isPredictiveBackInProgress) 1.dp else 0.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = backProgress), shape = RoundedCornerShape(currentCornerRadius)).background(MaterialTheme.colorScheme.background)) {
-                SubPage(title, displayPage, performHaptic) { performHaptic(); currentPage = SettingsPage.Main }
+                SubPage(
+                    title = title,
+                    page = displayPage,
+                    performHaptic = performHaptic,
+                    onNavigate = { currentPage = it },
+                    onBack = { performHaptic(); currentPage = SettingsPage.Main }
+                )
             }
         }
     }
@@ -182,6 +190,7 @@ fun MainSettingsList(onNavigate: (SettingsPage) -> Unit) {
 
         SettingsListItem(title = "清理空间", description = "管理App占用的缓存与截图空间", onClick = { onNavigate(SettingsPage.Storage) })
         SettingsListItem(title = "关于", description = "应用信息与开源许可", onClick = { onNavigate(SettingsPage.About) })
+        SettingsListItem(title = "赞助", description = "支持项目持续更新", onClick = { onNavigate(SettingsPage.Sponsor) })
         Spacer(modifier = Modifier.height(100.dp))
     }
 }
@@ -200,7 +209,13 @@ private fun requestAddTile(context: Context) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SubPage(title: String, page: SettingsPage, performHaptic: () -> Unit, onBack: () -> Unit) {
+fun SubPage(
+    title: String,
+    page: SettingsPage,
+    performHaptic: () -> Unit,
+    onNavigate: (SettingsPage) -> Unit,
+    onBack: () -> Unit
+) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
     Column(modifier = Modifier.fillMaxSize().windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.safeDrawing.only(androidx.compose.foundation.layout.WindowInsetsSides.Top))) {
@@ -212,6 +227,7 @@ fun SubPage(title: String, page: SettingsPage, performHaptic: () -> Unit, onBack
             SettingsPage.KeepAlive -> KeepAliveSettingsContent(performHaptic)
             SettingsPage.Storage -> StorageSettingsContent(performHaptic, prefs)
             SettingsPage.About -> AboutSettingsContent(performHaptic)
+            SettingsPage.Sponsor -> SponsorSettingsContent()
             else -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(text = "正在开发中...", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)) }
         }
     }
@@ -608,6 +624,98 @@ fun AboutSettingsContent(performHaptic: () -> Unit) {
                 }
             }
         )
+    }
+}
+
+@Composable
+fun SponsorSettingsContent() {
+    val context = LocalContext.current
+    val alipayImage = remember {
+        runCatching {
+            context.assets.open("sponsor/Alipay.jpg").use { stream ->
+                BitmapFactory.decodeStream(stream)?.asImageBitmap()
+            }
+        }.getOrNull()
+    }
+    val wechatImage = remember {
+        runCatching {
+            context.assets.open("sponsor/Wechat.png").use { stream ->
+                BitmapFactory.decodeStream(stream)?.asImageBitmap()
+            }
+        }.getOrNull()
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp)
+            .verticalScroll(rememberScrollState())
+            .windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.safeDrawing.only(androidx.compose.foundation.layout.WindowInsetsSides.Bottom)),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Spacer(modifier = Modifier.height(20.dp))
+
+        Surface(
+            shape = RoundedCornerShape(15.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(
+                text = "感谢您使用我的项目，项目制作花费的时间精力很大，在上学期间做的小项目，软件完全免费，如果倒卖请联系退款并举报！！",
+                modifier = Modifier.padding(16.dp),
+                fontSize = 14.sp,
+                lineHeight = 21.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        if (alipayImage != null) {
+            Surface(
+                shape = RoundedCornerShape(15.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Image(
+                    bitmap = alipayImage,
+                    contentDescription = "支付宝赞助码",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+
+        if (wechatImage != null) {
+            Surface(
+                shape = RoundedCornerShape(15.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Image(
+                    bitmap = wechatImage,
+                    contentDescription = "微信赞助码",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp)
+                )
+            }
+        }
+
+        if (alipayImage == null && wechatImage == null) {
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = "未找到赞助图片资源",
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(32.dp))
     }
 }
 
@@ -1138,9 +1246,10 @@ fun ScreenshotSettingsContent(performHaptic: () -> Unit) {
     }
 
     LaunchedEffect(Unit) {
+        // Root 不需要高频检测；只检查一次 su 是否存在，避免在未使用时频繁触发 Magisk 提示。
+        rootReady = withContext(Dispatchers.IO) { RootHelper.isSuAvailable() }
         while (true) {
             shizukuReady = withContext(Dispatchers.IO) { isShizukuReady() }
-            rootReady = withContext(Dispatchers.IO) { RootHelper.hasRootAccess() }
             if (!shizukuReady && captureMode == "shizuku") {
                 captureMode = "media_projection"
                 prefs.edit().putString("capture_mode", "media_projection").apply()

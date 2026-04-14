@@ -8,6 +8,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -38,6 +40,7 @@ import androidx.core.net.toUri
 import coil.compose.AsyncImage
 import com.Badnng.moe.OrderEntity
 import com.Badnng.moe.OrderGroup
+import com.Badnng.moe.MainActivity
 import com.Badnng.moe.R
 import java.io.File
 
@@ -52,8 +55,25 @@ fun GroupDetailScreen(
 ) {
     val context = LocalContext.current
     var showFullScreen by remember { mutableStateOf(false) }
+    var fullScreenImagePath by remember { mutableStateOf("") }
     val completedCount = orders.count { it.isCompleted }
     val totalCount = orders.size
+    val screenshotPaths = remember(group.screenshotPath, orders) {
+        val fromOrders = orders
+            .map { it.screenshotPath }
+            .filter { it.isNotBlank() && File(it).exists() }
+        if (fromOrders.isNotEmpty()) {
+            fromOrders.distinct()
+        } else if (group.screenshotPath.isNotBlank() && File(group.screenshotPath).exists()) {
+            listOf(group.screenshotPath)
+        } else {
+            emptyList()
+        }
+    }
+    val screenshotPagerState = rememberPagerState(
+        initialPage = 0,
+        pageCount = { screenshotPaths.size.coerceAtLeast(1) }
+    )
 
     Scaffold(
         topBar = {
@@ -159,20 +179,53 @@ fun GroupDetailScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    if (group.screenshotPath.isNotEmpty() && File(group.screenshotPath).exists()) {
-                        AsyncImage(
-                            model = File(group.screenshotPath),
-                            contentDescription = "原图",
+                    if (screenshotPaths.isNotEmpty()) {
+                        HorizontalPager(
+                            state = screenshotPagerState,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(400.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable { showFullScreen = true },
-                            contentScale = ContentScale.Fit
-                        )
+                        ) { page ->
+                            val path = screenshotPaths[page]
+                            AsyncImage(
+                                model = File(path),
+                                contentDescription = "截图副本 ${page + 1}",
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable {
+                                        fullScreenImagePath = path
+                                        showFullScreen = true
+                                    },
+                                contentScale = ContentScale.Fit
+                            )
+                        }
+                        if (screenshotPaths.size > 1) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Row(
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                screenshotPaths.forEachIndexed { index, _ ->
+                                    val selected = screenshotPagerState.currentPage == index
+                                    Box(
+                                        modifier = Modifier
+                                            .padding(horizontal = 4.dp)
+                                            .size(if (selected) 8.dp else 6.dp)
+                                            .clip(RoundedCornerShape(50))
+                                            .background(
+                                                if (selected) MaterialTheme.colorScheme.primary
+                                                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+                                            )
+                                    )
+                                }
+                            }
+                        }
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            "点击截图可查看全图",
+                            if (screenshotPaths.size > 1) "左右滑动查看截图，点击可全屏"
+                            else "点击截图可查看全图",
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                         )
@@ -206,14 +259,15 @@ fun GroupDetailScreen(
         }
     }
 
-    if (showFullScreen && group.screenshotPath.isNotEmpty()) {
-        FullScreenImageDialog(imagePath = group.screenshotPath) {
+    if (showFullScreen && fullScreenImagePath.isNotBlank()) {
+        FullScreenImageDialog(imagePath = fullScreenImagePath) {
             showFullScreen = false
         }
     }
 }
 
 private fun openTaobaoIdentityEntry(context: Context) {
+    (context as? MainActivity)?.clearNotificationLaunchState()
     val pkg = "com.taobao.taobao"
     val lastmile = "https://pages-fast.m.taobao.com/wow/z/uniapp/1100333/last-mile-fe/m-end-school-tab/home"
     val candidates = listOf(
@@ -238,6 +292,7 @@ private fun openTaobaoIdentityEntry(context: Context) {
 }
 
 private fun openPddIdentityEntry(context: Context) {
+    (context as? MainActivity)?.clearNotificationLaunchState()
     val pkg = "com.xunmeng.pinduoduo"
     val schemes = listOf(
         "pinduoduo://com.xunmeng.pinduoduo/mdkd/package",
