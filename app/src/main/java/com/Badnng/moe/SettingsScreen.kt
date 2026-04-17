@@ -49,6 +49,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
@@ -1029,7 +1030,15 @@ private fun formatFileSize(size: Long): String {
 @Composable
 fun PreferenceSettingsContent(performHaptic: () -> Unit) {
     val context = LocalContext.current; val prefs = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
+    val configuration = LocalConfiguration.current
+    val isLargeScreen = configuration.screenWidthDp >= 700
+    val isFoldableDevice = remember(context) {
+        context.packageManager.hasSystemFeature(PackageManager.FEATURE_SENSOR_HINGE_ANGLE)
+    }
     var navAlignment by remember { mutableStateOf(prefs.getString("nav_alignment", "center") ?: "center") }
+    var largeScreenNavAdaptiveEnabled by remember {
+        mutableStateOf(prefs.getBoolean("large_screen_nav_adaptive_enabled", true))
+    }
     var themeMode by remember { mutableStateOf(prefs.getString("theme_mode", "system") ?: "system") }
     var monetEnabled by remember { mutableStateOf(prefs.getBoolean("monet_enabled", true)) }
     var amoledPureBlack by remember { mutableStateOf(prefs.getBoolean("amoled_pure_black", false)) }
@@ -1049,7 +1058,48 @@ fun PreferenceSettingsContent(performHaptic: () -> Unit) {
         verticalArrangement = Arrangement.spacedBy(32.dp)
     ) {
         Spacer(Modifier.height(16.dp))
-        PreferenceSection(title = "底栏位置") { Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) { listOf("left" to "靠左", "center" to "居中", "right" to "靠右").forEach { (key, label) -> ChoiceChip(label = label, selected = navAlignment == key, onClick = { performHaptic(); navAlignment = key; prefs.edit().putString("nav_alignment", key).apply() }, modifier = Modifier.weight(1f)) } } }
+        PreferenceSection(title = "底栏位置") {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (isLargeScreen || isFoldableDevice) {
+                    Surface(
+                        shape = RoundedCornerShape(15.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f))
+                    ) {
+                        PreferenceSwitchItem(
+                            title = "底栏自适应",
+                            description = "根据主页纵向滑动区域自动切换底栏到左/中/右",
+                            checked = largeScreenNavAdaptiveEnabled,
+                            onCheckedChange = {
+                                largeScreenNavAdaptiveEnabled = it
+                                prefs.edit().putBoolean("large_screen_nav_adaptive_enabled", it).apply()
+                                performHaptic()
+                            }
+                        )
+                    }
+                }
+                AnimatedVisibility(
+                    visible = !(isLargeScreen || isFoldableDevice) || !largeScreenNavAdaptiveEnabled,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically()
+                ) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf("left" to "靠左", "center" to "居中", "right" to "靠右").forEach { (key, label) ->
+                            ChoiceChip(
+                                label = label,
+                                selected = navAlignment == key,
+                                onClick = {
+                                    performHaptic()
+                                    navAlignment = key
+                                    prefs.edit().putString("nav_alignment", key).apply()
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+            }
+        }
 
         PreferenceSection(title = "交互反馈") {
             Surface(
@@ -1538,7 +1588,7 @@ fun PermissionSettingsContent(performHaptic: () -> Unit) {
                         )
                         Spacer(Modifier.width(12.dp))
                         Text(
-                            text = "开启保活后，应用切到后台时会自动隐藏卡片并提示正在后台运行，防止系统清理导致通知失效。部分设备可能需要额外设置。",
+                            text = "开启后，应用在主页返回时会退出在后台并自动隐藏后台任务卡片。",
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onPrimaryContainer,
                             lineHeight = 18.sp

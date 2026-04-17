@@ -18,6 +18,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -37,9 +38,15 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.changedToDownIgnoreConsumed
+import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -63,6 +70,7 @@ import com.Badnng.moe.screens.QrCodeDialog
 import com.Badnng.moe.screens.LogScreen
 import com.Badnng.moe.screens.OrderDetailScreen
 import com.Badnng.moe.screens.GroupDetailScreen
+import kotlin.math.abs
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 
@@ -96,9 +104,47 @@ fun HomeScreen(
 
     val prefs = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
     var navAlignment by remember { mutableStateOf(prefs.getString("nav_alignment", "center") ?: "center") }
+    var largeScreenNavAdaptiveEnabled by remember {
+        mutableStateOf(prefs.getBoolean("large_screen_nav_adaptive_enabled", true))
+    }
+    var dynamicNavAlignment by remember { mutableStateOf<String?>(null) }
+    var dynamicFabSide by remember {
+        mutableStateOf(
+            if ((prefs.getString("nav_alignment", "center") ?: "center") == "left") "left" else "right"
+        )
+    }
     // 关键修复：hapticEnabled 现在是实时响应的状态
     var hapticEnabled by remember { mutableStateOf(prefs.getBoolean("haptic_enabled", true)) }
     var amoledPureBlack by remember { mutableStateOf(prefs.getBoolean("amoled_pure_black", false)) }
+    val configuration = LocalConfiguration.current
+    val isLargeScreen = configuration.screenWidthDp >= 700
+    val navAdaptiveActive = isLargeScreen && largeScreenNavAdaptiveEnabled
+    val effectiveNavAlignment = if (navAdaptiveActive) (dynamicNavAlignment ?: navAlignment) else navAlignment
+    var allowPagerHorizontalSwipe by remember { mutableStateOf(true) }
+    val targetBottomBarBias = when (effectiveNavAlignment) {
+        "left" -> -1f
+        "right" -> 1f
+        else -> 0f
+    }
+    val animatedBottomBarBias by animateFloatAsState(
+        targetValue = targetBottomBarBias,
+        animationSpec = spring(dampingRatio = 0.92f, stiffness = 260f),
+        label = "bottomBarBias"
+    )
+    val effectiveFabSide = if (navAdaptiveActive) {
+        if (effectiveNavAlignment == "center") "right" else dynamicFabSide
+    } else {
+        effectiveNavAlignment
+    }
+    val targetFabBias = when (effectiveFabSide) {
+        "left" -> -1f
+        else -> 1f
+    }
+    val animatedFabBias by animateFloatAsState(
+        targetValue = targetFabBias,
+        animationSpec = spring(dampingRatio = 0.92f, stiffness = 260f),
+        label = "fabBias"
+    )
 
     DisposableEffect(prefs) {
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { p, key ->
@@ -106,10 +152,29 @@ fun HomeScreen(
                 "nav_alignment" -> navAlignment = p.getString(key, "center") ?: "center"
                 "haptic_enabled" -> hapticEnabled = p.getBoolean(key, true)
                 "amoled_pure_black" -> amoledPureBlack = p.getBoolean(key, false)
+                "large_screen_nav_adaptive_enabled" -> largeScreenNavAdaptiveEnabled =
+                    p.getBoolean(key, true)
+            }
+            if (key == "nav_alignment") {
+                val updated = p.getString(key, "center") ?: "center"
+                if (updated == "left" || updated == "right") {
+                    dynamicFabSide = updated
+                }
             }
         }
         prefs.registerOnSharedPreferenceChangeListener(listener)
         onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+
+    LaunchedEffect(navAdaptiveActive, navAlignment) {
+        if (!navAdaptiveActive) {
+            dynamicNavAlignment = null
+            if (navAlignment == "left" || navAlignment == "right") {
+                dynamicFabSide = navAlignment
+            } else {
+                dynamicFabSide = "right"
+            }
+        }
     }
 
     val performHaptic = {
@@ -117,18 +182,18 @@ fun HomeScreen(
             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
         }
     }
-    val bottomBarWidth = if (navAlignment == "center") 275.dp else 250.dp
+    val bottomBarWidth = if (effectiveNavAlignment == "center") 275.dp else 250.dp
     val fontScale = LocalDensity.current.fontScale
     val largeFont = fontScale >= 1.2f
     val bottomBarHeight = if (largeFont) 72.dp else 64.dp
     val fabAboveBottomBarPadding = bottomBarHeight + 70.dp
-    val fabHorizontalPadding = when (navAlignment) {
+    val fabHorizontalPadding = when (effectiveNavAlignment) {
         "left", "right", "center" -> 24.dp
         else -> 24.dp
     }
-    val fabColumnAlignment = if (navAlignment == "left") Alignment.Start else Alignment.End
+    val fabColumnAlignment = if (effectiveNavAlignment == "left") Alignment.Start else Alignment.End
     val identityContainerOffsetX = 0.dp
-    val fabContentAlignment = when (navAlignment) {
+    val fabContentAlignment = when (effectiveNavAlignment) {
         "left" -> Alignment.BottomStart
         else -> Alignment.BottomEnd
     }
@@ -234,11 +299,7 @@ fun HomeScreen(
             containerColor = Color.Transparent,
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             bottomBar = {
-                val alignment = when (navAlignment) {
-                    "left" -> Alignment.BottomStart
-                    "right" -> Alignment.BottomEnd
-                    else -> Alignment.BottomCenter
-                }
+                val alignment = BiasAlignment(animatedBottomBarBias, 1f)
                 val barWidth = bottomBarWidth
                 val barHeight = bottomBarHeight
 
@@ -303,7 +364,98 @@ fun HomeScreen(
             }
         ) { _ ->
             Box(modifier = Modifier.fillMaxSize().layerBackdrop(backdrop)) {
-                HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize(), beyondViewportPageCount = 1, userScrollEnabled = !isManaging && !isSettingsSubPageOpen && detailOrder == null && detailGroup == null) { page ->
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(isLargeScreen, navAdaptiveActive, pagerState.currentPage, isUiHidden) {
+                            var gestureActive = false
+                            var downX = 0f
+                            var downY = 0f
+                            var downZone = "center"
+                            // 0=未判定, 1=纵向, -1=横向
+                            var gestureDirection = 0
+                            var directionLocked = false
+                            val directionThresholdPx = 14f
+                            val axisRatio = 1.2f
+                            awaitPointerEventScope {
+                                while (true) {
+                                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                                    if (pagerState.currentPage != 0 || isUiHidden) {
+                                        if (!allowPagerHorizontalSwipe) allowPagerHorizontalSwipe = true
+                                        gestureActive = false
+                                        gestureDirection = 0
+                                        directionLocked = false
+                                        continue
+                                    }
+                                    val change = event.changes.firstOrNull() ?: continue
+                                    val x = change.position.x
+                                    val y = change.position.y
+                                    val width = size.width.toFloat().coerceAtLeast(1f)
+                                    val zoneAtX = when {
+                                        x < width / 3f -> "left"
+                                        x > width * 2f / 3f -> "right"
+                                        else -> "center"
+                                    }
+
+                                    if (change.changedToDownIgnoreConsumed()) {
+                                        gestureActive = true
+                                        gestureDirection = 0
+                                        directionLocked = false
+                                        // 手势开始保持可切页，避免“先纵滑后立刻横滑”出现延迟体感
+                                        if (!allowPagerHorizontalSwipe) allowPagerHorizontalSwipe = true
+                                        downX = x
+                                        downY = y
+                                        downZone = zoneAtX
+                                    }
+
+                                    if (gestureActive && change.pressed && !directionLocked) {
+                                        val dx = x - downX
+                                        val dy = y - downY
+                                        val absDx = abs(dx)
+                                        val absDy = abs(dy)
+                                        if (absDx >= directionThresholdPx || absDy >= directionThresholdPx) {
+                                            val verticalDominant = absDy > absDx * axisRatio
+                                            val horizontalDominant = absDx > absDy * axisRatio
+                                            if (!verticalDominant && !horizontalDominant) {
+                                                // 比值未明显偏向，继续等待更多位移再判定
+                                                continue
+                                            }
+                                            gestureDirection = if (verticalDominant) 1 else -1
+                                            directionLocked = true
+                                            // 仅纵向手势触发底栏切换，并锁定为按下时区域，避免长按后横移误触发
+                                            if (gestureDirection == 1 && navAdaptiveActive) {
+                                                // 方向锁定为纵向后，横向切页彻底关闭，直到抬手重置
+                                                if (allowPagerHorizontalSwipe) allowPagerHorizontalSwipe = false
+                                                if (dynamicNavAlignment != downZone) dynamicNavAlignment = downZone
+                                                if (downZone == "left" || downZone == "right") {
+                                                    if (dynamicFabSide != downZone) dynamicFabSide = downZone
+                                                } else if (dynamicFabSide != "right") {
+                                                    dynamicFabSide = "right"
+                                                }
+                                            } else if (gestureDirection == -1) {
+                                                // 方向锁定为横向后，仅保留切页响应
+                                                if (!allowPagerHorizontalSwipe) allowPagerHorizontalSwipe = true
+                                            }
+                                        }
+                                    }
+
+                                    if (change.changedToUpIgnoreConsumed() || event.changes.none { it.pressed }) {
+                                        gestureActive = false
+                                        gestureDirection = 0
+                                        directionLocked = false
+                                        if (!allowPagerHorizontalSwipe) allowPagerHorizontalSwipe = true
+                                    }
+                                }
+                            }
+                        },
+                    beyondViewportPageCount = 1,
+                    userScrollEnabled = !isManaging &&
+                        !isSettingsSubPageOpen &&
+                        detailOrder == null &&
+                        detailGroup == null &&
+                        allowPagerHorizontalSwipe
+                ) { page ->
                     when (page) {
                         0 -> CaptureScreen(modifier = Modifier.fillMaxSize(), bottomPadding = 100.dp, backdrop = backdrop, onEditModeChange = { isManaging = it }, onNavigateToDetail = { detailItem ->
                             when (detailItem) {
@@ -322,7 +474,11 @@ fun HomeScreen(
             visible = pagerState.currentPage == 0 && !isUiHidden,
             enter = scaleIn() + fadeIn(),
             exit = scaleOut() + fadeOut(),
-            modifier = Modifier.align(fabContentAlignment)
+            modifier = if (isLargeScreen) {
+                Modifier.align(BiasAlignment(animatedFabBias, 1f))
+            } else {
+                Modifier.align(fabContentAlignment)
+            }
         ) {
             Box(
                 modifier = Modifier

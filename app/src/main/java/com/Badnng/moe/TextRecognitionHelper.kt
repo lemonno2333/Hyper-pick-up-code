@@ -16,7 +16,14 @@ class TextRecognitionHelper(private val context: Context) {
     // PaddleOCR 文字识别
     val paddleOcr = PaddleOcrHelper.getInstance(context)
 
-    private val drinkBrands = listOf("星巴克", "瑞幸", "喜茶", "奈雪", "霸王茶姬", "茶百道", "蜜雪冰城", "一点点", "古茗", "Manner", "山楂奶绿", "取茶", "奶茶", "茶颜悦色")
+    private val drinkBrands = listOf(
+        "星巴克", "瑞幸", "库迪", "幸运咖",
+        "蜜雪冰城", "古茗", "茶百道", "沪上阿姨", "甜啦啦", "霸王茶姬",
+        "CoCo", "COCO", "一点点", "书亦烧仙草", "喜茶", "奈雪的茶", "奈雪",
+        "Manner", "Tims", "TIMS", "700CC",
+        "鲜果时间", "快乐柠檬", "7分甜", "一只酸奶牛",
+        "山楂奶绿", "取茶", "奶茶", "茶颜悦色"
+    )
     private val foodBrands = listOf("麦当劳", "肯德基", "KFC", "汉堡王", "塔斯汀", "老乡鸡", "华莱士")
     private val expressBrandKeywords = listOf(
         "邮政", "中国邮政", "申通", "中通", "圆通", "韵达", "顺丰", "极兔", "德邦",
@@ -157,7 +164,7 @@ class TextRecognitionHelper(private val context: Context) {
         mergedText: String
     ): String? {
         // 扩展关键词：支持"取件码"、"请凭"、"靖凭"(OCR错误)等
-        val expressKeywords = listOf("取件码", "取性码", "请凭", "靖凭", "凭")
+        val expressKeywords = listOf("取件码", "取性码", "请凭", "靖凭")
 
         fun pickCandidate(source: String, contextText: String): String? {
             // 🚀 优化：支持更多格式的快递取件码
@@ -248,8 +255,8 @@ class TextRecognitionHelper(private val context: Context) {
         if (Regex("^1\\d{10}$").matches(value)) return true
         // 过滤年份
         if (value.startsWith("202") && value.length == 4) return true
-        // 过滤纯日期 03-10 及其拼接产生的垃圾
-        if (Regex("^\\d{2}-\\d{2,6}$").matches(value)) return true
+        // 过滤明显月-日日期（仅拦截 MM-DD / M-D 等短日期，不误伤 22-6516 这类取件码）
+        if (Regex("^(0?[1-9]|1[0-2])-(0?[1-9]|[12]\\d|3[01])$").matches(value)) return true
         // 过滤超长快递单号（快递取件码一般不超过12位）
         if (value.length > 12) return true
         return false
@@ -448,7 +455,7 @@ class TextRecognitionHelper(private val context: Context) {
     private fun findPickupLocation(mergedText: String, blocks: List<PaddleOcrHelper.TextBlock>): String? {
         // 移除"至"，因为它太短容易误匹配（如"己放至代收点"）
         val startKeywords = listOf("已到", "已至", "到达", "到了", "在", "于", "己到", "前往", "送到", "前住")
-        val targetKeywords = listOf("服务站", "驿站", "自提点", "快递站", "菜鸟站", "代收点", "代点", "丰巢柜", "快递柜", "智能柜", "门面", "邮政大厅", "大厅")
+        val targetKeywords = listOf("服务站", "驿站", "菜鸟驿", "菜鸟驿站", "自提点", "快递站", "菜鸟站", "代收点", "代点", "丰巢柜", "快递柜", "智能柜", "门面", "邮政大厅", "大厅")
         val stopKeywords = listOf("领取", "取件", "查看", "请凭", "靖凭", "如有", "如有疑问", "取您的", "复制")
 
         // 辅助函数：检查是否为垃圾匹配（包含快递单号等）
@@ -497,7 +504,10 @@ class TextRecognitionHelper(private val context: Context) {
         }
 
         // 匹配 startKeywords + content + (?=stopKeywords)
-        val locToVerbPattern = Regex("(?:${startKeywords.joinToString("|")})([^,，。！!?;？\\s]{4,60}?)(?=${stopKeywords.joinToString("|")})")
+        // 支持“前往东大路，领取...”这类中间带标点/空格的句式
+        val locToVerbPattern = Regex(
+            "(?:${startKeywords.joinToString("|")})([^,，。！!?;？\\s]{2,60}?)(?=[,，。！!?;？\\s]*(?:${stopKeywords.joinToString("|")}))"
+        )
         val locMatch2 = locToVerbPattern.find(mergedText)
         if (locMatch2 != null) {
             val loc = truncateLocation(locMatch2.groupValues[1])
@@ -604,7 +614,7 @@ class TextRecognitionHelper(private val context: Context) {
     }
 
     private fun extractExpressCodeFromText(mergedText: String): String? {
-        val expressKeywords = listOf("取件码", "取性码", "请凭", "靖凭", "凭")
+        val expressKeywords = listOf("取件码", "取性码", "请凭", "靖凭")
         val hasExpressKeyword = mergedText.contains("取件码") || mergedText.contains("取性码") ||
                 mergedText.contains("请凭") || mergedText.contains("靖凭")
         val hasExpressBrand = expressBrandKeywords.any { mergedText.contains(it) }
@@ -770,11 +780,13 @@ class TextRecognitionHelper(private val context: Context) {
         val orders = mutableListOf<RecognitionResult>()
         
         // 方法1：基于"取件码"关键词查找（支持“取件码123456”和“123456取件码”两种顺序）
-        val expressKeywords = listOf("取件码", "取性码", "请凭", "靖凭", "凭")
+        val expressKeywords = listOf("取件码", "取性码", "请凭", "靖凭")
         val keywordPattern = expressKeywords.joinToString("|")
         // 多码识别关键词提取：优先精确抓快递柜三段码，且必须包含数字，避免把 ZTO 这类品牌词识别成取件码。
-        val codePattern =
+        val rawCodePattern =
             "([0-9]{1,2}-[0-9]{1,2}-[0-9]{4}|[A-Z]{1,3}[0-9]{0,3}-[0-9]{3,8}|[A-Z0-9]{1,4}-[A-Z0-9]{3,8}|[A-Z]{1,3}[0-9]{4,8}|[0-9]{4,8})"
+        // 关键：加边界，避免从长运单号中截取 4-8 位尾段误当取件码
+        val codePattern = "(?<![A-Z0-9-])$rawCodePattern(?![A-Z0-9-])"
         val forwardPattern = Regex("(?:$keywordPattern)[:：\\s]*$codePattern")
         val reversePattern = Regex("$codePattern[:：\\s]*(?:$keywordPattern)")
         val allForwardMatches = forwardPattern.findAll(mergedText).toList()
