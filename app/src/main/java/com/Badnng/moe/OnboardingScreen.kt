@@ -69,7 +69,6 @@ fun OnboardingScreen(onComplete: () -> Unit) {
     var hasUsageStatsPermission by remember { mutableStateOf(checkUsageStatsPermission(context)) }
     var shizukuReady by remember { mutableStateOf(false) }
     var rootReady by remember { mutableStateOf(false) }
-    var keepAliveEnabled by remember { mutableStateOf(prefs.getBoolean("keep_alive_enabled", false)) }
     var featuresAckCountdown by remember { mutableIntStateOf(15) }
 
     // 定期检查权限状态
@@ -81,7 +80,6 @@ fun OnboardingScreen(onComplete: () -> Unit) {
             isIgnoringBattery = checkBatteryOptimization(context)
             hasUsageStatsPermission = checkUsageStatsPermission(context)
             shizukuReady = withContext(Dispatchers.IO) { isShizukuReady() }
-            keepAliveEnabled = prefs.getBoolean("keep_alive_enabled", false)
             delay(1500)
         }
     }
@@ -163,12 +161,7 @@ fun OnboardingScreen(onComplete: () -> Unit) {
                                 hasUsageStatsPermission = hasUsageStatsPermission,
                                 shizukuReady = shizukuReady,
                                 rootReady = rootReady,
-                                keepAliveEnabled = keepAliveEnabled,
-                                performHaptic = performHaptic,
-                                onToggleKeepAlive = {
-                                    keepAliveEnabled = !keepAliveEnabled
-                                    prefs.edit().putBoolean("keep_alive_enabled", keepAliveEnabled).apply()
-                                }
+                                performHaptic = performHaptic
                             )
                         }
                         OnboardingStep.Features -> {
@@ -296,9 +289,7 @@ private fun PermissionsStep(
     hasUsageStatsPermission: Boolean,
     shizukuReady: Boolean,
     rootReady: Boolean,
-    keepAliveEnabled: Boolean,
-    performHaptic: () -> Unit,
-    onToggleKeepAlive: () -> Unit
+    performHaptic: () -> Unit
 ) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
@@ -445,16 +436,6 @@ private fun PermissionsStep(
                     } catch (e: Exception) {}
                 }
             }
-        )
-
-        PermissionCard(
-            title = "启用保活",
-            description = "开启后切到后台时自动隐藏卡片并提示，防止系统清理",
-            icon = Icons.Default.Lock,
-            isGranted = keepAliveEnabled,
-            isRequired = false,
-            onClick = onToggleKeepAlive,
-            isToggle = true
         )
 
         Surface(
