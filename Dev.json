@@ -1,7 +1,7 @@
 {
-  "versionCode": 2026042411,
-  "versionName": "26.4.24.C01-Dev",
-  "releaseNotes": "您正在使用 澎湃记 的测试版本，可能会遇到不稳定，闪退，数据丢失等情况，请谨慎升级\n\n26.4.24.C01-Dev 版本更新如下：\n重构 App代码\n\n修改 部分功能引导说明\n\n添加 自定义规则（现在你可以自行写规则了）*\n\n*文档 https://badnng.github.io/Hyper-pick-up-code-Docs/guide/CUSTOM_RULES_GUIDE.html\n自定义规则初期是需要大家反馈来不断调优降低大家适配成本的，请大家多多反馈，让开发者做的更好\n\n优化 自适应底栏对于折叠屏的相关适配\n优化 折叠屏展开折叠时的页面保持体验\n优化 点击通知后的窗口详情的显示效果\n优化 身份码按钮的显示效果\n优化 底栏显示的大小\n\n移除 日志入口（重构中）",
-  "downloadUrl": "https://github.com/badnng/Hyper-pick-up-code/releases/download/v26.4.24.C01-Dev/app-release.apk",
-  "md5": "1dad0ad1807aa89d352dff5913053adf"
+  "versionCode": 2026042412,
+  "versionName": "26.4.24.C02-Dev",
+  "releaseNotes": "您正在使用 澎湃记 的测试版本，可能会遇到不稳定，闪退，数据丢失等情况，请谨慎升级\n\n26.4.24.C02-Dev 版本更新如下：\n\n修复 无法识别问题\n修复 手动添加无法使用问题",
+  "downloadUrl": "https://github.com/badnng/Hyper-pick-up-code/releases/download/v26.4.24.C02-Dev/app-release.apk",
+  "md5": "11bd3e0a0d4784503b7f77bfdec7c638"
 }
