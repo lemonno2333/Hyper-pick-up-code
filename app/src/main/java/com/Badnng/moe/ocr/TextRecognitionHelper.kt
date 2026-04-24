@@ -436,7 +436,7 @@ class TextRecognitionHelper(private val context: Context) {
 
         fun isGarbageMatch(location: String): Boolean {
             for (pattern in plConfig.garbagePatterns) {
-                if (Regex(pattern).containsMatchIn(location)) return true
+                if (location.contains(pattern)) return true
             }
             return false
         }

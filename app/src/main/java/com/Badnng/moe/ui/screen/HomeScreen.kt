@@ -704,6 +704,7 @@ fun HomeScreen(
                 }
             }
         }
+        }
 
         if (showBottomSheet) {
             ModalBottomSheet(
@@ -865,55 +866,3 @@ fun HomeScreen(
         }
     }
 }
-
-fun openTaobaoIdentityEntry(context: Context) {
-    (context as? MainActivity)?.clearNotificationLaunchState()
-    val pkg = "com.taobao.taobao"
-    val lastmile = "https://pages-fast.m.taobao.com/wow/z/uniapp/1100333/last-mile-fe/m-end-school-tab/home"
-    val candidates = listOf(
-        "tbopen://m.taobao.com/tbopen/index.html?h5Url=" + Uri.encode(lastmile)
-    )
-    for (u in candidates) {
-        try {
-            val i = Intent(Intent.ACTION_VIEW, Uri.parse(u))
-            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            context.startActivity(i)
-            return
-        } catch (_: Exception) {
-        }
-    }
-    try {
-        val i = Intent(Intent.ACTION_VIEW, Uri.parse(lastmile))
-        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        i.setClassName(pkg, "com.taobao.browser.BrowserActivity")
-        context.startActivity(i)
-    } catch (_: Exception) {
-    }
-}
-
-fun openPddIdentityEntry(context: Context) {
-    (context as? MainActivity)?.clearNotificationLaunchState()
-    val pkg = "com.xunmeng.pinduoduo"
-    val schemes = listOf(
-        "pinduoduo://com.xunmeng.pinduoduo/mdkd/package",
-        "pinduoduo://com.xunmeng.pinduoduo/",
-        "pinduoduo://"
-    )
-    for (u in schemes) {
-        try {
-            val i = Intent(Intent.ACTION_VIEW, Uri.parse(u))
-            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            context.startActivity(i)
-            return
-        } catch (_: Exception) {
-        }
-    }
-    try {
-        val i = context.packageManager.getLaunchIntentForPackage(pkg)
-        if (i != null) {
-            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            context.startActivity(i)
-        }
-    } catch (_: Exception) {
-    }
-}}
