@@ -1,0 +1,722 @@
+package com.Badnng.moe.rules
+
+import org.json.JSONArray
+import org.json.JSONObject
+
+// ─────────── Online Rule Source ───────────
+
+data class OnlineRuleSource(
+    val id: String = "",
+    val name: String = "",
+    val url: String = "",
+    val enabled: Boolean = true,
+    val updateIntervalHours: Int = 24,
+    val lastUpdated: Long = 0,
+    val lastEtag: String? = null,
+    val lastModified: String? = null
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("id", id)
+        put("name", name)
+        put("url", url)
+        put("enabled", enabled)
+        put("update_interval_hours", updateIntervalHours)
+        put("last_updated", lastUpdated)
+        put("last_etag", lastEtag ?: "")
+        put("last_modified", lastModified ?: "")
+    }
+
+    companion object {
+        fun fromJson(json: JSONObject): OnlineRuleSource = OnlineRuleSource(
+            id = json.optString("id", ""),
+            name = json.optString("name", ""),
+            url = json.optString("url", ""),
+            enabled = json.optBoolean("enabled", true),
+            updateIntervalHours = json.optInt("update_interval_hours", 24),
+            lastUpdated = json.optLong("last_updated", 0),
+            lastEtag = json.optString("last_etag", "").ifBlank { null },
+            lastModified = json.optString("last_modified", "").ifBlank { null }
+        )
+    }
+}
+
+// ─────────── Top Level ───────────
+
+data class RecognitionRules(
+    val schemaVersion: Int = 1,
+    val appVersion: String = "",
+    val updatedAt: String = "",
+    val description: String = "",
+    val brands: BrandConfig = BrandConfig(),
+    val codeExtraction: CodeExtractionConfig = CodeExtractionConfig(),
+    val categoryDetection: CategoryDetectionConfig = CategoryDetectionConfig(),
+    val homepageDetection: HomepageDetectionConfig = HomepageDetectionConfig(),
+    val textCleaning: TextCleaningConfig = TextCleaningConfig(),
+    val validation: ValidationConfig = ValidationConfig(),
+    val scoring: ScoringConfig = ScoringConfig(),
+    val pickupLocation: PickupLocationConfig = PickupLocationConfig()
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("schema_version", schemaVersion)
+        put("app_version", appVersion)
+        put("updated_at", updatedAt)
+        put("description", description)
+        put("brands", brands.toJson())
+        put("code_extraction", codeExtraction.toJson())
+        put("category_detection", categoryDetection.toJson())
+        put("homepage_detection", homepageDetection.toJson())
+        put("text_cleaning", textCleaning.toJson())
+        put("validation", validation.toJson())
+        put("scoring", scoring.toJson())
+        put("pickup_location", pickupLocation.toJson())
+    }
+
+    companion object {
+        fun fromJson(json: JSONObject): RecognitionRules = RecognitionRules(
+            schemaVersion = json.optInt("schema_version", 1),
+            appVersion = json.optString("app_version", ""),
+            updatedAt = json.optString("updated_at", ""),
+            description = json.optString("description", ""),
+            brands = json.optJSONObject("brands")?.let { BrandConfig.fromJson(it) } ?: BrandConfig(),
+            codeExtraction = json.optJSONObject("code_extraction")?.let { CodeExtractionConfig.fromJson(it) } ?: CodeExtractionConfig(),
+            categoryDetection = json.optJSONObject("category_detection")?.let { CategoryDetectionConfig.fromJson(it) } ?: CategoryDetectionConfig(),
+            homepageDetection = json.optJSONObject("homepage_detection")?.let { HomepageDetectionConfig.fromJson(it) } ?: HomepageDetectionConfig(),
+            textCleaning = json.optJSONObject("text_cleaning")?.let { TextCleaningConfig.fromJson(it) } ?: TextCleaningConfig(),
+            validation = json.optJSONObject("validation")?.let { ValidationConfig.fromJson(it) } ?: ValidationConfig(),
+            scoring = json.optJSONObject("scoring")?.let { ScoringConfig.fromJson(it) } ?: ScoringConfig(),
+            pickupLocation = json.optJSONObject("pickup_location")?.let { PickupLocationConfig.fromJson(it) } ?: PickupLocationConfig()
+        )
+    }
+}
+
+// ─────────── Brands ───────────
+
+data class BrandConfig(
+    val drink: List<BrandDefinition> = emptyList(),
+    val food: List<BrandDefinition> = emptyList(),
+    val express: List<BrandDefinition> = emptyList()
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("drink", JSONArray(drink.map { it.toJson() }))
+        put("food", JSONArray(food.map { it.toJson() }))
+        put("express", JSONArray(express.map { it.toJson() }))
+    }
+
+    companion object {
+        fun fromJson(json: JSONObject): BrandConfig = BrandConfig(
+            drink = json.optJSONArray("drink")?.let { arr -> (0 until arr.length()).map { BrandDefinition.fromJson(arr.getJSONObject(it)) } } ?: emptyList(),
+            food = json.optJSONArray("food")?.let { arr -> (0 until arr.length()).map { BrandDefinition.fromJson(arr.getJSONObject(it)) } } ?: emptyList(),
+            express = json.optJSONArray("express")?.let { arr -> (0 until arr.length()).map { BrandDefinition.fromJson(arr.getJSONObject(it)) } } ?: emptyList()
+        )
+    }
+}
+
+data class BrandDefinition(
+    val name: String,
+    val aliases: List<String> = emptyList(),
+    val category: String = "餐食",
+    val packageName: String? = null,
+    val keywords: List<String> = emptyList(),
+    val scoringOverrides: Map<String, Int> = emptyMap(),
+    val specialRules: Map<String, Boolean> = emptyMap(),
+    val enabled: Boolean = true
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("name", name)
+        if (aliases.isNotEmpty()) put("aliases", JSONArray(aliases))
+        put("category", category)
+        packageName?.let { put("package_name", it) }
+        if (keywords.isNotEmpty()) put("keywords", JSONArray(keywords))
+        if (scoringOverrides.isNotEmpty()) {
+            val obj = JSONObject()
+            scoringOverrides.forEach { (k, v) -> obj.put(k, v) }
+            put("scoring_overrides", obj)
+        }
+        if (specialRules.isNotEmpty()) {
+            val obj = JSONObject()
+            specialRules.forEach { (k, v) -> obj.put(k, v) }
+            put("special_rules", obj)
+        }
+        put("enabled", enabled)
+    }
+
+    companion object {
+        fun fromJson(json: JSONObject): BrandDefinition = BrandDefinition(
+            name = json.getString("name"),
+            aliases = json.optJSONArray("aliases")?.let { arr -> (0 until arr.length()).map { arr.getString(it) } } ?: emptyList(),
+            category = json.optString("category", "餐食"),
+            packageName = json.optString("package_name", null),
+            keywords = json.optJSONArray("keywords")?.let { arr -> (0 until arr.length()).map { arr.getString(it) } } ?: emptyList(),
+            scoringOverrides = json.optJSONObject("scoring_overrides")?.let { obj ->
+                obj.keys().asSequence().associateWith { obj.getInt(it) }
+            } ?: emptyMap(),
+            specialRules = json.optJSONObject("special_rules")?.let { obj ->
+                obj.keys().asSequence().associateWith { obj.getBoolean(it) }
+            } ?: emptyMap(),
+            enabled = json.optBoolean("enabled", true)
+        )
+    }
+}
+
+// ─────────── Code Extraction ───────────
+
+data class CodeExtractionConfig(
+    val express: ExpressExtraction = ExpressExtraction(),
+    val food: FoodExtraction = FoodExtraction()
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("express", express.toJson())
+        put("food", food.toJson())
+    }
+
+    companion object {
+        fun fromJson(json: JSONObject): CodeExtractionConfig = CodeExtractionConfig(
+            express = json.optJSONObject("express")?.let { ExpressExtraction.fromJson(it) } ?: ExpressExtraction(),
+            food = json.optJSONObject("food")?.let { FoodExtraction.fromJson(it) } ?: FoodExtraction()
+        )
+    }
+}
+
+data class ExpressExtraction(
+    val triggerKeywords: List<String> = listOf("取件码", "取性码", "请凭", "靖凭"),
+    val patterns: List<ExtractionPattern> = emptyList(),
+    val fallbackPattern: FallbackPattern? = null
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("trigger_keywords", JSONArray(triggerKeywords))
+        put("patterns", JSONArray(patterns.map { it.toJson() }))
+        fallbackPattern?.let { put("fallback_pattern", it.toJson()) }
+    }
+
+    companion object {
+        fun fromJson(json: JSONObject): ExpressExtraction = ExpressExtraction(
+            triggerKeywords = json.optJSONArray("trigger_keywords")?.let { arr -> (0 until arr.length()).map { arr.getString(it) } } ?: listOf("取件码", "取性码", "请凭", "靖凭"),
+            patterns = json.optJSONArray("patterns")?.let { arr -> (0 until arr.length()).map { ExtractionPattern.fromJson(arr.getJSONObject(it)) } } ?: emptyList(),
+            fallbackPattern = json.optJSONObject("fallback_pattern")?.let { FallbackPattern.fromJson(it) }
+        )
+    }
+}
+
+data class FoodExtraction(
+    val triggerKeywords: List<String> = listOf("取餐", "取茶", "验证码", "券码", "订单", "准备完毕", "领取", "取单", "取货"),
+    val hintKeywords: List<String> = listOf("取单码", "取单号", "取餐号", "取餐码", "取茶号", "取货码", "券码", "订单号", "取性码", "取養号"),
+    val queueKeywords: List<String> = listOf("叫号", "取号", "过号", "排队", "迎宾台", "到店就餐", "还需等待", "桌安排"),
+    val queueThreshold: Int = 2,
+    val patterns: FoodPatterns = FoodPatterns(),
+    val starbucksPattern: StarbucksPattern? = null
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("trigger_keywords", JSONArray(triggerKeywords))
+        put("hint_keywords", JSONArray(hintKeywords))
+        put("queue_keywords", JSONArray(queueKeywords))
+        put("queue_threshold", queueThreshold)
+        put("patterns", patterns.toJson())
+        starbucksPattern?.let { put("starbucks_pattern", it.toJson()) }
+    }
+
+    companion object {
+        fun fromJson(json: JSONObject): FoodExtraction = FoodExtraction(
+            triggerKeywords = json.optJSONArray("trigger_keywords")?.let { arr -> (0 until arr.length()).map { arr.getString(it) } } ?: listOf("取餐", "取茶", "验证码", "券码", "订单", "准备完毕", "领取", "取单", "取货"),
+            hintKeywords = json.optJSONArray("hint_keywords")?.let { arr -> (0 until arr.length()).map { arr.getString(it) } } ?: listOf("取单码", "取单号", "取餐号", "取餐码", "取茶号", "取货码", "券码", "订单号", "取性码", "取養号"),
+            queueKeywords = json.optJSONArray("queue_keywords")?.let { arr -> (0 until arr.length()).map { arr.getString(it) } } ?: listOf("叫号", "取号", "过号", "排队", "迎宾台", "到店就餐", "还需等待", "桌安排"),
+            queueThreshold = json.optInt("queue_threshold", 2),
+            patterns = json.optJSONObject("patterns")?.let { FoodPatterns.fromJson(it) } ?: FoodPatterns(),
+            starbucksPattern = json.optJSONObject("starbucks_pattern")?.let { StarbucksPattern.fromJson(it) }
+        )
+    }
+}
+
+data class FoodPatterns(
+    val queuePatterns: List<QueuePattern> = emptyList(),
+    val sloganPattern: ExtractionPattern? = null,
+    val keywordPattern: KeywordPattern? = null,
+    val fallbackPattern: ExtractionPattern? = null
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("queue_patterns", JSONArray(queuePatterns.map { it.toJson() }))
+        sloganPattern?.let { put("slogan_pattern", it.toJson()) }
+        keywordPattern?.let { put("keyword_pattern", it.toJson()) }
+        fallbackPattern?.let { put("fallback_pattern", it.toJson()) }
+    }
+
+    companion object {
+        fun fromJson(json: JSONObject): FoodPatterns = FoodPatterns(
+            queuePatterns = json.optJSONArray("queue_patterns")?.let { arr -> (0 until arr.length()).map { QueuePattern.fromJson(arr.getJSONObject(it)) } } ?: emptyList(),
+            sloganPattern = json.optJSONObject("slogan_pattern")?.let { ExtractionPattern.fromJson(it) },
+            keywordPattern = json.optJSONObject("keyword_pattern")?.let { KeywordPattern.fromJson(it) },
+            fallbackPattern = json.optJSONObject("fallback_pattern")?.let { ExtractionPattern.fromJson(it) }
+        )
+    }
+}
+
+data class ExtractionPattern(
+    val id: String,
+    val regex: String,
+    val priority: Int = 5,
+    val description: String = "",
+    val weightMultiplier: Int = 1,
+    val enabled: Boolean = true
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("id", id)
+        put("regex", regex)
+        put("priority", priority)
+        put("description", description)
+        put("weight_multiplier", weightMultiplier)
+        put("enabled", enabled)
+    }
+
+    companion object {
+        fun fromJson(json: JSONObject): ExtractionPattern = ExtractionPattern(
+            id = json.getString("id"),
+            regex = json.getString("regex"),
+            priority = json.optInt("priority", 5),
+            description = json.optString("description", ""),
+            weightMultiplier = json.optInt("weight_multiplier", 1),
+            enabled = json.optBoolean("enabled", true)
+        )
+    }
+}
+
+data class QueuePattern(
+    val id: String,
+    val regex: String,
+    val description: String = "",
+    val codeLengthMin: Int = 2,
+    val codeLengthMax: Int = 5,
+    val requireMixed: Boolean = true,
+    val enabled: Boolean = true
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("id", id)
+        put("regex", regex)
+        put("description", description)
+        put("code_length_min", codeLengthMin)
+        put("code_length_max", codeLengthMax)
+        put("require_mixed", requireMixed)
+        put("enabled", enabled)
+    }
+
+    companion object {
+        fun fromJson(json: JSONObject): QueuePattern = QueuePattern(
+            id = json.getString("id"),
+            regex = json.getString("regex"),
+            description = json.optString("description", ""),
+            codeLengthMin = json.optInt("code_length_min", 2),
+            codeLengthMax = json.optInt("code_length_max", 5),
+            requireMixed = json.optBoolean("require_mixed", true),
+            enabled = json.optBoolean("enabled", true)
+        )
+    }
+}
+
+data class FallbackPattern(
+    val regex: String,
+    val requiresTrigger: Boolean = true
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("regex", regex)
+        put("requires_trigger", requiresTrigger)
+    }
+
+    companion object {
+        fun fromJson(json: JSONObject): FallbackPattern = FallbackPattern(
+            regex = json.getString("regex"),
+            requiresTrigger = json.optBoolean("requires_trigger", true)
+        )
+    }
+}
+
+data class KeywordPattern(
+    val id: String = "keyword_code",
+    val forwardRegex: String = "",
+    val reverseRegex: String = ""
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("id", id)
+        put("forward_regex", forwardRegex)
+        put("reverse_regex", reverseRegex)
+    }
+
+    companion object {
+        fun fromJson(json: JSONObject): KeywordPattern = KeywordPattern(
+            id = json.optString("id", "keyword_code"),
+            forwardRegex = json.optString("forward_regex", ""),
+            reverseRegex = json.optString("reverse_regex", "")
+        )
+    }
+}
+
+data class StarbucksPattern(
+    val regex: String = "(\\d{1,3}[.．][\\u4e00-\\u9fa5]{2,10})",
+    val triggerKeywords: List<String> = listOf("啡快口令"),
+    val triggerBrand: String = "星巴克",
+    val description: String = "星巴克啡快口令"
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("regex", regex)
+        put("trigger_keywords", JSONArray(triggerKeywords))
+        put("trigger_brand", triggerBrand)
+        put("description", description)
+    }
+
+    companion object {
+        fun fromJson(json: JSONObject): StarbucksPattern = StarbucksPattern(
+            regex = json.optString("regex", "(\\d{1,3}[.．][\\u4e00-\\u9fa5]{2,10})"),
+            triggerKeywords = json.optJSONArray("trigger_keywords")?.let { arr -> (0 until arr.length()).map { arr.getString(it) } } ?: listOf("啡快口令"),
+            triggerBrand = json.optString("trigger_brand", "星巴克"),
+            description = json.optString("description", "星巴克啡快口令")
+        )
+    }
+}
+
+// ─────────── Category Detection ───────────
+
+data class CategoryDetectionConfig(
+    val defaultCategory: String = "餐食",
+    val drinkTriggers: DrinkTriggers = DrinkTriggers(),
+    val expressTriggers: ExpressTriggers = ExpressTriggers()
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("default_category", defaultCategory)
+        put("drink_triggers", drinkTriggers.toJson())
+        put("express_triggers", expressTriggers.toJson())
+    }
+
+    companion object {
+        fun fromJson(json: JSONObject): CategoryDetectionConfig = CategoryDetectionConfig(
+            defaultCategory = json.optString("default_category", "餐食"),
+            drinkTriggers = json.optJSONObject("drink_triggers")?.let { DrinkTriggers.fromJson(it) } ?: DrinkTriggers(),
+            expressTriggers = json.optJSONObject("express_triggers")?.let { ExpressTriggers.fromJson(it) } ?: ExpressTriggers()
+        )
+    }
+}
+
+data class DrinkTriggers(
+    val brandBased: Boolean = true,
+    val textKeywords: List<String> = listOf("奶茶", "咖啡")
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("brand_based", brandBased)
+        put("text_keywords", JSONArray(textKeywords))
+    }
+
+    companion object {
+        fun fromJson(json: JSONObject): DrinkTriggers = DrinkTriggers(
+            brandBased = json.optBoolean("brand_based", true),
+            textKeywords = json.optJSONArray("text_keywords")?.let { arr -> (0 until arr.length()).map { arr.getString(it) } } ?: listOf("奶茶", "咖啡")
+        )
+    }
+}
+
+data class ExpressTriggers(
+    val textKeywords: List<String> = listOf("取件", "取性", "快递", "包裹", "待取件", "丰巢"),
+    val brandInText: Boolean = true
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("text_keywords", JSONArray(textKeywords))
+        put("brand_in_text", brandInText)
+    }
+
+    companion object {
+        fun fromJson(json: JSONObject): ExpressTriggers = ExpressTriggers(
+            textKeywords = json.optJSONArray("text_keywords")?.let { arr -> (0 until arr.length()).map { arr.getString(it) } } ?: listOf("取件", "取性", "快递", "包裹", "待取件", "丰巢"),
+            brandInText = json.optBoolean("brand_in_text", true)
+        )
+    }
+}
+
+// ─────────── Homepage Detection ───────────
+
+data class HomepageDetectionConfig(
+    val keywords: List<String> = listOf("我的", "首页", "会员码", "到店取餐", "点单", "会员", "我的订单"),
+    val threshold: Int = 3
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("keywords", JSONArray(keywords))
+        put("threshold", threshold)
+    }
+
+    companion object {
+        fun fromJson(json: JSONObject): HomepageDetectionConfig = HomepageDetectionConfig(
+            keywords = json.optJSONArray("keywords")?.let { arr -> (0 until arr.length()).map { arr.getString(it) } } ?: listOf("我的", "首页", "会员码", "到店取餐", "点单", "会员", "我的订单"),
+            threshold = json.optInt("threshold", 3)
+        )
+    }
+}
+
+// ─────────── Text Cleaning ───────────
+
+data class TextCleaningConfig(
+    val datetimePattern: String = "\\d{2}-\\d{2}\\s+\\d{2}:\\d{2}",
+    val corrections: List<TextCorrection> = emptyList(),
+    val charRemovals: List<String> = listOf("|"),
+    val spaceCollapse: String = "(?<=[\\u4e00-\\u9fa5A-Z0-9-])\\s+(?=[\\u4e00-\\u9fa5])"
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("datetime_pattern", datetimePattern)
+        put("corrections", JSONArray(corrections.map { it.toJson() }))
+        put("char_removals", JSONArray(charRemovals))
+        put("space_collapse", spaceCollapse)
+    }
+
+    companion object {
+        fun fromJson(json: JSONObject): TextCleaningConfig = TextCleaningConfig(
+            datetimePattern = json.optString("datetime_pattern", "\\d{2}-\\d{2}\\s+\\d{2}:\\d{2}"),
+            corrections = json.optJSONArray("corrections")?.let { arr -> (0 until arr.length()).map { TextCorrection.fromJson(arr.getJSONObject(it)) } } ?: emptyList(),
+            charRemovals = json.optJSONArray("char_removals")?.let { arr -> (0 until arr.length()).map { arr.getString(it) } } ?: listOf("|"),
+            spaceCollapse = json.optString("space_collapse", "(?<=[\\u4e00-\\u9fa5A-Z0-9-])\\s+(?=[\\u4e00-\\u9fa5])")
+        )
+    }
+}
+
+data class TextCorrection(
+    val from: String,
+    val to: String
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("from", from)
+        put("to", to)
+    }
+
+    companion object {
+        fun fromJson(json: JSONObject): TextCorrection = TextCorrection(
+            from = json.getString("from"),
+            to = json.getString("to")
+        )
+    }
+}
+
+// ─────────── Validation ───────────
+
+data class ValidationConfig(
+    val expressCode: ExpressValidation = ExpressValidation(),
+    val foodCode: FoodValidation = FoodValidation()
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("express_code", expressCode.toJson())
+        put("food_code", foodCode.toJson())
+    }
+
+    companion object {
+        fun fromJson(json: JSONObject): ValidationConfig = ValidationConfig(
+            expressCode = json.optJSONObject("express_code")?.let { ExpressValidation.fromJson(it) } ?: ExpressValidation(),
+            foodCode = json.optJSONObject("food_code")?.let { FoodValidation.fromJson(it) } ?: FoodValidation()
+        )
+    }
+}
+
+data class ExpressValidation(
+    val maxLength: Int = 12,
+    val rejectAllLetters: Boolean = true,
+    val rejectPhonePattern: String = "^1\\d{10}$",
+    val rejectYearPrefix: String = "202",
+    val rejectYearLength: Int = 4,
+    val rejectDatePattern: String = "^(0?[1-9]|1[0-2])-(0?[1-9]|[12]\\d|3[01])$",
+    val phoneTail: PhoneTailConfig = PhoneTailConfig()
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("max_length", maxLength)
+        put("reject_all_letters", rejectAllLetters)
+        put("reject_phone_pattern", rejectPhonePattern)
+        put("reject_year_prefix", rejectYearPrefix)
+        put("reject_year_length", rejectYearLength)
+        put("reject_date_pattern", rejectDatePattern)
+        put("phone_tail", phoneTail.toJson())
+    }
+
+    companion object {
+        fun fromJson(json: JSONObject): ExpressValidation = ExpressValidation(
+            maxLength = json.optInt("max_length", 12),
+            rejectAllLetters = json.optBoolean("reject_all_letters", true),
+            rejectPhonePattern = json.optString("reject_phone_pattern", "^1\\d{10}$"),
+            rejectYearPrefix = json.optString("reject_year_prefix", "202"),
+            rejectYearLength = json.optInt("reject_year_length", 4),
+            rejectDatePattern = json.optString("reject_date_pattern", "^(0?[1-9]|1[0-2])-(0?[1-9]|[12]\\d|3[01])$"),
+            phoneTail = json.optJSONObject("phone_tail")?.let { PhoneTailConfig.fromJson(it) } ?: PhoneTailConfig()
+        )
+    }
+}
+
+data class PhoneTailConfig(
+    val length: Int = 4,
+    val digitsOnly: Boolean = true,
+    val maskPattern: String = "\\*{2,}",
+    val contextKeywords: List<String> = listOf("本人", "手机", "手机号", "电话", "联系", "收件人", "尾号")
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("length", length)
+        put("digits_only", digitsOnly)
+        put("mask_pattern", maskPattern)
+        put("context_keywords", JSONArray(contextKeywords))
+    }
+
+    companion object {
+        fun fromJson(json: JSONObject): PhoneTailConfig = PhoneTailConfig(
+            length = json.optInt("length", 4),
+            digitsOnly = json.optBoolean("digits_only", true),
+            maskPattern = json.optString("mask_pattern", "\\*{2,}"),
+            contextKeywords = json.optJSONArray("context_keywords")?.let { arr -> (0 until arr.length()).map { arr.getString(it) } } ?: listOf("本人", "手机", "手机号", "电话", "联系", "收件人", "尾号")
+        )
+    }
+}
+
+data class FoodValidation(
+    val rejectYearPrefix: String = "202",
+    val rejectYearLength: Int = 4,
+    val rejectTimeContexts: List<String> = listOf(":", "/"),
+    val rejectTimeKeywords: List<String> = listOf("时间", "日期", "预计获得", "积分"),
+    val distractionWords: List<String> = listOf("ml", "g", "元", "¥", "购", "券", "赢", "送", "补贴", "减", "满", "起", "合计", "实付"),
+    val distractionRange: Int = 2
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("reject_year_prefix", rejectYearPrefix)
+        put("reject_year_length", rejectYearLength)
+        put("reject_time_contexts", JSONArray(rejectTimeContexts))
+        put("reject_time_keywords", JSONArray(rejectTimeKeywords))
+        put("distraction_words", JSONArray(distractionWords))
+        put("distraction_range", distractionRange)
+    }
+
+    companion object {
+        fun fromJson(json: JSONObject): FoodValidation = FoodValidation(
+            rejectYearPrefix = json.optString("reject_year_prefix", "202"),
+            rejectYearLength = json.optInt("reject_year_length", 4),
+            rejectTimeContexts = json.optJSONArray("reject_time_contexts")?.let { arr -> (0 until arr.length()).map { arr.getString(it) } } ?: listOf(":", "/"),
+            rejectTimeKeywords = json.optJSONArray("reject_time_keywords")?.let { arr -> (0 until arr.length()).map { arr.getString(it) } } ?: listOf("时间", "日期", "预计获得", "积分"),
+            distractionWords = json.optJSONArray("distraction_words")?.let { arr -> (0 until arr.length()).map { arr.getString(it) } } ?: listOf("ml", "g", "元", "¥", "购", "券", "赢", "送", "补贴", "减", "满", "起", "合计", "实付"),
+            distractionRange = json.optInt("distraction_range", 2)
+        )
+    }
+}
+
+// ─────────── Scoring ───────────
+
+data class ScoringConfig(
+    val brandDetection: BrandScoring = BrandScoring(),
+    val expressCode: ExpressScoring = ExpressScoring(),
+    val foodCode: FoodScoring = FoodScoring()
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("brand_detection", brandDetection.toJson())
+        put("express_code", expressCode.toJson())
+        put("food_code", foodCode.toJson())
+    }
+
+    companion object {
+        fun fromJson(json: JSONObject): ScoringConfig = ScoringConfig(
+            brandDetection = json.optJSONObject("brand_detection")?.let { BrandScoring.fromJson(it) } ?: BrandScoring(),
+            expressCode = json.optJSONObject("express_code")?.let { ExpressScoring.fromJson(it) } ?: ExpressScoring(),
+            foodCode = json.optJSONObject("food_code")?.let { FoodScoring.fromJson(it) } ?: FoodScoring()
+        )
+    }
+}
+
+data class BrandScoring(
+    val keywordMatchWeight: Int = 4,
+    val colonMatchWeight: Int = 1,
+    val exactMatchWeight: Int = 15
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("keyword_match_weight", keywordMatchWeight)
+        put("colon_match_weight", colonMatchWeight)
+        put("exact_match_weight", exactMatchWeight)
+    }
+
+    companion object {
+        fun fromJson(json: JSONObject): BrandScoring = BrandScoring(
+            keywordMatchWeight = json.optInt("keyword_match_weight", 4),
+            colonMatchWeight = json.optInt("colon_match_weight", 1),
+            exactMatchWeight = json.optInt("exact_match_weight", 15)
+        )
+    }
+}
+
+data class ExpressScoring(
+    val baseByBboxWidth: Boolean = true,
+    val dashMultiplier: Int = 20,
+    val letterMultiplier: Int = 5
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("base_by_bbox_width", baseByBboxWidth)
+        put("dash_multiplier", dashMultiplier)
+        put("letter_multiplier", letterMultiplier)
+    }
+
+    companion object {
+        fun fromJson(json: JSONObject): ExpressScoring = ExpressScoring(
+            baseByBboxWidth = json.optBoolean("base_by_bbox_width", true),
+            dashMultiplier = json.optInt("dash_multiplier", 20),
+            letterMultiplier = json.optInt("letter_multiplier", 5)
+        )
+    }
+}
+
+data class FoodScoring(
+    val baseByBboxWidth: Boolean = true,
+    val brandOverrides: Map<String, BrandFoodScoring> = emptyMap()
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("base_by_bbox_width", baseByBboxWidth)
+        val obj = JSONObject()
+        brandOverrides.forEach { (k, v) -> obj.put(k, v.toJson()) }
+        put("brand_overrides", obj)
+    }
+
+    companion object {
+        fun fromJson(json: JSONObject): FoodScoring = FoodScoring(
+            baseByBboxWidth = json.optBoolean("base_by_bbox_width", true),
+            brandOverrides = json.optJSONObject("brand_overrides")?.let { obj ->
+                obj.keys().asSequence().associateWith { BrandFoodScoring.fromJson(obj.getJSONObject(it)) }
+            } ?: emptyMap()
+        )
+    }
+}
+
+data class BrandFoodScoring(
+    val lengthGte4LetterMultiplier: Int = 1,
+    val length5DigitMultiplier: Int = 1,
+    val length4DigitMultiplier: Int = 1
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("length_gte_4_letter_multiplier", lengthGte4LetterMultiplier)
+        put("length_5_digit_multiplier", length5DigitMultiplier)
+        put("length_4_digit_multiplier", length4DigitMultiplier)
+    }
+
+    companion object {
+        fun fromJson(json: JSONObject): BrandFoodScoring = BrandFoodScoring(
+            lengthGte4LetterMultiplier = json.optInt("length_gte_4_letter_multiplier", 1),
+            length5DigitMultiplier = json.optInt("length_5_digit_multiplier", 1),
+            length4DigitMultiplier = json.optInt("length_4_digit_multiplier", 1)
+        )
+    }
+}
+
+// ─────────── Pickup Location ───────────
+
+data class PickupLocationConfig(
+    val startKeywords: List<String> = listOf("已到", "已至", "到达", "到了", "在", "于", "己到", "前往", "送到", "前住"),
+    val targetKeywords: List<String> = listOf("服务站", "驿站", "菜鸟驿", "菜鸟驿站", "自提点", "快递站", "菜鸟站", "代收点", "代点", "丰巢柜", "快递柜", "智能柜", "门面", "邮政大厅", "大厅"),
+    val stopKeywords: List<String> = listOf("领取", "取件", "查看", "请凭", "靖凭", "如有", "如有疑问", "取您的", "复制"),
+    val garbagePatterns: List<String> = listOf("代收点(", "代收点（", "\\d{10,}"),
+    val proximityThreshold: Int = 400
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("start_keywords", JSONArray(startKeywords))
+        put("target_keywords", JSONArray(targetKeywords))
+        put("stop_keywords", JSONArray(stopKeywords))
+        put("garbage_patterns", JSONArray(garbagePatterns))
+        put("proximity_threshold", proximityThreshold)
+    }
+
+    companion object {
+        fun fromJson(json: JSONObject): PickupLocationConfig = PickupLocationConfig(
+            startKeywords = json.optJSONArray("start_keywords")?.let { arr -> (0 until arr.length()).map { arr.getString(it) } } ?: listOf("已到", "已至", "到达", "到了", "在", "于", "己到", "前往", "送到", "前住"),
+            targetKeywords = json.optJSONArray("target_keywords")?.let { arr -> (0 until arr.length()).map { arr.getString(it) } } ?: listOf("服务站", "驿站", "菜鸟驿", "菜鸟驿站", "自提点", "快递站", "菜鸟站", "代收点", "代点", "丰巢柜", "快递柜", "智能柜", "门面", "邮政大厅", "大厅"),
+            stopKeywords = json.optJSONArray("stop_keywords")?.let { arr -> (0 until arr.length()).map { arr.getString(it) } } ?: listOf("领取", "取件", "查看", "请凭", "靖凭", "如有", "如有疑问", "取您的", "复制"),
+            garbagePatterns = json.optJSONArray("garbage_patterns")?.let { arr -> (0 until arr.length()).map { arr.getString(it) } } ?: listOf("代收点(", "代收点（", "\\d{10,}"),
+            proximityThreshold = json.optInt("proximity_threshold", 400)
+        )
+    }
+}

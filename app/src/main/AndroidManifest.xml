@@ -31,14 +31,17 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:enableOnBackInvokedCallback="true"
+        android:resizeableActivity="true"
         android:theme="@style/Theme.澎湃记">
 
         <activity
-            android:name=".MainActivity"
+            android:name=".activity.MainActivity"
             android:exported="true"
             android:label="@string/app_name"
             android:theme="@style/Theme.澎湃记"
-            android:launchMode="singleTask">
+            android:resizeableActivity="true"
+            android:launchMode="singleTask"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|density|uiMode|smallestScreenSize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -46,7 +49,7 @@
         </activity>
 
         <activity
-            android:name=".PermissionActivity"
+            android:name=".activity.PermissionActivity"
             android:theme="@android:style/Theme.Translucent.NoTitleBar"
             android:excludeFromRecents="true"
             android:noHistory="true"
@@ -54,7 +57,7 @@
             android:exported="false" />
 
         <activity
-            android:name=".ProcessTextActivity"
+            android:name=".activity.ProcessTextActivity"
             android:label="澎湃记-划词识别"
             android:theme="@android:style/Theme.Translucent.NoTitleBar"
             android:excludeFromRecents="true"
@@ -68,7 +71,7 @@
         </activity>
 
         <activity
-            android:name=".OrderQuickViewActivity"
+            android:name=".activity.OrderQuickViewActivity"
             android:label="订单快速查看"
             android:theme="@style/Theme.澎湃记.Overlay"
             android:excludeFromRecents="true"
@@ -78,7 +81,7 @@
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" />
 
         <activity
-            android:name=".IdentityChooserActivity"
+            android:name=".activity.IdentityChooserActivity"
             android:label="身份码选择"
             android:theme="@style/Theme.澎湃记.Overlay"
             android:excludeFromRecents="true"
@@ -87,7 +90,7 @@
             android:taskAffinity=".quickview" />
 
         <activity
-            android:name=".ShareReceiverActivity"
+            android:name=".activity.ShareReceiverActivity"
             android:label="识别截图"
             android:theme="@android:style/Theme.Translucent.NoTitleBar"
             android:excludeFromRecents="true"
@@ -101,7 +104,7 @@
         </activity>
 
         <service
-            android:name=".CaptureTileService"
+            android:name=".service.CaptureTileService"
             android:exported="true"
             android:label="截图识别"
             android:icon="@drawable/note_qs"
@@ -112,22 +115,22 @@
         </service>
 
         <service
-            android:name=".ScreenCaptureService"
+            android:name=".service.ScreenCaptureService"
             android:exported="false"
             android:foregroundServiceType="mediaProjection|specialUse" />
 
         <service
-            android:name=".ShareRecognitionService"
+            android:name=".service.ShareRecognitionService"
             android:exported="false"
             android:foregroundServiceType="specialUse" />
 
         <service
-            android:name=".ProcessTextRecognitionService"
+            android:name=".service.ProcessTextRecognitionService"
             android:exported="false"
             android:foregroundServiceType="specialUse" />
 
         <service
-            android:name=".VolumeShortcutAccessibilityService"
+            android:name=".service.VolumeShortcutAccessibilityService"
             android:enabled="true"
             android:exported="false"
             android:label="@string/app_name"
@@ -140,7 +143,7 @@
                 android:resource="@xml/volume_shortcut_accessibility_service" />
         </service>
 
-        <receiver android:name=".NotificationReceiver" android:exported="false" />
+        <receiver android:name=".receiver.NotificationReceiver" android:exported="false" />
 
         <provider
             android:name="androidx.core.content.FileProvider"
