@@ -2,6 +2,7 @@
   "schema_version": 1,
   "app_version": "26.4.17",
   "updated_at": "2026-04-23T00:00:00Z",
+  "jsonpackage": "com.Badnng.Config",
   "description": "澎湃记内置默认识别规则",
 
   "brands": {

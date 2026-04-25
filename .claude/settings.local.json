@@ -25,7 +25,16 @@
       "Bash(xargs -I{} sh -c 'javap -p {} 2>/dev/null')",
       "Bash(./gradlew compileDebugKotlin)",
       "Bash(cd /d \"D:\\\\Hypernotesuper\")",
-      "Bash(./gradlew compileDebugKotlin --no-daemon)"
+      "Bash(./gradlew compileDebugKotlin --no-daemon)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:chrisbanes.github.io)",
+      "WebFetch(domain:compose-miuix-ui.github.io)",
+      "WebFetch(domain:central.sonatype.com)",
+      "Bash(jar tf *)",
+      "Bash(jar xf *)",
+      "Bash(python3 -c ' *)",
+      "Bash(python -c ' *)",
+      "Bash(python -c *)"
     ]
   }
 }

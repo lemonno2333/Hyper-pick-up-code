@@ -8,14 +8,14 @@ plugins {
 
 android {
     namespace = "com.Badnng.moe"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.Badnng.moe"
         minSdk = 35
         targetSdk = 36
-        versionCode = 20260424_12
-        versionName = "26.4.24.C02-Dev"
+        versionCode = 20260426_11
+        versionName = "26.4.26.C01-Dev"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {
@@ -132,6 +132,8 @@ dependencies {
     ksp(libs.androidx.room.compiler)
     // PaddleOCR (替换 ML Kit 文字识别)
     implementation("com.github.equationl.paddleocr4android:ncnnandroidppocr:v1.3.0")
+    // Miuix Blur (毛玻璃模糊效果)
+    implementation("top.yukonga.miuix.kmp:miuix-blur-android:0.9.0")
     // 保留 ML Kit 条码扫描
     implementation(libs.mlkit.barcode.scanning)
     implementation(libs.zxing.core)

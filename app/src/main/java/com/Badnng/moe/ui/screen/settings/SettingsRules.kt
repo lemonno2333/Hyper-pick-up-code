@@ -574,7 +574,7 @@ private fun OnlineSourceRow(
                         maxLines = 1
                     )
                     Text(
-                        text = "${source.updateIntervalHours}h | $lastUpdatedText",
+                        text = "${source.updateIntervalMinutes}分钟 | $lastUpdatedText",
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                     )
@@ -639,7 +639,7 @@ private fun OnlineSourceDialog(
 ) {
     var name by remember { mutableStateOf(source?.name ?: "") }
     var url by remember { mutableStateOf(source?.url ?: "") }
-    var updateInterval by remember { mutableStateOf((source?.updateIntervalHours ?: 24).toString()) }
+    var updateInterval by remember(source?.id) { mutableStateOf((source?.updateIntervalMinutes ?: 1440).toString()) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -667,7 +667,7 @@ private fun OnlineSourceDialog(
                 OutlinedTextField(
                     value = updateInterval,
                     onValueChange = { updateInterval = it.filter { c -> c.isDigit() } },
-                    label = { Text("更新间隔 (小时)") },
+                    label = { Text("更新间隔 (分钟)") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     shape = RoundedCornerShape(12.dp)
@@ -678,15 +678,15 @@ private fun OnlineSourceDialog(
             TextButton(
                 onClick = {
                     if (name.isNotBlank() && url.isNotBlank()) {
-                        val interval = updateInterval.toIntOrNull() ?: 24
+                        val interval = maxOf(1, updateInterval.toIntOrNull() ?: 1440)
                         val newSource = if (source != null) {
-                            source.copy(name = name.trim(), url = url.trim(), updateIntervalHours = interval)
+                            source.copy(name = name.trim(), url = url.trim(), updateIntervalMinutes = interval)
                         } else {
                             OnlineRuleSource(
                                 id = UUID.randomUUID().toString(),
                                 name = name.trim(),
                                 url = url.trim(),
-                                updateIntervalHours = interval
+                                updateIntervalMinutes = interval
                             )
                         }
                         onSave(newSource)

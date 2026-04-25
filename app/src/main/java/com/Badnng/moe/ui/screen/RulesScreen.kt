@@ -5,7 +5,12 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,16 +28,18 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.Badnng.moe.rules.*
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.BufferedReader
-import java.text.SimpleDateFormat
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RulesScreen(modifier: Modifier = Modifier) {
+fun RulesScreen(
+    modifier: Modifier = Modifier,
+    onShowMenu: ((position: androidx.compose.ui.geometry.Offset, rename: (() -> Unit)?, delete: (() -> Unit)?, export: (() -> Unit)?) -> Unit)? = null,
+    onDismissMenu: (() -> Unit)? = null
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
@@ -45,17 +52,46 @@ fun RulesScreen(modifier: Modifier = Modifier) {
     }
 
     var rules by remember { mutableStateOf(RecognitionRuleEngine.rules) }
-    var onlineSources by remember { mutableStateOf(emptyList<OnlineRuleSource>()) }
+    var builtinRules by remember { mutableStateOf(RecognitionRules()) }
+    var localConfig by remember { mutableStateOf(LocalRuleSourceConfig()) }
+    var localCustomSources by remember { mutableStateOf<List<LocalCustomSource>>(emptyList()) }
+    var customSourceRules by remember { mutableStateOf<Map<String, RecognitionRules>>(emptyMap()) }
+    var onlineSources by remember { mutableStateOf<List<OnlineRuleSource>>(emptyList()) }
+    var onlineSourceRules by remember { mutableStateOf<Map<String, RecognitionRules>>(emptyMap()) }
+    var activeSourceId by remember { mutableStateOf("local") }
 
     var localExpanded by remember { mutableStateOf(true) }
-    var onlineExpanded by remember { mutableStateOf(true) }
+    var onlineExpanded by remember { mutableStateOf(false) }
 
     var showAddSourceDialog by remember { mutableStateOf(false) }
     var editingSource by remember { mutableStateOf<OnlineRuleSource?>(null) }
     var showResetDialog by remember { mutableStateOf(false) }
+    var deletingCustomSourceId by remember { mutableStateOf<String?>(null) }
+    var pendingImportRules by remember { mutableStateOf<RecognitionRules?>(null) }
+    var pendingImportFileName by remember { mutableStateOf("") }
+    var pendingImportName by remember { mutableStateOf("") }
 
-    var autoUpdateCountdown by remember { mutableIntStateOf(0) }
-    var isAutoUpdating by remember { mutableStateOf(false) }
+    var renamingTarget by remember { mutableStateOf<String?>(null) }
+    var renamingName by remember { mutableStateOf("") }
+
+    val singleExportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        uri?.let {
+            scope.launch {
+                try {
+                    withContext(Dispatchers.IO) {
+                        context.contentResolver.openOutputStream(it)?.use { os ->
+                            os.write(RecognitionRuleEngine.exportToJson(rules).toByteArray())
+                        }
+                    }
+                    Toast.makeText(context, "导出成功", Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    Toast.makeText(context, "导出失败: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
 
     val importLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -66,12 +102,46 @@ fun RulesScreen(modifier: Modifier = Modifier) {
                     val json = withContext(Dispatchers.IO) {
                         context.contentResolver.openInputStream(it)?.bufferedReader()?.use(BufferedReader::readText) ?: ""
                     }
+                    val fileName = withContext(Dispatchers.IO) {
+                        val cursor = context.contentResolver.query(it, null, null, null, null)
+                        cursor?.use { c ->
+                            if (c.moveToFirst()) {
+                                val nameIndex = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                                if (nameIndex >= 0) c.getString(nameIndex) else null
+                            } else null
+                        } ?: "自定义JSON规则"
+                    }
                     val result = RecognitionRuleEngine.importFromJson(json)
                     result.fold(
                         onSuccess = { importedRules ->
-                            RecognitionRuleEngine.saveLocalRules(importedRules)
-                            rules = RecognitionRuleEngine.rules
-                            Toast.makeText(context, "导入成功", Toast.LENGTH_SHORT).show()
+                            val jsonPkg = importedRules.jsonPackage
+                            if (jsonPkg.isNotBlank()) {
+                                // 检查是否有相同 jsonPackage 的源
+                                val existing = RecognitionRuleEngine.findExistingSourceByPackage(context, jsonPkg)
+                                if (existing != null) {
+                                    // 直接覆盖，保持原名
+                                    RecognitionRuleEngine.overwriteLocalCustomSource(context, existing.id, importedRules)
+                                    val (local, custom, online) = RecognitionRuleEngine.loadAllSourcesSystem(context)
+                                    localConfig = local
+                                    localCustomSources = custom
+                                    onlineSources = online
+                                    customSourceRules = customSourceRules + (existing.id to importedRules)
+                                    rules = RecognitionRuleEngine.rules
+                                    Toast.makeText(context, "已覆盖更新「${existing.displayName}」", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    // 新源，弹出重命名对话框
+                                    val name = fileName.substringBeforeLast(".")
+                                    pendingImportRules = importedRules
+                                    pendingImportFileName = fileName
+                                    pendingImportName = name
+                                }
+                            } else {
+                                // 无 jsonPackage，弹出重命名对话框
+                                val name = fileName.substringBeforeLast(".")
+                                pendingImportRules = importedRules
+                                pendingImportFileName = fileName
+                                pendingImportName = name
+                            }
                         },
                         onFailure = { e ->
                             Toast.makeText(context, "导入失败: ${e.message}", Toast.LENGTH_LONG).show()
@@ -104,35 +174,50 @@ fun RulesScreen(modifier: Modifier = Modifier) {
     }
 
     LaunchedEffect(Unit) {
-        onlineSources = RecognitionRuleEngine.loadOnlineSources()
+        val repo = com.Badnng.moe.rules.RuleRepository(context)
+        val config = repo.loadSystemConfig()
+        localConfig = config.localConfig
+        localCustomSources = config.localCustomSources
+        onlineSources = config.onlineSources
+        activeSourceId = config.activeSourceId
+        // 加载内置规则
+        builtinRules = repo.loadBuiltInRules()
+        // 加载每个自定义源的规则详情
+        val rulesMap = mutableMapOf<String, RecognitionRules>()
+        config.localCustomSources.forEach { source ->
+            repo.loadLocalCustomRulesById(source.id)?.let { rulesMap[source.id] = it }
+        }
+        customSourceRules = rulesMap
+        // 加载每个在线源的规则详情
+        val onlineRulesMap = mutableMapOf<String, RecognitionRules>()
+        android.util.Log.d("RulesScreen", "在线源数量: ${config.onlineSources.size}")
+        config.onlineSources.forEach { source ->
+            val loaded = repo.loadOnlineRulesById(source.id)
+            android.util.Log.d("RulesScreen", "加载在线源规则 [${source.id}]: ${if (loaded != null) "成功" else "无缓存"}")
+            loaded?.let { onlineRulesMap[source.id] = it }
+        }
+        onlineSourceRules = onlineRulesMap
     }
 
-    LaunchedEffect(isAutoUpdating) {
-        if (isAutoUpdating) {
-            while (autoUpdateCountdown > 0) {
-                delay(60_000L)
-                autoUpdateCountdown--
-                if (autoUpdateCountdown <= 0) {
-                    isAutoUpdating = false
-                    onlineSources.filter { it.enabled }.forEach { source ->
-                        val updater = RuleOnlineUpdater(context)
-                        val result = updater.fetchAndSaveSource(source)
-                        result.fold(
-                            onSuccess = { (updated, newSource) ->
-                                val newSources = onlineSources.toMutableList().apply {
-                                    val idx = indexOfFirst { it.id == source.id }
-                                    if (idx >= 0) set(idx, newSource)
-                                }
-                                RecognitionRuleEngine.saveOnlineSources(newSources)
-                                onlineSources = newSources
-                                if (updated) {
-                                    RecognitionRuleEngine.reload(context)
-                                    rules = RecognitionRuleEngine.rules
-                                }
-                            },
-                            onFailure = { }
-                        )
-                    }
+    // 从后台管理器读取倒计时
+    val countdowns by com.Badnng.moe.rules.RuleAutoUpdateManager.countdowns.collectAsState()
+
+    // 后台更新后刷新UI
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(5000L)
+            val repo = com.Badnng.moe.rules.RuleRepository(context)
+            val config = repo.loadSystemConfig()
+            if (config.onlineSources != onlineSources) {
+                onlineSources = config.onlineSources
+                val updatedMap = mutableMapOf<String, RecognitionRules>()
+                config.onlineSources.forEach { s ->
+                    repo.loadOnlineRulesById(s.id)?.let { updatedMap[s.id] = it }
+                }
+                onlineSourceRules = updatedMap
+                if (config.activeSourceId != activeSourceId) {
+                    activeSourceId = config.activeSourceId
+                    rules = RecognitionRuleEngine.rules
                 }
             }
         }
@@ -155,51 +240,121 @@ fun RulesScreen(modifier: Modifier = Modifier) {
         containerColor = Color.Transparent,
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { _ ->
-        Box(modifier = Modifier.fillMaxSize()) {
-            val bottomInsets = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-            val topInsets = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(start = 16.dp, top = topInsets + 64.dp, end = 16.dp, bottom = bottomInsets + 100.dp)
-            ) {
-                item {
-                    SectionCard(
-                        title = "本地规则",
-                        subtitle = "${rules.brands.drink.size + rules.brands.food.size + rules.brands.express.size} 条规则",
-                        expanded = localExpanded,
-                        onToggle = { performHaptic(); localExpanded = !localExpanded }
-                    ) {
-                        RuleRow(
-                            name = "内置默认规则",
-                            count = rules.brands.drink.size + rules.brands.food.size + rules.brands.express.size,
-                            details = listOf(
-                                "饮品品牌" to rules.brands.drink.size,
-                                "餐食品牌" to rules.brands.food.size,
-                                "快递关键词" to rules.brands.express.size,
-                                "取件码触发词" to rules.codeExtraction.express.triggerKeywords.size,
-                                "取餐码触发词" to rules.codeExtraction.food.triggerKeywords.size,
-                                "首页关键词" to rules.homepageDetection.keywords.size,
-                                "OCR 纠错" to rules.textCleaning.corrections.size
-                            ),
-                            performHaptic = performHaptic
-                        )
+        val bottomInsets =
+            WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+        val topInsets = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        RuleRow(
-                            name = "本地自定义规则",
-                            count = null,
-                            details = null,
-                            performHaptic = performHaptic,
-                            expandable = false
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = PaddingValues(
+                        start = 16.dp,
+                        top = topInsets + 64.dp,
+                        end = 16.dp,
+                        bottom = bottomInsets + 100.dp
+                    )
+                ) {
+                    item {
+                        SectionCard(
+                            title = "本地规则",
+                            subtitle = "${1 + localCustomSources.size} 个规则源",
+                            expanded = localExpanded,
+                            onToggle = { performHaptic(); localExpanded = !localExpanded; if (localExpanded) onlineExpanded = false }
                         ) {
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                ActionButton("从文件导入") {
+                                RuleSourceRow(
+                                    name = "内置默认规则",
+                                    subtitle = "应用自带规则",
+                                    enabled = true,
+                                    isActive = activeSourceId == "builtin",
+                                    performHaptic = performHaptic,
+                                    showSwitch = false,
+                                    expandable = true,
+                                    details = listOf(
+                                        "饮品品牌" to builtinRules.brands.drink.size,
+                                        "餐食品牌" to builtinRules.brands.food.size,
+                                        "快递关键词" to builtinRules.brands.express.size,
+                                        "取件码触发词" to builtinRules.codeExtraction.express.triggerKeywords.size,
+                                        "取餐码触发词" to builtinRules.codeExtraction.food.triggerKeywords.size,
+                                        "首页关键词" to builtinRules.homepageDetection.keywords.size,
+                                        "OCR 纠错" to builtinRules.textCleaning.corrections.size
+                                    ),
+                                    onLongPress = { offset ->
+                                        performHaptic()
+                                        onShowMenu?.invoke(
+                                            offset,
+                                            null,
+                                            null,
+                                            { singleExportLauncher.launch("builtin_rules.json") }
+                                        )
+                                    }
+                                )
+
+                                localCustomSources.forEachIndexed { index, source ->
+                                    val sourceRules = customSourceRules[source.id]
+                                    RuleSourceRow(
+                                        name = source.displayName.ifBlank { "自定义JSON规则" },
+                                        subtitle = "从文件导入的规则",
+                                        enabled = source.enabled,
+                                        isActive = activeSourceId == "local_custom_${source.id}",
+                                        performHaptic = performHaptic,
+                                        expandable = sourceRules != null,
+                                        details = sourceRules?.let { r ->
+                                            listOf(
+                                                "饮品品牌" to r.brands.drink.size,
+                                                "餐食品牌" to r.brands.food.size,
+                                                "快递关键词" to r.brands.express.size,
+                                                "取件码触发词" to r.codeExtraction.express.triggerKeywords.size,
+                                                "取餐码触发词" to r.codeExtraction.food.triggerKeywords.size,
+                                                "首页关键词" to r.homepageDetection.keywords.size,
+                                                "OCR 纠错" to r.textCleaning.corrections.size
+                                            )
+                                        },
+                                        onLongPress = { offset ->
+                                            performHaptic()
+                                            onShowMenu?.invoke(
+                                                offset,
+                                                {
+                                                    renamingTarget = "local_custom_${source.id}"
+                                                    renamingName = source.displayName.ifBlank { "自定义JSON规则" }
+                                                },
+                                                { deletingCustomSourceId = source.id },
+                                                { singleExportLauncher.launch("${source.displayName}.json") }
+                                            )
+                                        },
+                                        onToggle = { enabled ->
+                                            scope.launch {
+                                                if (enabled) {
+                                                    RecognitionRuleEngine.activateExclusiveSource(
+                                                        context,
+                                                        "local_custom_${source.id}"
+                                                    )
+                                                    activeSourceId = "local_custom_${source.id}"
+                                                } else {
+                                                    RecognitionRuleEngine.toggleLocalCustomSource(
+                                                        context,
+                                                        source.id,
+                                                        false
+                                                    )
+                                                    activeSourceId = "builtin"
+                                                }
+                                                val (local, custom, online) = RecognitionRuleEngine.loadAllSourcesSystem(
+                                                    context
+                                                )
+                                                localConfig = local
+                                                localCustomSources = custom
+                                                onlineSources = online
+                                                rules = RecognitionRuleEngine.rules
+                                            }
+                                        }
+                                    )
+                                }
+
+                                ActionButton("导入JSON规则") {
                                     performHaptic()
                                     importLauncher.launch(arrayOf("application/json", "text/plain"))
                                 }
-                                ActionButton("导出到文件") {
+                                ActionButton("导出当前规则") {
                                     performHaptic()
                                     exportLauncher.launch("recognition_rules.json")
                                 }
@@ -210,134 +365,195 @@ fun RulesScreen(modifier: Modifier = Modifier) {
                             }
                         }
                     }
-                }
 
-                item {
-                    SectionCard(
-                        title = "在线规则",
-                        subtitle = if (isAutoUpdating) "自动更新中 ${autoUpdateCountdown}分钟" else "${onlineSources.size} 个规则源",
-                        expanded = onlineExpanded,
-                        onToggle = { performHaptic(); onlineExpanded = !onlineExpanded }
-                    ) {
-                        if (onlineSources.isEmpty()) {
-                            Text(
-                                text = "暂无在线规则源",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        } else {
-                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                onlineSources.forEachIndexed { index, source ->
-                                    OnlineSourceRow(
-                                        source = source,
-                                        performHaptic = performHaptic,
-                                        onToggle = { enabled ->
-                                            scope.launch {
-                                                val updated = source.copy(enabled = enabled)
-                                                val newSources = onlineSources.toMutableList().apply { set(index, updated) }
-                                                RecognitionRuleEngine.saveOnlineSources(newSources)
-                                                onlineSources = newSources
-                                            }
-                                        },
-                                        onUpdate = {
-                                            scope.launch {
-                                                val updater = RuleOnlineUpdater(context)
-                                                val result = updater.fetchAndSaveSource(source)
-                                                result.fold(
-                                                    onSuccess = { (updated, newSource) ->
-                                                        val newSources = onlineSources.toMutableList().apply { set(index, newSource) }
-                                                        RecognitionRuleEngine.saveOnlineSources(newSources)
-                                                        onlineSources = newSources
-                                                        if (updated) {
-                                                            RecognitionRuleEngine.reload(context)
-                                                            rules = RecognitionRuleEngine.rules
-                                                            Toast.makeText(context, "更新成功", Toast.LENGTH_SHORT).show()
-                                                        } else {
-                                                            Toast.makeText(context, "规则已是最新", Toast.LENGTH_SHORT).show()
+                    item {
+                        SectionCard(
+                            title = "在线规则",
+                            subtitle = "${onlineSources.size} 个规则源",
+                            expanded = onlineExpanded,
+                            onToggle = { performHaptic(); onlineExpanded = !onlineExpanded; if (onlineExpanded) localExpanded = false }
+                        ) {
+                            if (onlineSources.isEmpty()) {
+                                Text(
+                                    text = "暂无在线规则源",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            } else {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    onlineSources.forEachIndexed { index, source ->
+                                        val sourceRules = onlineSourceRules[source.id]
+                                        val cd = countdowns[source.id]
+                                        val subtitleText = if (source.enabled && cd != null) {
+                                            "${source.url}\n${cd}分钟后更新"
+                                        } else source.url
+                                        RuleSourceRow(
+                                            name = source.name,
+                                            subtitle = subtitleText,
+                                            enabled = source.enabled,
+                                            isActive = activeSourceId == source.id,
+                                            performHaptic = performHaptic,
+                                            expandable = true,
+                                            details = sourceRules?.let { r ->
+                                                listOf(
+                                                    "饮品品牌" to r.brands.drink.size,
+                                                    "餐食品牌" to r.brands.food.size,
+                                                    "快递关键词" to r.brands.express.size,
+                                                    "取件码触发词" to r.codeExtraction.express.triggerKeywords.size,
+                                                    "取餐码触发词" to r.codeExtraction.food.triggerKeywords.size,
+                                                    "首页关键词" to r.homepageDetection.keywords.size,
+                                                    "OCR 纠错" to r.textCleaning.corrections.size
+                                                )
+                                            },
+                                            noDataText = "暂无缓存，请先点击更新按钮获取规则",
+                                            extraAction = {
+                                                var isUpdating by remember { mutableStateOf(false) }
+                                                IconButton(
+                                                    onClick = {
+                                                        performHaptic()
+                                                        isUpdating = true
+                                                        scope.launch {
+                                                            val updater = RuleOnlineUpdater(context)
+                                                            val result = updater.fetchAndSaveSource(source)
+                                                            result.fold(
+                                                                onSuccess = { (updated, newSource) ->
+                                                                    val newSources = onlineSources.toMutableList()
+                                                                        .apply { set(index, newSource) }
+                                                                    RecognitionRuleEngine.saveOnlineSources(newSources)
+                                                                    if (updated && activeSourceId == source.id) {
+                                                                        RecognitionRuleEngine.reload(context)
+                                                                        rules = RecognitionRuleEngine.rules
+                                                                    }
+                                                                    val (local, custom, online) = RecognitionRuleEngine.loadAllSourcesSystem(context)
+                                                                    localConfig = local
+                                                                    localCustomSources = custom
+                                                                    onlineSources = online
+                                                                    // 刷新在线源规则详情
+                                                                    val repo = com.Badnng.moe.rules.RuleRepository(context)
+                                                                    val updatedMap = mutableMapOf<String, RecognitionRules>()
+                                                                    online.forEach { s ->
+                                                                        val loaded = repo.loadOnlineRulesById(s.id)
+                                                                        android.util.Log.d("RulesScreen", "更新后加载在线源规则 [${s.id}]: ${if (loaded != null) "成功(品牌数:${loaded.brands.drink.size + loaded.brands.food.size + loaded.brands.express.size})" else "失败"}")
+                                                                        loaded?.let { updatedMap[s.id] = it }
+                                                                    }
+                                                                    onlineSourceRules = updatedMap
+                                                                    Toast.makeText(context, if (updated) "已更新" else "无需更新", Toast.LENGTH_SHORT).show()
+                                                                    // 手动更新后重置倒计时
+                                                                    com.Badnng.moe.rules.RuleAutoUpdateManager.resetCountdown(source.id, source.updateIntervalMinutes)
+                                                                },
+                                                                onFailure = { e ->
+                                                                    Toast.makeText(context, "更新失败: ${e.message}", Toast.LENGTH_SHORT).show()
+                                                                }
+                                                            )
+                                                            isUpdating = false
                                                         }
                                                     },
-                                                    onFailure = { e ->
-                                                        Toast.makeText(context, "更新失败: ${e.message}", Toast.LENGTH_LONG).show()
+                                                    enabled = !isUpdating
+                                                ) {
+                                                    if (isUpdating) {
+                                                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                                                    } else {
+                                                        Icon(Icons.Default.Refresh, contentDescription = "更新", modifier = Modifier.size(20.dp))
                                                     }
+                                                }
+                                            },
+                                            onLongPress = { offset ->
+                                                performHaptic()
+                                                onShowMenu?.invoke(
+                                                    offset,
+                                                    {
+                                                        editingSource = source
+                                                    },
+                                                    {
+                                                        scope.launch {
+                                                            val newSources = onlineSources.toMutableList()
+                                                                .apply { removeAt(index) }
+                                                            RecognitionRuleEngine.saveOnlineSources(newSources)
+                                                            if (activeSourceId == source.id) {
+                                                                RecognitionRuleEngine.switchActiveSource("builtin", context)
+                                                                activeSourceId = "builtin"
+                                                            }
+                                                            val (local, custom, online) = RecognitionRuleEngine.loadAllSourcesSystem(context)
+                                                            localConfig = local
+                                                            localCustomSources = custom
+                                                            onlineSources = online
+                                                            onlineSourceRules = onlineSourceRules - source.id
+                                                            rules = RecognitionRuleEngine.rules
+                                                            Toast.makeText(context, "已删除", Toast.LENGTH_SHORT).show()
+                                                        }
+                                                    },
+                                                    { singleExportLauncher.launch("${source.name}.json") }
                                                 )
+                                            },
+                                            onToggle = { enabled ->
+                                                scope.launch {
+                                                    if (enabled) {
+                                                        RecognitionRuleEngine.activateExclusiveSource(
+                                                            context,
+                                                            source.id
+                                                        )
+                                                        activeSourceId = source.id
+                                                    } else {
+                                                        val updated = source.copy(enabled = false)
+                                                        val newSources = onlineSources.toMutableList()
+                                                            .apply { set(index, updated) }
+                                                        RecognitionRuleEngine.saveOnlineSources(
+                                                            newSources
+                                                        )
+                                                        RecognitionRuleEngine.switchActiveSource(
+                                                            "builtin",
+                                                            context
+                                                        )
+                                                        activeSourceId = "builtin"
+                                                    }
+                                                    val (local, custom, online) = RecognitionRuleEngine.loadAllSourcesSystem(
+                                                        context
+                                                    )
+                                                    localConfig = local
+                                                    localCustomSources = custom
+                                                    onlineSources = online
+                                                    rules = RecognitionRuleEngine.rules
+                                                }
                                             }
-                                        },
-                                        onEdit = { performHaptic(); editingSource = source },
-                                        onDelete = {
-                                            performHaptic()
-                                            scope.launch {
-                                                val newSources = onlineSources.toMutableList().apply { removeAt(index) }
-                                                RecognitionRuleEngine.saveOnlineSources(newSources)
-                                                onlineSources = newSources
-                                                Toast.makeText(context, "已删除", Toast.LENGTH_SHORT).show()
-                                            }
-                                        }
-                                    )
+                                        )
+                                    }
                                 }
                             }
-                        }
 
-                        Spacer(modifier = Modifier.height(8.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
                             OutlinedButton(
                                 onClick = { performHaptic(); showAddSourceDialog = true },
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(15.dp),
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-                            ) {
-                                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("添加规则源")
-                            }
-
-                            OutlinedButton(
-                                onClick = {
-                                    performHaptic()
-                                    if (isAutoUpdating) {
-                                        isAutoUpdating = false
-                                        autoUpdateCountdown = 0
-                                    } else {
-                                        isAutoUpdating = true
-                                        autoUpdateCountdown = 30
-                                    }
-                                },
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(15.dp),
                                 border = BorderStroke(
                                     1.dp,
-                                    if (isAutoUpdating) MaterialTheme.colorScheme.error.copy(alpha = 0.5f)
-                                    else MaterialTheme.colorScheme.outlineVariant
-                                ),
-                                colors = if (isAutoUpdating) ButtonDefaults.outlinedButtonColors(
-                                    contentColor = MaterialTheme.colorScheme.error
-                                ) else ButtonDefaults.outlinedButtonColors()
+                                    MaterialTheme.colorScheme.outlineVariant
+                                )
                             ) {
                                 Icon(
-                                    if (isAutoUpdating) Icons.Default.Stop else Icons.Default.Refresh,
+                                    Icons.Default.Add,
                                     contentDescription = null,
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text(if (isAutoUpdating) "停止更新" else "自动更新")
+                                Text("添加规则源")
                             }
                         }
                     }
-                }
 
-                item {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "规则版本: ${rules.schemaVersion} | 更新时间: ${rules.updatedAt}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    item {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "规则版本: ${rules.schemaVersion} | 更新时间: ${rules.updatedAt}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
-            }
+    }
 
+    // 添加/编辑在线源对话框
             if (showAddSourceDialog || editingSource != null) {
                 OnlineSourceDialog(
                     source = editingSource,
@@ -347,7 +563,8 @@ fun RulesScreen(modifier: Modifier = Modifier) {
                         showAddSourceDialog = false
                         editingSource = null
                     },
-                    onSave = { newSource ->
+                    onSave = { newSource: OnlineRuleSource ->
+                        android.util.Log.d("RulesScreen", "OnlineSourceDialog onSave: name=${newSource.name}, updateIntervalMinutes=${newSource.updateIntervalMinutes}")
                         scope.launch {
                             val newSources = if (editingSource != null) {
                                 onlineSources.map { if (it.id == newSource.id) newSource else it }
@@ -355,7 +572,18 @@ fun RulesScreen(modifier: Modifier = Modifier) {
                                 onlineSources + newSource
                             }
                             RecognitionRuleEngine.saveOnlineSources(newSources)
-                            onlineSources = newSources
+                            val config = com.Badnng.moe.rules.RuleRepository(context).loadSystemConfig()
+                            localConfig = config.localConfig
+                            localCustomSources = config.localCustomSources
+                            onlineSources = config.onlineSources
+                            activeSourceId = config.activeSourceId
+                            config.onlineSources.forEach { s ->
+                                android.util.Log.d("RulesScreen", "保存后加载: ${s.name} [${s.id}] updateIntervalMinutes=${s.updateIntervalMinutes}")
+                            }
+                            // 保存后重置倒计时
+                            if (newSource.enabled) {
+                                com.Badnng.moe.rules.RuleAutoUpdateManager.resetCountdown(newSource.id, newSource.updateIntervalMinutes)
+                            }
                             showAddSourceDialog = false
                             editingSource = null
                             Toast.makeText(context, "已保存", Toast.LENGTH_SHORT).show()
@@ -364,6 +592,7 @@ fun RulesScreen(modifier: Modifier = Modifier) {
                 )
             }
 
+            // 恢复默认确认对话框
             if (showResetDialog) {
                 AlertDialog(
                     onDismissRequest = { showResetDialog = false },
@@ -374,10 +603,19 @@ fun RulesScreen(modifier: Modifier = Modifier) {
                             onClick = {
                                 performHaptic()
                                 scope.launch {
-                                    RecognitionRuleEngine.deleteLocalRules(context)
-                                    rules = RecognitionRuleEngine.rules
+                                    RecognitionRuleEngine.resetLocalDefaultRules(context)
+                                    val (local, custom, online) = RecognitionRuleEngine.loadAllSourcesSystem(
+                                        context
+                                    )
+                                    localConfig = local
+                                    localCustomSources = custom
+                                    onlineSources = online
+                                    if (activeSourceId == "local") {
+                                        rules = RecognitionRuleEngine.rules
+                                    }
                                     showResetDialog = false
-                                    Toast.makeText(context, "已恢复默认规则", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "已恢复默认规则", Toast.LENGTH_SHORT)
+                                        .show()
                                 }
                             }
                         ) {
@@ -391,8 +629,168 @@ fun RulesScreen(modifier: Modifier = Modifier) {
                     }
                 )
             }
-        }
-    }
+
+            // 重命名对话框
+            if (renamingTarget != null) {
+                AlertDialog(
+                    onDismissRequest = { renamingTarget = null },
+                    title = { Text("重命名规则") },
+                    text = {
+                        OutlinedTextField(
+                            value = renamingName,
+                            onValueChange = { renamingName = it },
+                            label = { Text("规则名称") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                performHaptic()
+                                scope.launch {
+                                    val target = renamingTarget ?: return@launch
+                                    if (target == "local") {
+                                        val config =
+                                            RecognitionRuleEngine.loadAllSourcesSystem(context).first
+                                        val newConfig = config.copy(displayName = renamingName)
+                                        val repo = com.Badnng.moe.rules.RuleRepository(context)
+                                        val sysConfig = repo.loadSystemConfig()
+                                        repo.saveSystemConfig(sysConfig.copy(localConfig = newConfig))
+                                    } else if (target.startsWith("local_custom_")) {
+                                        val sourceId = target.removePrefix("local_custom_")
+                                        RecognitionRuleEngine.renameLocalCustomSource(context, sourceId, renamingName)
+                                    } else {
+                                        val newSources = onlineSources.map {
+                                            if (it.id == target) it.copy(name = renamingName) else it
+                                        }
+                                        RecognitionRuleEngine.saveOnlineSources(newSources)
+                                    }
+                                    val (local, custom, online) = RecognitionRuleEngine.loadAllSourcesSystem(
+                                        context
+                                    )
+                                    localConfig = local
+                                    localCustomSources = custom
+                                    onlineSources = online
+                                    renamingTarget = null
+                                    Toast.makeText(context, "已重命名", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        ) {
+                            Text("确定")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { performHaptic(); renamingTarget = null }) {
+                            Text("取消")
+                        }
+                    }
+                )
+            }
+
+            // 导入重命名对话框
+            if (pendingImportRules != null) {
+                AlertDialog(
+                    onDismissRequest = {
+                        pendingImportRules = null
+                        pendingImportFileName = ""
+                        pendingImportName = ""
+                    },
+                    title = { Text("导入规则") },
+                    text = {
+                        OutlinedTextField(
+                            value = pendingImportName,
+                            onValueChange = { pendingImportName = it },
+                            label = { Text("规则名称") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    },
+                    confirmButton = {
+                        val isDuplicateName = localCustomSources.any {
+                            it.displayName == pendingImportName.trim()
+                        }
+                        TextButton(
+                            onClick = {
+                                performHaptic()
+                                if (isDuplicateName) {
+                                    Toast.makeText(context, "已存在同名规则「${pendingImportName.trim()}」", Toast.LENGTH_SHORT).show()
+                                    return@TextButton
+                                }
+                                scope.launch {
+                                    val rulesToImport = pendingImportRules ?: return@launch
+                                    val newId = RecognitionRuleEngine.importLocalCustomSource(
+                                        context,
+                                        rulesToImport,
+                                        pendingImportName.ifBlank { pendingImportFileName },
+                                        rulesToImport.jsonPackage
+                                    )
+                                    val (local, custom, online) = RecognitionRuleEngine.loadAllSourcesSystem(context)
+                                    localConfig = local
+                                    localCustomSources = custom
+                                    onlineSources = online
+                                    customSourceRules = customSourceRules + (newId to rulesToImport)
+                                    rules = RecognitionRuleEngine.rules
+                                    pendingImportRules = null
+                                    pendingImportFileName = ""
+                                    pendingImportName = ""
+                                    Toast.makeText(context, "导入成功", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            enabled = pendingImportName.isNotBlank() && !isDuplicateName
+                        ) {
+                            Text("确定")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = {
+                            performHaptic()
+                            pendingImportRules = null
+                            pendingImportFileName = ""
+                            pendingImportName = ""
+                        }) {
+                            Text("取消")
+                        }
+                    }
+                )
+            }
+
+            // 删除自定义规则源确认对话框
+            if (deletingCustomSourceId != null) {
+                val sourceId = deletingCustomSourceId!!
+                val source = localCustomSources.firstOrNull { it.id == sourceId }
+                AlertDialog(
+                    onDismissRequest = { deletingCustomSourceId = null },
+                    title = { Text("删除规则源") },
+                    text = { Text("确定要删除「${source?.displayName?.ifBlank { "自定义JSON规则" } ?: "自定义JSON规则"}」吗？此操作不可撤销。") },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                performHaptic()
+                                scope.launch {
+                                    RecognitionRuleEngine.deleteLocalCustomSource(context, sourceId)
+                                    val (local, custom, online) = RecognitionRuleEngine.loadAllSourcesSystem(context)
+                                    localConfig = local
+                                    localCustomSources = custom
+                                    onlineSources = online
+                                    customSourceRules = customSourceRules - sourceId
+                                    activeSourceId = RecognitionRuleEngine.currentSourceId
+                                    rules = RecognitionRuleEngine.rules
+                                    deletingCustomSourceId = null
+                                    Toast.makeText(context, "已删除", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        ) {
+                            Text("确定")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { performHaptic(); deletingCustomSourceId = null }) {
+                            Text("取消")
+                        }
+                    }
+                )
+            }
 }
 
 @Composable
@@ -455,37 +853,66 @@ private fun SectionCard(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun RuleRow(
+private fun RuleSourceRow(
     name: String,
-    count: Int?,
-    details: List<Pair<String, Int>>?,
+    subtitle: String,
+    enabled: Boolean,
+    isActive: Boolean,
     performHaptic: () -> Unit,
-    expandable: Boolean = true,
-    content: @Composable (() -> Unit)? = null
+    onToggle: ((Boolean) -> Unit)? = null,
+    showSwitch: Boolean = true,
+    expandable: Boolean = false,
+    details: List<Pair<String, Int>>? = null,
+    noDataText: String? = null,
+    extraAction: (@Composable () -> Unit)? = null,
+    onLongPress: ((androidx.compose.ui.geometry.Offset) -> Unit)? = null
 ) {
     var expanded by remember { mutableStateOf(false) }
-
+    var globalPosition by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .animateContentSize(),
+            .animateContentSize()
+            .onGloballyPositioned { coordinates ->
+                globalPosition = coordinates.positionInWindow()
+            }
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = {
+                        if (expandable) {
+                            performHaptic()
+                            expanded = !expanded
+                        }
+                    },
+                    onLongPress = { offset ->
+                        performHaptic()
+                        onLongPress?.invoke(
+                            androidx.compose.ui.geometry.Offset(
+                                globalPosition.x + offset.x,
+                                globalPosition.y + offset.y
+                            )
+                        )
+                    }
+                )
+            },
         shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+        color = if (isActive) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+        else MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
+        border = BorderStroke(
+            1.dp,
+            if (isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+            else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+        )
     ) {
         Column {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .clickable {
-                        performHaptic()
-                        if (expandable) expanded = !expanded
-                    }
-                    .padding(horizontal = 12.dp, vertical = 10.dp)
+                    .padding(12.dp)
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -493,14 +920,20 @@ private fun RuleRow(
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Medium
                     )
-                    if (count != null) {
-                        Text(
-                            text = "$count 条",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                        )
-                    }
+                    Text(
+                        text = subtitle,
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        maxLines = 1
+                    )
                 }
+                if (showSwitch && onToggle != null) {
+                    Switch(
+                        checked = enabled,
+                        onCheckedChange = { performHaptic(); onToggle(it) }
+                    )
+                }
+                extraAction?.invoke()
                 if (expandable) {
                     Icon(
                         imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
@@ -517,109 +950,38 @@ private fun RuleRow(
                 exit = shrinkVertically() + fadeOut()
             ) {
                 Column(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
+                    modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp)
                 ) {
-                    details?.forEach { (label, value) ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = label,
-                                fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                text = "$value",
-                                fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
+                    if (details != null) {
+                        details.forEach { (label, value) ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = label,
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = "$value",
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
                         }
+                    } else if (noDataText != null) {
+                        Text(
+                            text = noDataText,
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        )
                     }
-                }
-            }
-
-            if (!expandable && content != null) {
-                Column(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
-                ) {
-                    content()
                 }
             }
         }
     }
 }
-
-@Composable
-private fun OnlineSourceRow(
-    source: OnlineRuleSource,
-    performHaptic: () -> Unit,
-    onToggle: (Boolean) -> Unit,
-    onUpdate: () -> Unit,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit
-) {
-    val dateFormat = remember { SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()) }
-    val lastUpdatedText = if (source.lastUpdated > 0) dateFormat.format(Date(source.lastUpdated)) else "从未更新"
-
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp)),
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = source.name,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Text(
-                        text = source.url,
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                        maxLines = 1
-                    )
-                    Text(
-                        text = "${source.updateIntervalHours}h | $lastUpdatedText",
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                    )
-                }
-                Switch(
-                    checked = source.enabled,
-                    onCheckedChange = { performHaptic(); onToggle(it) }
-                )
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
-            ) {
-                TextButton(onClick = { performHaptic(); onUpdate() }) {
-                    Text("更新", fontSize = 12.sp)
-                }
-                TextButton(onClick = { performHaptic(); onEdit() }) {
-                    Text("编辑", fontSize = 12.sp)
-                }
-                TextButton(
-                    onClick = { performHaptic(); onDelete() },
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
-                    )
-                ) {
-                    Text("删除", fontSize = 12.sp)
-                }
-            }
-        }
-    }}
 
 @Composable
 private fun ActionButton(
@@ -651,13 +1013,17 @@ private fun OnlineSourceDialog(
     onDismiss: () -> Unit,
     onSave: (OnlineRuleSource) -> Unit
 ) {
-    var name by remember { mutableStateOf(source?.name ?: "") }
-    var url by remember { mutableStateOf(source?.url ?: "") }
-    var updateInterval by remember { mutableStateOf((source?.updateIntervalHours ?: 24).toString()) }
+    var name by remember(source?.id) { mutableStateOf(source?.name ?: "") }
+    var url by remember(source?.id) { mutableStateOf(source?.url ?: "") }
+    var autoUpdate by remember(source?.id) { mutableStateOf(source?.enabled ?: false) }
+    var updateIntervalMinutes by remember(source?.id) {
+        android.util.Log.d("RulesScreen", "OnlineSourceDialog init: source=${source?.name}, id=${source?.id}, updateIntervalMinutes=${source?.updateIntervalMinutes}")
+        mutableStateOf("${source?.updateIntervalMinutes ?: 1440}")
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (source != null) "编辑规则源" else "添加规则源") },
+        title = { Text(if (source != null) "修改配置" else "添加规则源") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
@@ -678,13 +1044,28 @@ private fun OnlineSourceDialog(
                     singleLine = true,
                     shape = RoundedCornerShape(12.dp)
                 )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "自动更新",
+                        modifier = Modifier.weight(1f),
+                        fontSize = 14.sp
+                    )
+                    Switch(
+                        checked = autoUpdate,
+                        onCheckedChange = { performHaptic(); autoUpdate = it }
+                    )
+                }
                 OutlinedTextField(
-                    value = updateInterval,
-                    onValueChange = { updateInterval = it.filter { c -> c.isDigit() } },
-                    label = { Text("更新间隔 (小时)") },
+                    value = updateIntervalMinutes,
+                    onValueChange = { updateIntervalMinutes = it.filter { c -> c.isDigit() } },
+                    label = { Text("更新间隔 (分钟)") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(12.dp),
+                    enabled = autoUpdate
                 )
             }
         },
@@ -693,18 +1074,19 @@ private fun OnlineSourceDialog(
                 onClick = {
                     if (name.isNotBlank() && url.isNotBlank()) {
                         performHaptic()
-                        val interval = updateInterval.toIntOrNull() ?: 24
-                        val newSource = if (source != null) {
-                            source.copy(name = name.trim(), url = url.trim(), updateIntervalHours = interval)
+                        val intervalMinutes = maxOf(1, updateIntervalMinutes.toIntOrNull() ?: 1440)
+                        val sourceToSave = if (source != null) {
+                            source.copy(name = name.trim(), url = url.trim(), enabled = autoUpdate, updateIntervalMinutes = intervalMinutes)
                         } else {
                             OnlineRuleSource(
                                 id = UUID.randomUUID().toString(),
                                 name = name.trim(),
                                 url = url.trim(),
-                                updateIntervalHours = interval
+                                enabled = autoUpdate,
+                                updateIntervalMinutes = intervalMinutes
                             )
                         }
-                        onSave(newSource)
+                        onSave(sourceToSave)
                     }
                 },
                 enabled = name.isNotBlank() && url.isNotBlank()
