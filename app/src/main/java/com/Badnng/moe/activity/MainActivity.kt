@@ -76,6 +76,9 @@ class MainActivity : ComponentActivity() {
             RecognitionRuleEngine.initialize(applicationContext)
             Log.d("RuleEngine", "规则引擎初始化完成")
 
+            // 启动在线规则自动更新
+            com.Badnng.moe.rules.RuleAutoUpdateManager.start(applicationContext)
+
             StorageCleanupHelper.runStartupCleanup(applicationContext)
             runCatching {
                 val db = OrderDatabase.getDatabase(applicationContext)

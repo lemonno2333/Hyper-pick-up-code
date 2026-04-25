@@ -191,6 +191,7 @@ fun AboutSettingsContent(performHaptic: () -> Unit) {
                 OssItem("Kyant Backdrop", "优雅的毛玻璃与层级模糊效果实现", "https://github.com/Kyant0/AndroidLiquidGlass", performHaptic)
                 OssItem("Paddle Lite" , "使用深度识别算法在本地进行OCR识别" , "https://www.paddlepaddle.org.cn/paddle/paddlelite", performHaptic)
                 OssItem("Paddle4Android" , "不需要学习原理即可一键在Android上引入OCR识别" , "https://github.com/equationl/paddleocr4android", performHaptic)
+                OssItem("Miuix", "多平台UI/效果实现的UI设计库", "https://github.com/compose-miuix-ui/miuix/", performHaptic)
             }
         }
 

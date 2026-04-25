@@ -10,7 +10,7 @@ data class OnlineRuleSource(
     val name: String = "",
     val url: String = "",
     val enabled: Boolean = true,
-    val updateIntervalHours: Int = 24,
+    val updateIntervalMinutes: Int = 1440,
     val lastUpdated: Long = 0,
     val lastEtag: String? = null,
     val lastModified: String? = null
@@ -20,22 +20,125 @@ data class OnlineRuleSource(
         put("name", name)
         put("url", url)
         put("enabled", enabled)
-        put("update_interval_hours", updateIntervalHours)
+        put("update_interval_minutes", updateIntervalMinutes)
+        android.util.Log.d("RuleModels", "OnlineRuleSource.toJson: name=$name updateIntervalMinutes=$updateIntervalMinutes")
         put("last_updated", lastUpdated)
         put("last_etag", lastEtag ?: "")
         put("last_modified", lastModified ?: "")
     }
 
     companion object {
-        fun fromJson(json: JSONObject): OnlineRuleSource = OnlineRuleSource(
-            id = json.optString("id", ""),
-            name = json.optString("name", ""),
-            url = json.optString("url", ""),
+        fun fromJson(json: JSONObject): OnlineRuleSource {
+            // 优先读分钟字段，兼容旧的小时字段
+            val minutes = if (json.has("update_interval_minutes")) {
+                json.optInt("update_interval_minutes", 1440)
+            } else {
+                json.optInt("update_interval_hours", 24) * 60
+            }
+            android.util.Log.d("RuleModels", "OnlineRuleSource.fromJson: name=${json.optString("name","")} has_minutes=${json.has("update_interval_minutes")} minutes=$minutes raw=${json.opt("update_interval_minutes")}")
+            return OnlineRuleSource(
+                id = json.optString("id", ""),
+                name = json.optString("name", ""),
+                url = json.optString("url", ""),
+                enabled = json.optBoolean("enabled", true),
+                updateIntervalMinutes = minutes,
+                lastUpdated = json.optLong("last_updated", 0),
+                lastEtag = json.optString("last_etag", "").ifBlank { null },
+                lastModified = json.optString("last_modified", "").ifBlank { null }
+            )
+        }
+    }
+}
+
+enum class RuleSourceType {
+    LOCAL,
+    ONLINE
+}
+
+data class LocalRuleSourceConfig(
+    val id: String = "local",
+    val name: String = "本地规则",
+    val displayName: String = "",  // 导入的JSON文件名
+    val enabled: Boolean = true,
+    val isCustomized: Boolean = false,
+    val lastImportTime: Long = 0
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("id", id)
+        put("name", name)
+        put("display_name", displayName)
+        put("enabled", enabled)
+        put("is_customized", isCustomized)
+        put("last_import_time", lastImportTime)
+    }
+
+    companion object {
+        fun fromJson(json: JSONObject): LocalRuleSourceConfig = LocalRuleSourceConfig(
+            id = json.optString("id", "local"),
+            name = json.optString("name", "本地规则"),
+            displayName = json.optString("display_name", ""),
             enabled = json.optBoolean("enabled", true),
-            updateIntervalHours = json.optInt("update_interval_hours", 24),
-            lastUpdated = json.optLong("last_updated", 0),
-            lastEtag = json.optString("last_etag", "").ifBlank { null },
-            lastModified = json.optString("last_modified", "").ifBlank { null }
+            isCustomized = json.optBoolean("is_customized", false),
+            lastImportTime = json.optLong("last_import_time", 0)
+        )
+    }
+}
+
+data class LocalCustomSource(
+    val id: String = "",
+    val displayName: String = "",
+    val jsonPackage: String = "",
+    val enabled: Boolean = true,
+    val lastImportTime: Long = 0
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("id", id)
+        put("display_name", displayName)
+        put("json_package", jsonPackage)
+        put("enabled", enabled)
+        put("last_import_time", lastImportTime)
+    }
+
+    companion object {
+        fun fromJson(json: JSONObject): LocalCustomSource = LocalCustomSource(
+            id = json.optString("id", ""),
+            displayName = json.optString("display_name", ""),
+            jsonPackage = json.optString("json_package", ""),
+            enabled = json.optBoolean("enabled", true),
+            lastImportTime = json.optLong("last_import_time", 0)
+        )
+    }
+}
+
+data class RuleSystemConfig(
+    val activeSourceId: String = "local",
+    val localConfig: LocalRuleSourceConfig = LocalRuleSourceConfig(),
+    val localCustomSources: List<LocalCustomSource> = emptyList(),
+    val onlineSources: List<OnlineRuleSource> = emptyList()
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("active_source_id", activeSourceId)
+        put("local_config", localConfig.toJson())
+        val customArr = JSONArray()
+        localCustomSources.forEach { customArr.put(it.toJson()) }
+        put("local_custom_sources", customArr)
+        val arr = JSONArray()
+        onlineSources.forEach { arr.put(it.toJson()) }
+        put("online_sources", arr)
+    }
+
+    companion object {
+        fun fromJson(json: JSONObject): RuleSystemConfig = RuleSystemConfig(
+            activeSourceId = json.optString("active_source_id", "local"),
+            localConfig = json.optJSONObject("local_config")?.let {
+                LocalRuleSourceConfig.fromJson(it)
+            } ?: LocalRuleSourceConfig(),
+            localCustomSources = json.optJSONArray("local_custom_sources")?.let { arr ->
+                (0 until arr.length()).map { LocalCustomSource.fromJson(arr.getJSONObject(it)) }
+            } ?: emptyList(),
+            onlineSources = json.optJSONArray("online_sources")?.let { arr ->
+                (0 until arr.length()).map { OnlineRuleSource.fromJson(arr.getJSONObject(it)) }
+            } ?: emptyList()
         )
     }
 }
@@ -47,6 +150,7 @@ data class RecognitionRules(
     val appVersion: String = "",
     val updatedAt: String = "",
     val description: String = "",
+    val jsonPackage: String = "",
     val brands: BrandConfig = BrandConfig(),
     val codeExtraction: CodeExtractionConfig = CodeExtractionConfig(),
     val categoryDetection: CategoryDetectionConfig = CategoryDetectionConfig(),
@@ -61,6 +165,8 @@ data class RecognitionRules(
         put("app_version", appVersion)
         put("updated_at", updatedAt)
         put("description", description)
+        put("json_package", jsonPackage)
+        put("jsonpackage", jsonPackage)
         put("brands", brands.toJson())
         put("code_extraction", codeExtraction.toJson())
         put("category_detection", categoryDetection.toJson())
@@ -77,8 +183,8 @@ data class RecognitionRules(
             appVersion = json.optString("app_version", ""),
             updatedAt = json.optString("updated_at", ""),
             description = json.optString("description", ""),
+            jsonPackage = json.optString("json_package", "").ifEmpty { json.optString("jsonpackage", "") },
             brands = json.optJSONObject("brands")?.let { BrandConfig.fromJson(it) } ?: BrandConfig(),
-            codeExtraction = json.optJSONObject("code_extraction")?.let { CodeExtractionConfig.fromJson(it) } ?: CodeExtractionConfig(),
             categoryDetection = json.optJSONObject("category_detection")?.let { CategoryDetectionConfig.fromJson(it) } ?: CategoryDetectionConfig(),
             homepageDetection = json.optJSONObject("homepage_detection")?.let { HomepageDetectionConfig.fromJson(it) } ?: HomepageDetectionConfig(),
             textCleaning = json.optJSONObject("text_cleaning")?.let { TextCleaningConfig.fromJson(it) } ?: TextCleaningConfig(),

@@ -5,9 +5,7 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.graphics.ImageDecoder
-import android.net.Uri
 import android.os.Build
-import android.os.Process
 import android.provider.MediaStore
 import androidx.activity.BackEventCompat
 import androidx.activity.compose.BackHandler
@@ -19,12 +17,14 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -34,16 +34,15 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.changedToDownIgnoreConsumed
 import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
@@ -54,20 +53,21 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.Badnng.moe.R
 import com.Badnng.moe.activity.MainActivity
 import com.Badnng.moe.data.db.OrderEntity
 import com.Badnng.moe.data.db.OrderGroup
 import com.Badnng.moe.ocr.TextRecognitionHelper
 import com.Badnng.moe.viewmodel.OrderViewModel
-import com.google.mlkit.vision.barcode.BarcodeScanning
-import com.google.mlkit.vision.common.InputImage
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.vibrancy
 import com.kyant.backdrop.effects.lens
+import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop as rememberMiuixBackdrop
+import top.yukonga.miuix.kmp.blur.layerBackdrop as miuixLayerBackdrop
+import top.yukonga.miuix.kmp.blur.textureBlur
+import top.yukonga.miuix.kmp.blur.drawBackdrop
 import androidx.window.layout.FoldingFeature
 import androidx.window.layout.WindowInfoTracker
 import kotlinx.coroutines.launch
@@ -318,21 +318,32 @@ fun HomeScreen(
     }
 
     val backgroundColor = MaterialTheme.colorScheme.background
-    val isDarkPalette = backgroundColor.luminance() < 0.5f
-    val usePureBlackHomeBackground = amoledPureBlack && isDarkPalette
-    val homeBackgroundColor = if (usePureBlackHomeBackground) Color.Black else backgroundColor
     val backdrop = rememberLayerBackdrop {
         drawRect(backgroundColor)
         drawContent()
     }
+    val isDarkPalette = backgroundColor.luminance() < 0.5f
+    val usePureBlackHomeBackground = amoledPureBlack && isDarkPalette
+    val homeBackgroundColor = if (usePureBlackHomeBackground) Color.Black else backgroundColor
+
+    val miuixBackdrop = rememberMiuixBackdrop()
 
     var isSettingsSubPageOpen by remember { mutableStateOf(false) }
     val isUiHidden = isSettingsSubPageOpen || isManaging
 
+    // 全屏菜单状态
+    var showMenu by remember { mutableStateOf(false) }
+    var menuPosition by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+    var menuRename by remember { mutableStateOf<(() -> Unit)?>(null) }
+    var menuDelete by remember { mutableStateOf<(() -> Unit)?>(null) }
+    var menuExport by remember { mutableStateOf<(() -> Unit)?>(null) }
+
     Box(modifier = modifier.fillMaxSize().background(homeBackgroundColor)) {
+        // 内层：miuixLayerBackdrop 只捕获 Scaffold 内容（不含菜单叠加层）
+        Box(modifier = Modifier.fillMaxSize().background(homeBackgroundColor).miuixLayerBackdrop(miuixBackdrop)) {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
-            containerColor = Color.Transparent,
+            containerColor = homeBackgroundColor,
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             bottomBar = {
                 val alignment = BiasAlignment(animatedBottomBarBias, 1f)
@@ -498,10 +509,134 @@ fun HomeScreen(
                                 is OrderGroup -> detailGroup = detailItem
                             }
                         })
-                        1 -> RulesScreen(modifier = Modifier.fillMaxSize())
+                        1 -> RulesScreen(
+                            modifier = Modifier.fillMaxSize(),
+                            onShowMenu = { position, rename, delete, export ->
+                                menuPosition = position
+                                menuRename = rename
+                                menuDelete = delete
+                                menuExport = export
+                                showMenu = true
+                            },
+                            onDismissMenu = { showMenu = false }
+                        )
                         2 -> SettingsScreen(modifier = Modifier.fillMaxSize(), onSubPageStatusChange = { isSettingsSubPageOpen = it })
                     }
                 }
+            }
+        }
+        } // 关闭 miuixLayerBackdrop 内层 Box
+
+        // 全屏毛玻璃快捷菜单（覆盖底栏）
+        val animatedBlurRadius by animateFloatAsState(
+            targetValue = if (showMenu) 60f else 0f,
+            animationSpec = tween(durationMillis = 300)
+        )
+        val animatedCardAlpha by animateFloatAsState(
+            targetValue = if (showMenu) 1f else 0f,
+            animationSpec = tween(durationMillis = 250, delayMillis = 50)
+        )
+        val animatedCardScale by animateFloatAsState(
+            targetValue = if (showMenu) 1f else 0.9f,
+            animationSpec = tween(durationMillis = 250, delayMillis = 50)
+        )
+        if (animatedBlurRadius > 0f) {
+            val density = LocalDensity.current
+            Box(modifier = Modifier.fillMaxSize()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .textureBlur(
+                            backdrop = miuixBackdrop,
+                            shape = RoundedCornerShape(0.dp),
+                            blurRadius = animatedBlurRadius,
+                            colors = top.yukonga.miuix.kmp.blur.BlurColors(brightness = -0.15f)
+                        )
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) { showMenu = false }
+                )
+                val configuration = LocalConfiguration.current
+                val screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() }
+                val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
+                val cardWidthPx = 280f
+                val cardMaxHeightPx = with(density) { 160.dp.toPx() }
+
+                var cardWidthMeasured by remember { mutableIntStateOf(0) }
+                val cardXDp = with(density) {
+                    menuPosition.x.coerceIn(0f, screenWidthPx - cardWidthMeasured).toDp()
+                }
+                val cardYDp = with(density) {
+                    val rawY = menuPosition.y
+                    if (rawY + cardMaxHeightPx > screenHeightPx) {
+                        // 下方空间不够，卡片显示在长按位置上方
+                        (menuPosition.y - cardMaxHeightPx).coerceAtLeast(0f).toDp()
+                    } else {
+                        rawY.toDp()
+                    }
+                }
+                Card(
+                    shape = RoundedCornerShape(15.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
+                    ),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                    modifier = Modifier
+                        .offset(x = cardXDp, y = cardYDp)
+                        .onGloballyPositioned { cardWidthMeasured = it.size.width }
+                        .widthIn(max = 280.dp)
+                        .graphicsLayer {
+                            alpha = animatedCardAlpha
+                            scaleX = animatedCardScale
+                            scaleY = animatedCardScale
+                        }
+                ) {
+                    val menuItems = buildList {
+                        if (menuRename != null) add("rename")
+                        if (menuExport != null) add("export")
+                        if (menuDelete != null) add("delete")
+                    }
+                    Column {
+                        menuItems.forEachIndexed { index, item ->
+                            val isFirst = index == 0
+                            val isLast = index == menuItems.lastIndex
+                            val shape = when {
+                                isFirst && isLast -> RoundedCornerShape(15.dp)
+                                isFirst -> RoundedCornerShape(topStart = 15.dp, topEnd = 15.dp)
+                                isLast -> RoundedCornerShape(bottomStart = 15.dp, bottomEnd = 15.dp)
+                                else -> RoundedCornerShape(0.dp)
+                            }
+                            Surface(
+                                onClick = {
+                                    showMenu = false
+                                    when (item) {
+                                        "rename" -> menuRename?.invoke()
+                                        "export" -> menuExport?.invoke()
+                                        "delete" -> menuDelete?.invoke()
+                                    }
+                                },
+                                shape = shape,
+                                color = Color.Transparent
+                            ) {
+                                val (icon, label, color) = when (item) {
+                                    "rename" -> Triple(Icons.Default.Edit, "重命名", MaterialTheme.colorScheme.onSurface)
+                                    "export" -> Triple(Icons.Default.FileUpload, "导出规则", MaterialTheme.colorScheme.onSurface)
+                                    "delete" -> Triple(Icons.Default.Delete, "删除", MaterialTheme.colorScheme.error)
+                                    else -> Triple(Icons.Default.Edit, "", Color.Unspecified)
+                                }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(icon, null, tint = color)
+                                    Spacer(Modifier.width(12.dp))
+                                    Text(label, color = color)
+                                }
+                            }
+                        }
+                    }
+                    }
             }
         }
 
