@@ -1,7 +1,7 @@
 {
-  "versionCode": 2026042611,
-  "versionName": "26.4.26.C01-Dev",
-  "releaseNotes": "您正在使用 澎湃记 的测试版本，可能会遇到不稳定，闪退，数据丢失等情况，请谨慎升级\n\n26.4.26.C01-Dev 版本更新如下：\n\n完善 识别规则相关功能：\n\n现在可以单独导出规则了，无论在线还是本地都可以直接导出\n长按可以修改相关配置，shoutcut UI已完善\n添加了jsonpackage变量（文档已更新）\n\n今天晚些时候将会更新在线规则，届时以后的数据识别错误直接可以进行规则更新了\n日志系统目前依然还在重构当中!",
-  "downloadUrl": "https://github.com/badnng/Hyper-pick-up-code/releases/download/v26.4.26.C01-Dev/app-release.apk",
-  "md5": "47bb13f9f97c368311a4411be5c107b7"
+  "versionCode": 2026042612,
+  "versionName": "26.4.26.C02-Dev",
+  "releaseNotes": "您正在使用 澎湃记 的测试版本，可能会遇到不稳定，闪退，数据丢失等情况，请谨慎升级\n\n26.4.26.C02-Dev 版本更新如下：\n\n修复 识别规则对于划词识别的识别异常\n修复 json导出的规则异常\n\n日志系统目前依然重构",
+  "downloadUrl": "https://github.com/badnng/Hyper-pick-up-code/releases/download/v26.4.26.C02-Dev/app-release.apk",
+  "md5": "cf875d539450095d59461e194f9a062f"
 }
