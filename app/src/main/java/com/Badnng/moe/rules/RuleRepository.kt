@@ -18,7 +18,7 @@ class RuleRepository(private val context: Context) {
     suspend fun loadBuiltIn(): RecognitionRules = withContext(Dispatchers.IO) {
         try {
             val json = context.assets.open("default_rules.json").bufferedReader().use { it.readText() }
-            RecognitionRules.fromJson(JSONObject(json))
+            RecognitionRules.fromJson(JSONObject(json), rawJson = json)
         } catch (e: Exception) {
             Log.e(TAG, "加载内置规则失败", e)
             RecognitionRules()
@@ -30,7 +30,7 @@ class RuleRepository(private val context: Context) {
             val file = File(rulesDir, "rules.json")
             if (!file.exists()) return@withContext null
             val json = file.readText()
-            RecognitionRules.fromJson(JSONObject(json))
+            RecognitionRules.fromJson(JSONObject(json), rawJson = json)
         } catch (e: Exception) {
             Log.e(TAG, "加载本地自定义规则失败", e)
             null
@@ -40,7 +40,7 @@ class RuleRepository(private val context: Context) {
     suspend fun saveLocal(rules: RecognitionRules) = withContext(Dispatchers.IO) {
         try {
             val file = File(rulesDir, "rules.json")
-            file.writeText(rules.toJson().toString(2))
+            file.writeText(rules.rawJson ?: rules.toJson().toString(2))
             Log.d(TAG, "保存本地自定义规则成功")
         } catch (e: Exception) {
             Log.e(TAG, "保存本地自定义规则失败", e)
@@ -62,7 +62,7 @@ class RuleRepository(private val context: Context) {
             val file = File(rulesDir, "online_cache.json")
             if (!file.exists()) return@withContext null
             val json = file.readText()
-            RecognitionRules.fromJson(JSONObject(json))
+            RecognitionRules.fromJson(JSONObject(json), rawJson = json)
         } catch (e: Exception) {
             Log.e(TAG, "加载在线缓存规则失败", e)
             null
@@ -72,7 +72,7 @@ class RuleRepository(private val context: Context) {
     suspend fun saveOnlineCache(rules: RecognitionRules, etag: String?, lastModified: String?) = withContext(Dispatchers.IO) {
         try {
             val rulesFile = File(rulesDir, "online_cache.json")
-            rulesFile.writeText(rules.toJson().toString(2))
+            rulesFile.writeText(rules.rawJson ?: rules.toJson().toString(2))
 
             val metaFile = File(rulesDir, "online_cache_meta.json")
             val meta = JSONObject().apply {
@@ -103,12 +103,12 @@ class RuleRepository(private val context: Context) {
     }
 
     fun exportToJson(rules: RecognitionRules): String {
-        return rules.toJson().toString(2)
+        return rules.rawJson ?: rules.toJson().toString(2)
     }
 
     fun importFromJson(json: String): Result<RecognitionRules> {
         return try {
-            val rules = RecognitionRules.fromJson(JSONObject(json))
+            val rules = RecognitionRules.fromJson(JSONObject(json), rawJson = json)
             val validation = RuleValidator.validate(rules)
             if (!validation.isValid) {
                 Result.failure(Exception("规则验证失败: ${validation.errors.joinToString("; ")}"))
@@ -187,7 +187,7 @@ class RuleRepository(private val context: Context) {
             val file = File(rulesDir, "local_custom_rules.json")
             if (!file.exists()) return@withContext null
             val json = file.readText()
-            RecognitionRules.fromJson(JSONObject(json))
+            RecognitionRules.fromJson(JSONObject(json), rawJson = json)
         } catch (e: Exception) {
             Log.e(TAG, "加载本地自定义规则失败", e)
             null
@@ -197,7 +197,7 @@ class RuleRepository(private val context: Context) {
     suspend fun saveLocalCustomRules(rules: RecognitionRules) = withContext(Dispatchers.IO) {
         try {
             val file = File(rulesDir, "local_custom_rules.json")
-            file.writeText(rules.toJson().toString(2))
+            file.writeText(rules.rawJson ?: rules.toJson().toString(2))
             Log.d(TAG, "保存本地自定义规则成功")
         } catch (e: Exception) {
             Log.e(TAG, "保存本地自定义规则失败", e)
@@ -226,7 +226,7 @@ class RuleRepository(private val context: Context) {
         try {
             localCustomDir.mkdirs()
             val file = File(localCustomDir, "$id.json")
-            file.writeText(rules.toJson().toString(2))
+            file.writeText(rules.rawJson ?: rules.toJson().toString(2))
             Log.d(TAG, "保存本地自定义规则成功 [$id]")
         } catch (e: Exception) {
             Log.e(TAG, "保存本地自定义规则失败 [$id]", e)
@@ -237,7 +237,8 @@ class RuleRepository(private val context: Context) {
         try {
             val file = File(localCustomDir, "$id.json")
             if (!file.exists()) return@withContext null
-            RecognitionRules.fromJson(JSONObject(file.readText()))
+            val json = file.readText()
+            RecognitionRules.fromJson(JSONObject(json), rawJson = json)
         } catch (e: Exception) {
             Log.e(TAG, "加载本地自定义规则失败 [$id]", e)
             null
@@ -259,7 +260,9 @@ class RuleRepository(private val context: Context) {
     suspend fun loadBuiltInRules(): RecognitionRules = withContext(Dispatchers.IO) {
         try {
             val json = context.assets.open("default_rules.json").bufferedReader().use { it.readText() }
-            RecognitionRules.fromJson(JSONObject(json))
+            val rules = RecognitionRules.fromJson(JSONObject(json), rawJson = json)
+            Log.d(TAG, "loadBuiltInRules: patterns=${rules.codeExtraction.express.patterns.size}")
+            rules
         } catch (e: Exception) {
             Log.e(TAG, "加载内置规则失败", e)
             RecognitionRules()
@@ -269,24 +272,37 @@ class RuleRepository(private val context: Context) {
     suspend fun loadLocalRules(): RecognitionRules = withContext(Dispatchers.IO) {
         val builtIn = loadBuiltInRules()
         val custom = loadLocalCustomRules()
+        Log.d(TAG, "loadLocalRules: builtIn patterns=${builtIn.codeExtraction.express.patterns.size}, custom=${custom != null}, custom patterns=${custom?.codeExtraction?.express?.patterns?.size}")
         custom ?: builtIn
     }
 
     suspend fun loadActiveRules(sourceId: String): Result<RecognitionRules> = withContext(Dispatchers.IO) {
         try {
+            val builtIn = loadBuiltInRules()
+            Log.d(TAG, "loadActiveRules: sourceId=$sourceId, builtIn patterns=${builtIn.codeExtraction.express.patterns.size}")
             val rules = when (sourceId) {
-                "builtin" -> loadBuiltInRules()
+                "builtin" -> builtIn
                 "local" -> loadLocalRules()
                 else -> {
                     if (sourceId.startsWith("local_custom_")) {
                         val id = sourceId.removePrefix("local_custom_")
-                        loadLocalCustomRulesById(id) ?: loadBuiltInRules()
+                        loadLocalCustomRulesById(id) ?: builtIn
                     } else {
-                        loadOnlineRulesById(sourceId) ?: loadBuiltInRules()
+                        Log.d(TAG, "loadActiveRules: 加载在线源 $sourceId")
+                        loadOnlineRulesById(sourceId) ?: builtIn
                     }
                 }
             }
-            Result.success(rules)
+            Log.d(TAG, "loadActiveRules: source=$sourceId, loaded patterns=${rules.codeExtraction.express.patterns.size}")
+            // 非内置源：与内置规则合并，缺失部分自动补全
+            val merged = if (sourceId != "builtin") {
+                Log.d(TAG, "loadActiveRules: 执行合并 sourceId=$sourceId")
+                rules.mergeWithBuiltIn(builtIn)
+            } else {
+                rules
+            }
+            Log.d(TAG, "loadActiveRules: 最终 patterns=${merged.codeExtraction.express.patterns.size}")
+            Result.success(merged)
         } catch (e: Exception) {
             Log.e(TAG, "加载激活规则源失败: $sourceId", e)
             Result.failure(e)
@@ -300,7 +316,11 @@ class RuleRepository(private val context: Context) {
             if (!file.exists()) return@withContext null
             val json = file.readText()
             Log.d(TAG, "在线规则文件内容大小: ${json.length} 字符 [$sourceId]")
-            RecognitionRules.fromJson(JSONObject(json))
+            // 打印前200字符帮助调试
+            Log.d(TAG, "在线规则文件开头: ${json.take(200)}")
+            val rules = RecognitionRules.fromJson(JSONObject(json), rawJson = json)
+            Log.d(TAG, "在线规则解析结果: express patterns=${rules.codeExtraction.express.patterns.size}, brands=${rules.brands.drink.size + rules.brands.food.size + rules.brands.express.size}")
+            rules
         } catch (e: Exception) {
             Log.e(TAG, "加载在线规则缓存失败 [$sourceId]", e)
             null
@@ -313,7 +333,7 @@ class RuleRepository(private val context: Context) {
             onlineDir.mkdirs()
 
             val rulesFile = File(onlineDir, "$sourceId.json")
-            val jsonStr = rules.toJson().toString(2)
+            val jsonStr = rules.rawJson ?: rules.toJson().toString(2)
             rulesFile.writeText(jsonStr)
             Log.d(TAG, "保存在线规则文件: ${rulesFile.absolutePath}, 大小: ${jsonStr.length} 字符, 存在: ${rulesFile.exists()}")
 
@@ -327,6 +347,48 @@ class RuleRepository(private val context: Context) {
             Log.d(TAG, "保存在线规则缓存成功 [$sourceId]")
         } catch (e: Exception) {
             Log.e(TAG, "保存在线规则缓存失败 [$sourceId]", e)
+        }
+    }
+
+    /** 直接保存原始 JSON 文本，不做任何处理 */
+    suspend fun saveRawOnlineRulesById(sourceId: String, rawJson: String, etag: String?, lastModified: String?) = withContext(Dispatchers.IO) {
+        try {
+            val onlineDir = File(rulesDir, "online_sources")
+            onlineDir.mkdirs()
+
+            val rulesFile = File(onlineDir, "$sourceId.json")
+            rulesFile.writeText(rawJson)
+            Log.d(TAG, "保存原始在线规则文件: ${rulesFile.absolutePath}, 大小: ${rawJson.length} 字符")
+
+            val metaFile = File(onlineDir, "${sourceId}_meta.json")
+            val meta = JSONObject().apply {
+                put("etag", etag ?: "")
+                put("last_modified", lastModified ?: "")
+                put("fetch_time", System.currentTimeMillis())
+            }
+            metaFile.writeText(meta.toString(2))
+            Log.d(TAG, "保存在线规则缓存成功 [$sourceId]")
+        } catch (e: Exception) {
+            Log.e(TAG, "保存在线规则缓存失败 [$sourceId]", e)
+        }
+    }
+
+    /** 直接保存原始 JSON 到全局缓存 */
+    suspend fun saveRawOnlineCache(rawJson: String, etag: String?, lastModified: String?) = withContext(Dispatchers.IO) {
+        try {
+            val rulesFile = File(rulesDir, "online_cache.json")
+            rulesFile.writeText(rawJson)
+
+            val metaFile = File(rulesDir, "online_cache_meta.json")
+            val meta = JSONObject().apply {
+                put("etag", etag ?: "")
+                put("last_modified", lastModified ?: "")
+                put("fetch_time", System.currentTimeMillis())
+            }
+            metaFile.writeText(meta.toString(2))
+            Log.d(TAG, "保存原始在线缓存规则成功")
+        } catch (e: Exception) {
+            Log.e(TAG, "保存在线缓存规则失败", e)
         }
     }
 

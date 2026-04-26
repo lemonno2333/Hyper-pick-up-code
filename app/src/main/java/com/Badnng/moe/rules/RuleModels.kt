@@ -160,6 +160,21 @@ data class RecognitionRules(
     val scoring: ScoringConfig = ScoringConfig(),
     val pickupLocation: PickupLocationConfig = PickupLocationConfig()
 ) {
+    /** 原始 JSON 文本，用于导出时不丢失原始格式 */
+    @Transient
+    var rawJson: String? = null
+
+    /** 与内置规则合并，缺失的部分自动补全 */
+    fun mergeWithBuiltIn(builtIn: RecognitionRules): RecognitionRules = copy(
+        brands = if (brands.drink.isEmpty() && brands.food.isEmpty() && brands.express.isEmpty()) builtIn.brands else brands,
+        codeExtraction = codeExtraction.mergeWithBuiltIn(builtIn.codeExtraction),
+        categoryDetection = categoryDetection,
+        homepageDetection = homepageDetection,
+        textCleaning = textCleaning,
+        validation = validation,
+        scoring = scoring,
+        pickupLocation = pickupLocation
+    ).also { it.rawJson = this.rawJson }
     fun toJson(): JSONObject = JSONObject().apply {
         put("schema_version", schemaVersion)
         put("app_version", appVersion)
@@ -178,20 +193,21 @@ data class RecognitionRules(
     }
 
     companion object {
-        fun fromJson(json: JSONObject): RecognitionRules = RecognitionRules(
+        fun fromJson(json: JSONObject, rawJson: String? = null): RecognitionRules = RecognitionRules(
             schemaVersion = json.optInt("schema_version", 1),
             appVersion = json.optString("app_version", ""),
             updatedAt = json.optString("updated_at", ""),
             description = json.optString("description", ""),
             jsonPackage = json.optString("json_package", "").ifEmpty { json.optString("jsonpackage", "") },
             brands = json.optJSONObject("brands")?.let { BrandConfig.fromJson(it) } ?: BrandConfig(),
+            codeExtraction = json.optJSONObject("code_extraction")?.let { CodeExtractionConfig.fromJson(it) } ?: CodeExtractionConfig(),
             categoryDetection = json.optJSONObject("category_detection")?.let { CategoryDetectionConfig.fromJson(it) } ?: CategoryDetectionConfig(),
             homepageDetection = json.optJSONObject("homepage_detection")?.let { HomepageDetectionConfig.fromJson(it) } ?: HomepageDetectionConfig(),
             textCleaning = json.optJSONObject("text_cleaning")?.let { TextCleaningConfig.fromJson(it) } ?: TextCleaningConfig(),
             validation = json.optJSONObject("validation")?.let { ValidationConfig.fromJson(it) } ?: ValidationConfig(),
             scoring = json.optJSONObject("scoring")?.let { ScoringConfig.fromJson(it) } ?: ScoringConfig(),
             pickupLocation = json.optJSONObject("pickup_location")?.let { PickupLocationConfig.fromJson(it) } ?: PickupLocationConfig()
-        )
+        ).also { it.rawJson = rawJson }
     }
 }
 
@@ -275,6 +291,11 @@ data class CodeExtractionConfig(
         put("food", food.toJson())
     }
 
+    fun mergeWithBuiltIn(builtIn: CodeExtractionConfig): CodeExtractionConfig = copy(
+        express = express.mergeWithBuiltIn(builtIn.express),
+        food = food.mergeWithBuiltIn(builtIn.food)
+    )
+
     companion object {
         fun fromJson(json: JSONObject): CodeExtractionConfig = CodeExtractionConfig(
             express = json.optJSONObject("express")?.let { ExpressExtraction.fromJson(it) } ?: ExpressExtraction(),
@@ -293,6 +314,11 @@ data class ExpressExtraction(
         put("patterns", JSONArray(patterns.map { it.toJson() }))
         fallbackPattern?.let { put("fallback_pattern", it.toJson()) }
     }
+
+    fun mergeWithBuiltIn(builtIn: ExpressExtraction): ExpressExtraction = copy(
+        patterns = if (patterns.isEmpty()) builtIn.patterns else patterns,
+        fallbackPattern = fallbackPattern ?: builtIn.fallbackPattern
+    )
 
     companion object {
         fun fromJson(json: JSONObject): ExpressExtraction = ExpressExtraction(
@@ -320,6 +346,11 @@ data class FoodExtraction(
         starbucksPattern?.let { put("starbucks_pattern", it.toJson()) }
     }
 
+    fun mergeWithBuiltIn(builtIn: FoodExtraction): FoodExtraction = copy(
+        patterns = patterns.mergeWithBuiltIn(builtIn.patterns),
+        starbucksPattern = starbucksPattern ?: builtIn.starbucksPattern
+    )
+
     companion object {
         fun fromJson(json: JSONObject): FoodExtraction = FoodExtraction(
             triggerKeywords = json.optJSONArray("trigger_keywords")?.let { arr -> (0 until arr.length()).map { arr.getString(it) } } ?: listOf("取餐", "取茶", "验证码", "券码", "订单", "准备完毕", "领取", "取单", "取货"),
@@ -344,6 +375,13 @@ data class FoodPatterns(
         keywordPattern?.let { put("keyword_pattern", it.toJson()) }
         fallbackPattern?.let { put("fallback_pattern", it.toJson()) }
     }
+
+    fun mergeWithBuiltIn(builtIn: FoodPatterns): FoodPatterns = copy(
+        queuePatterns = if (queuePatterns.isEmpty()) builtIn.queuePatterns else queuePatterns,
+        sloganPattern = sloganPattern ?: builtIn.sloganPattern,
+        keywordPattern = keywordPattern ?: builtIn.keywordPattern,
+        fallbackPattern = fallbackPattern ?: builtIn.fallbackPattern
+    )
 
     companion object {
         fun fromJson(json: JSONObject): FoodPatterns = FoodPatterns(

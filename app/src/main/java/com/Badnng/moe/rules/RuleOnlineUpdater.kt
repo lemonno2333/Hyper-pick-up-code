@@ -77,15 +77,16 @@ class RuleOnlineUpdater(private val context: Context) {
 
     data class FetchResult(
         val rules: RecognitionRules?,
+        val rawJson: String? = null,
         val etag: String?,
         val lastModified: String?,
         val notModified: Boolean
     )
 
-    suspend fun fetch(url: String): Result<FetchResult> = withContext(Dispatchers.IO) {
+    suspend fun fetch(url: String, forceNoCache: Boolean = false): Result<FetchResult> = withContext(Dispatchers.IO) {
         try {
             Log.d(TAG, "========== 开始请求在线规则 ==========")
-            Log.d(TAG, "URL: $url")
+            Log.d(TAG, "URL: $url, forceNoCache=$forceNoCache")
             // 系统 TLS 信息
             val defaultSslContext = SSLContext.getDefault()
             Log.d(TAG, "系统默认 SSL 协议: ${defaultSslContext.protocol}")
@@ -119,8 +120,12 @@ class RuleOnlineUpdater(private val context: Context) {
 
             val builder = Request.Builder().url(url)
                 .header("User-Agent", "HyperNote/1.0 (Android)")
-            meta?.etag?.let { builder.header("If-None-Match", it) }
-            meta?.lastModified?.let { builder.header("If-Modified-Since", it) }
+            if (!forceNoCache) {
+                meta?.etag?.let { builder.header("If-None-Match", it) }
+                meta?.lastModified?.let { builder.header("If-Modified-Since", it) }
+            } else {
+                Log.d(TAG, "无条件获取：跳过缓存头")
+            }
 
             val request = builder.build()
             Log.d(TAG, "请求头: ${request.headers}")
@@ -138,15 +143,15 @@ class RuleOnlineUpdater(private val context: Context) {
                         Log.w(TAG, "规则验证失败: ${validationResult.errors}")
                         throw Exception("规则验证失败: ${validationResult.errors.joinToString("; ")}")
                     }
-                    val rules = RecognitionRules.fromJson(org.json.JSONObject(body))
+                    val rules = RecognitionRules.fromJson(org.json.JSONObject(body), rawJson = body)
                     val etag = response.header("ETag")
                     val lastModified = response.header("Last-Modified")
                     Log.d(TAG, "规则解析成功: schemaVersion=${rules.schemaVersion}, etag=$etag, lastModified=$lastModified")
-                    Result.success(FetchResult(rules, etag, lastModified, false))
+                    Result.success(FetchResult(rules, rawJson = body, etag = etag, lastModified = lastModified, notModified = false))
                 }
                 304 -> {
                     Log.d(TAG, "规则未修改 (304)")
-                    Result.success(FetchResult(null, null, null, true))
+                    Result.success(FetchResult(rules = null, rawJson = null, etag = null, lastModified = null, notModified = true))
                 }
                 else -> {
                     val errorBody = try { response.body?.string()?.take(500) } catch (_: Exception) { null }
@@ -221,32 +226,24 @@ class RuleOnlineUpdater(private val context: Context) {
     }
 
     suspend fun fetchAndSaveSource(source: OnlineRuleSource): Result<Pair<Boolean, OnlineRuleSource>> {
-        val result = fetch(source.url)
+        // 如果按源文件不存在，做无条件获取（不发缓存头）
+        val perSourceFile = java.io.File(
+            context.filesDir, "rules/online_sources/${source.id}.json"
+        )
+        val forceFetch = !perSourceFile.exists()
+        val result = fetch(source.url, forceNoCache = forceFetch)
         return result.fold(
             onSuccess = { fetchResult ->
                 if (fetchResult.notModified) {
-                    // 304: 规则没变，但如果按源文件不存在，从全局缓存迁移
-                    val perSourceFile = java.io.File(
-                        context.filesDir, "rules/online_sources/${source.id}.json"
-                    )
-                    if (!perSourceFile.exists()) {
-                        Log.d(TAG, "按源文件不存在，尝试从全局缓存迁移 [$source.id]")
-                        val cached = repository.loadOnlineCache()
-                        if (cached != null) {
-                            repository.saveOnlineRulesById(source.id, cached, null, null)
-                            Log.d(TAG, "从全局缓存迁移成功 [$source.id]")
-                        } else {
-                            Log.w(TAG, "全局缓存也为空，无法迁移 [$source.id]")
-                        }
-                    }
+                    // 304: 规则没变
                     val updated = source.copy(lastUpdated = System.currentTimeMillis())
                     Result.success(false to updated)
                 } else {
                     fetchResult.rules?.let { rules ->
-                        // 保存到按源ID分文件的位置（online_sources/{id}.json）
-                        repository.saveOnlineRulesById(source.id, rules, fetchResult.etag, fetchResult.lastModified)
+                        // 直接保存原始 JSON 文本，不做任何处理
+                        repository.saveRawOnlineRulesById(source.id, fetchResult.rawJson!!, fetchResult.etag, fetchResult.lastModified)
                         // 同时更新全局缓存
-                        repository.saveOnlineCache(rules, fetchResult.etag, fetchResult.lastModified)
+                        repository.saveRawOnlineCache(fetchResult.rawJson!!, fetchResult.etag, fetchResult.lastModified)
                         RecognitionRuleEngine.saveOnlineCache(rules, fetchResult.etag, fetchResult.lastModified)
                         val updated = source.copy(
                             lastUpdated = System.currentTimeMillis(),

@@ -523,6 +523,7 @@ class TextRecognitionHelper(private val context: Context) {
     // ─────────── 纯文字识别（用于划选文字处理） ───────────
     fun recognizeFromText(text: String): RecognitionResult {
         val mergedText = cleanChineseText(text)
+        Log.d("ExpressExtract", "recognizeFromText: engine patterns=${engine.getExpressPatterns().size}, sourceId=${engine.currentSourceId}")
 
         // 品牌识别
         var detectedBrand: String? = null
@@ -592,19 +593,49 @@ class TextRecognitionHelper(private val context: Context) {
         val hasExpressKeyword = expressKeywords.any { mergedText.contains(it) }
         val hasExpressBrand = expressBrandKeywords.any { mergedText.contains(it) }
 
+        // 第零步：先用完整文本匹配（处理需要包含关键词本身的模式，如『』格式）
+        if (hasExpressKeyword) {
+            val allPatterns = engine.getExpressPatterns()
+            Log.d("ExpressExtract", "第零步: 共${allPatterns.size}个模式, 文本=$mergedText")
+            for (pattern in allPatterns) {
+                val compiled = engine.getCompiledPattern(pattern.id)
+                if (compiled == null) {
+                    Log.d("ExpressExtract", "  跳过未编译: ${pattern.id}")
+                    continue
+                }
+                val match = compiled.find(mergedText)
+                Log.d("ExpressExtract", "  尝试 [${pattern.id}] regex=${pattern.regex} => match=${match?.value}")
+                if (match != null) {
+                    val code = match.groupValues.getOrElse(1) { match.value }
+                    Log.d("ExpressExtract", "  候选 code=$code, groupValues=${match.groupValues}")
+                    if (code.isNotBlank() &&
+                        !isInvalidExpressCode(code) &&
+                        !isLikelyPhoneTail(code, mergedText)
+                    ) {
+                        Log.d("ExpressExtract", "  第零步命中: $code")
+                        return code
+                    }
+                }
+            }
+        }
+
         // 第一步：精确从关键词后截取
         val matchedKeyword = expressKeywords.firstOrNull { mergedText.contains(it) }
+        Log.d("ExpressExtract", "第一步: matchedKeyword=$matchedKeyword")
         if (matchedKeyword != null) {
             val afterKeyword = mergedText.substringAfter(matchedKeyword).trimStart(':', '：', ' ')
+            Log.d("ExpressExtract", "第一步: afterKeyword=$afterKeyword")
 
             // 使用引擎中的正则模式按优先级匹配
             for (pattern in engine.getExpressPatterns()) {
                 val compiled = engine.getCompiledPattern(pattern.id) ?: continue
                 val match = compiled.find(afterKeyword)
+                Log.d("ExpressExtract", "  尝试 [${pattern.id}] => match=${match?.value}")
                 if (match != null &&
                     !isInvalidExpressCode(match.value) &&
                     !isLikelyPhoneTail(match.value, mergedText)
                 ) {
+                    Log.d("ExpressExtract", "  第一步命中: ${match.value}")
                     return match.value
                 }
             }

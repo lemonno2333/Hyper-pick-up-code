@@ -32,7 +32,7 @@ object RecognitionRuleEngine {
             onSuccess = { rules ->
                 _rules = rules
                 precompilePatterns()
-                Log.d(TAG, "规则引擎初始化完成，激活源: $activeSourceId")
+                Log.d(TAG, "规则引擎初始化完成，激活源: $activeSourceId, express patterns: ${_rules.codeExtraction.express.patterns.size}, brands: drink=${_rules.brands.drink.size} food=${_rules.brands.food.size} express=${_rules.brands.express.size}")
             },
             onFailure = { e ->
                 Log.e(TAG, "加载激活规则源失败，回退到本地规则", e)
@@ -215,7 +215,7 @@ object RecognitionRuleEngine {
     fun importFromJson(json: String): Result<RecognitionRules> {
         return repository?.importFromJson(json) ?: run {
             try {
-                val rules = RecognitionRules.fromJson(org.json.JSONObject(json))
+                val rules = RecognitionRules.fromJson(org.json.JSONObject(json), rawJson = json)
                 val validation = RuleValidator.validate(rules)
                 if (!validation.isValid) {
                     Result.failure(Exception("规则验证失败: ${validation.errors.joinToString("; ")}"))

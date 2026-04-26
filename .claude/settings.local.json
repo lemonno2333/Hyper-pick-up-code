@@ -34,7 +34,8 @@
       "Bash(jar xf *)",
       "Bash(python3 -c ' *)",
       "Bash(python -c ' *)",
-      "Bash(python -c *)"
+      "Bash(python -c *)",
+      "WebFetch(domain:raw.githubusercontent.com)"
     ]
   }
 }
