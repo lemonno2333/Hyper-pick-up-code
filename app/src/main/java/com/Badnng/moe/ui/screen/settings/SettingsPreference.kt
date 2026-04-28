@@ -55,6 +55,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.Badnng.moe.R
+import com.Badnng.moe.helper.SuperIslandHelper
 import com.Badnng.moe.ui.component.CaptureModeItem
 import com.Badnng.moe.ui.component.ChoiceChip
 import com.Badnng.moe.ui.component.PreferenceSection
@@ -81,6 +82,7 @@ fun PreferenceSettingsContent(performHaptic: () -> Unit) {
     var selectedColorInt by remember { mutableIntStateOf(prefs.getInt("theme_color", Color(0xFF6750A4).toArgb())) }
     var networkUpdateEnabled by remember { mutableStateOf(prefs.getBoolean("network_update_enabled", false)) }
     var updateChannel by remember { mutableStateOf(prefs.getString("update_channel", "stable") ?: "stable") }
+    var notificationType by remember { mutableStateOf(prefs.getString("notification_type", "native") ?: "native") }
 
     Column(
         modifier = Modifier
@@ -235,6 +237,56 @@ fun PreferenceSettingsContent(performHaptic: () -> Unit) {
                         prefs.edit().putBoolean("show_onboarding_on_next_launch", it).apply()
                     }
                 )
+            }
+        }
+
+        PreferenceSection(title = "通知类型") {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                CaptureModeItem(
+                    title = "安卓原生通知",
+                    description = "使用系统原生通知样式（推荐）",
+                    selected = notificationType == "native",
+                    onClick = {
+                        performHaptic()
+                        notificationType = "native"
+                        prefs.edit().putString("notification_type", "native").apply()
+                    }
+                )
+                CaptureModeItem(
+                    title = "小米超级岛",
+                    description = "在 HyperOS 设备上使用超级岛样式（需要设备支持）",
+                    selected = notificationType == "island",
+                    enabled = SuperIslandHelper.isDeviceSupported(context),
+                    onClick = {
+                        performHaptic()
+                        notificationType = "island"
+                        prefs.edit().putString("notification_type", "island").apply()
+                    }
+                )
+
+                AnimatedVisibility(
+                    visible = notificationType == "island",
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
+                    Surface(
+                        onClick = {
+                            performHaptic()
+                            SuperIslandHelper.sendTestNotification(context)
+                        },
+                        shape = RoundedCornerShape(15.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "测试超级岛通知",
+                            modifier = Modifier.padding(16.dp),
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
             }
         }
 

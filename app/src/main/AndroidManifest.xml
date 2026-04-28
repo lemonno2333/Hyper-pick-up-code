@@ -145,6 +145,7 @@
         </service>
 
         <receiver android:name=".receiver.NotificationReceiver" android:exported="false" />
+        <receiver android:name=".receiver.TestNotificationDismissReceiver" android:exported="false" />
 
         <provider
             android:name="androidx.core.content.FileProvider"
