@@ -21,6 +21,12 @@ class NotificationHelper(private val context: Context) {
     private val channelId = "promoted_live_update_channel"
     private val updateChannelId = "update_download_channel"
     private val updateNotificationId = 20260325
+    private val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
+
+    private fun isIslandMode(): Boolean {
+        return SuperIslandHelper.isDeviceSupported(context)
+            && prefs.getString("notification_type", "native") == "island"
+    }
 
     init {
         createNotificationChannel()
@@ -81,45 +87,71 @@ class NotificationHelper(private val context: Context) {
         )
 
         val brandToUse = detectedBrand ?: order.brandName
-        val iconRes = getBrandIcon(brandToUse, order.orderType)
         val isExpress = order.orderType == "快递"
-        val label = if (isExpress) "取件码" else "取餐码"
 
-        val builder = Notification.Builder(context, channelId)
-            .setContentTitle(if (isExpress) "快递待取 - ${brandToUse ?: "新包裹"}" else "取餐提醒 - ${brandToUse ?: "新订单"}")
-            .setContentText("$label: ${order.takeoutCode}")
-            .setSmallIcon(iconRes)
-            .setOngoing(true)
-            .setContentIntent(viewPendingIntent)
-            .setStyle(Notification.BigTextStyle().bigText("$label: ${order.takeoutCode}"))
-            .addAction(Notification.Action.Builder(null, "已完成", completePendingIntent).build())
-
-        if (isExpress) {
-            val identityChooserIntent = Intent(context, IdentityChooserActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                putExtra("from_notification", true)
-            }
-            val identityChooserPendingIntent = PendingIntent.getActivity(
-                context,
-                order.id.hashCode() + 3000,
-                identityChooserIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            builder.addAction(Notification.Action.Builder(null, "身份码", identityChooserPendingIntent).build())
-        }
-            
-        if (Build.VERSION.SDK_INT >= 35) {
-            val extras = Bundle()
-            extras.putBoolean("android.requestPromotedOngoing", true)
-            builder.addExtras(extras)
-            try {
-                if (Build.VERSION.SDK_INT >= 36) {
-                    builder.setShortCriticalText(" ${order.takeoutCode}")
+        if (isIslandMode()) {
+            val identityChooserPendingIntent = if (isExpress) {
+                val identityChooserIntent = Intent(context, IdentityChooserActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    putExtra("from_notification", true)
                 }
-            } catch (e: Exception) {}
-        }
+                PendingIntent.getActivity(
+                    context, order.id.hashCode() + 3000, identityChooserIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+            } else null
 
-        notificationManager.notify(order.id.hashCode(), builder.build())
+            val islandNotification = SuperIslandHelper.buildPromotedNotification(
+                context = context,
+                channelId = channelId,
+                order = order,
+                brandName = brandToUse,
+                isExpress = isExpress,
+                completePendingIntent = completePendingIntent,
+                viewPendingIntent = viewPendingIntent,
+                identityChooserPendingIntent = identityChooserPendingIntent
+            )
+            notificationManager.notify(order.id.hashCode(), islandNotification)
+        } else {
+            val iconRes = getBrandIcon(brandToUse, order.orderType)
+            val label = if (isExpress) "取件码" else "取餐码"
+
+            val builder = Notification.Builder(context, channelId)
+                .setContentTitle(if (isExpress) "快递待取 - ${brandToUse ?: "新包裹"}" else "取餐提醒 - ${brandToUse ?: "新订单"}")
+                .setContentText("$label: ${order.takeoutCode}")
+                .setSmallIcon(iconRes)
+                .setOngoing(true)
+                .setContentIntent(viewPendingIntent)
+                .setStyle(Notification.BigTextStyle().bigText("$label: ${order.takeoutCode}"))
+                .addAction(Notification.Action.Builder(null, "已完成", completePendingIntent).build())
+
+            if (isExpress) {
+                val identityChooserIntent = Intent(context, IdentityChooserActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    putExtra("from_notification", true)
+                }
+                val identityChooserPendingIntent = PendingIntent.getActivity(
+                    context,
+                    order.id.hashCode() + 3000,
+                    identityChooserIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                builder.addAction(Notification.Action.Builder(null, "身份码", identityChooserPendingIntent).build())
+            }
+
+            if (Build.VERSION.SDK_INT >= 35) {
+                val extras = Bundle()
+                extras.putBoolean("android.requestPromotedOngoing", true)
+                builder.addExtras(extras)
+                try {
+                    if (Build.VERSION.SDK_INT >= 36) {
+                        builder.setShortCriticalText(" ${order.takeoutCode}")
+                    }
+                } catch (e: Exception) {}
+            }
+
+            notificationManager.notify(order.id.hashCode(), builder.build())
+        }
     }
 
     private fun getBrandIcon(brandName: String?, orderType: String): Int {
@@ -145,6 +177,9 @@ class NotificationHelper(private val context: Context) {
     }
 
     fun showGroupNotification(group: OrderGroup, orders: List<OrderEntity>) {
+        // 先取消该组内所有单条订单的通知
+        orders.forEach { cancelNotification(it.id) }
+
         // 组详情意图
         val groupDetailIntent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -169,50 +204,74 @@ class NotificationHelper(private val context: Context) {
         val completedCount = orders.count { it.isCompleted }
         val totalCount = orders.size
         val brandToUse = group.brandName
-        val iconRes = getBrandIcon(brandToUse, group.orderType)
         val isExpress = group.orderType == "快递"
-        val label = if (isExpress) "取件码" else "取餐码"
 
-        // 构建通知文本
-        val codesText = orders.take(3).joinToString(", ") { it.takeoutCode }
-        val moreText = if (orders.size > 3) " 等${orders.size}件" else ""
-        val contentText = "$label: $codesText$moreText"
-
-        val builder = Notification.Builder(context, channelId)
-            .setContentTitle(if (isExpress) "快递待取 - ${brandToUse ?: "新包裹"}" else "取餐提醒 - ${brandToUse ?: "新订单"}")
-            .setContentText(contentText)
-            .setSmallIcon(iconRes)
-            .setOngoing(true)
-            .setContentIntent(groupDetailPendingIntent)
-            .setStyle(Notification.BigTextStyle().bigText("$contentText\n已完成 $completedCount/$totalCount"))
-            .addAction(Notification.Action.Builder(null, "全部完成", completeAllPendingIntent).build())
-
-        if (isExpress) {
-            val identityChooserIntent = Intent(context, IdentityChooserActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                putExtra("from_notification", true)
-            }
-            val identityChooserPendingIntent = PendingIntent.getActivity(
-                context,
-                group.id.hashCode() + 2000,
-                identityChooserIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            builder.addAction(Notification.Action.Builder(null, "身份码", identityChooserPendingIntent).build())
-        }
-
-        if (Build.VERSION.SDK_INT >= 35) {
-            val extras = Bundle()
-            extras.putBoolean("android.requestPromotedOngoing", true)
-            builder.addExtras(extras)
-            try {
-                if (Build.VERSION.SDK_INT >= 36) {
-                    builder.setShortCriticalText(" ${orders.size}件")
+        if (isIslandMode()) {
+            val identityChooserPendingIntent = if (isExpress) {
+                val identityChooserIntent = Intent(context, IdentityChooserActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    putExtra("from_notification", true)
                 }
-            } catch (e: Exception) {}
-        }
+                PendingIntent.getActivity(
+                    context, group.id.hashCode() + 2000, identityChooserIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+            } else null
 
-        notificationManager.notify(group.id.hashCode(), builder.build())
+            val islandNotification = SuperIslandHelper.buildGroupNotification(
+                context = context,
+                channelId = channelId,
+                group = group,
+                orders = orders,
+                isExpress = isExpress,
+                completeAllPendingIntent = completeAllPendingIntent,
+                groupDetailPendingIntent = groupDetailPendingIntent,
+                identityChooserPendingIntent = identityChooserPendingIntent
+            )
+            notificationManager.notify(group.id.hashCode(), islandNotification)
+        } else {
+            val iconRes = getBrandIcon(brandToUse, group.orderType)
+            val label = if (isExpress) "取件码" else "取餐码"
+            val codesText = orders.take(3).joinToString(", ") { it.takeoutCode }
+            val moreText = if (orders.size > 3) " 等${orders.size}件" else ""
+            val contentText = "$label: $codesText$moreText"
+
+            val builder = Notification.Builder(context, channelId)
+                .setContentTitle(if (isExpress) "快递待取 - ${brandToUse ?: "新包裹"}" else "取餐提醒 - ${brandToUse ?: "新订单"}")
+                .setContentText(contentText)
+                .setSmallIcon(iconRes)
+                .setOngoing(true)
+                .setContentIntent(groupDetailPendingIntent)
+                .setStyle(Notification.BigTextStyle().bigText("$contentText\n已完成 $completedCount/$totalCount"))
+                .addAction(Notification.Action.Builder(null, "全部完成", completeAllPendingIntent).build())
+
+            if (isExpress) {
+                val identityChooserIntent = Intent(context, IdentityChooserActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    putExtra("from_notification", true)
+                }
+                val identityChooserPendingIntent = PendingIntent.getActivity(
+                    context,
+                    group.id.hashCode() + 2000,
+                    identityChooserIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                builder.addAction(Notification.Action.Builder(null, "身份码", identityChooserPendingIntent).build())
+            }
+
+            if (Build.VERSION.SDK_INT >= 35) {
+                val extras = Bundle()
+                extras.putBoolean("android.requestPromotedOngoing", true)
+                builder.addExtras(extras)
+                try {
+                    if (Build.VERSION.SDK_INT >= 36) {
+                        builder.setShortCriticalText(" ${orders.size}件")
+                    }
+                } catch (e: Exception) {}
+            }
+
+            notificationManager.notify(group.id.hashCode(), builder.build())
+        }
     }
 
     fun cancelGroupNotification(groupId: Long) {

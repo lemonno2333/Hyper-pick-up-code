@@ -21,6 +21,7 @@ import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import android.widget.Toast
+import com.Badnng.moe.helper.AppLogger
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -51,6 +52,7 @@ class ScreenCaptureService : Service() {
     private val accessibilityCaptureDelayMs = 950L
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        AppLogger.service("ScreenCaptureService onStartCommand, triggeredByAccessibilityShortcut=${intent?.getBooleanExtra("triggered_by_accessibility_shortcut", false)}")
         val prefs = getSharedPreferences("settings", MODE_PRIVATE)
         val currentMode = prefs.getString("capture_mode", "media_projection") ?: "media_projection"
         val intentUseShizuku = intent?.getBooleanExtra("use_shizuku", false) ?: false
@@ -91,10 +93,13 @@ class ScreenCaptureService : Service() {
         }
 
         if (useRoot) {
+            AppLogger.service("ScreenCaptureService using ROOT capture")
             startRootCaptureSingleTry()
         } else if (useShizuku) {
+            AppLogger.service("ScreenCaptureService using SHIZUKU capture")
             startShizukuCaptureSingleTry()
         } else {
+            AppLogger.service("ScreenCaptureService using MEDIA_PROJECTION capture")
             val resultCode = intent?.getIntExtra("resultCode", Activity.RESULT_CANCELED)
                 ?: Activity.RESULT_CANCELED
             val data = if (Build.VERSION.SDK_INT >= 33) {
@@ -139,10 +144,12 @@ class ScreenCaptureService : Service() {
                     val cropped = cropStatusBar(bitmap)
                     recognizeAndStop(cropped, appName, pkg, triggeredByAccessibilityShortcut)
                 } else {
+                    AppLogger.service("Shizuku capture returned null bitmap")
                     stopSelf()
                 }
             } catch (e: Exception) {
                 Log.e("CaptureLog", "Shizuku capture failed", e)
+                AppLogger.service("Shizuku capture failed: ${e.message}")
                 stopSelf()
             } finally {
                 bitmap?.recycle()
@@ -169,6 +176,7 @@ class ScreenCaptureService : Service() {
                     val cropped = cropStatusBar(bitmap)
                     recognizeAndStop(cropped, appName, pkg, triggeredByAccessibilityShortcut)
                 } else {
+                    AppLogger.service("Root capture returned null bitmap")
                     withContext(Dispatchers.Main) {
                         Toast.makeText(
                             applicationContext,
@@ -180,6 +188,7 @@ class ScreenCaptureService : Service() {
                 }
             } catch (e: Exception) {
                 Log.e("CaptureLog", "Root capture failed", e)
+                AppLogger.service("Root capture failed: ${e.message}")
                 stopSelf()
             } finally {
                 bitmap?.recycle()
@@ -367,6 +376,7 @@ class ScreenCaptureService : Service() {
                 val insertedOrders = mutableListOf<OrderEntity>()
                 for (result in recognizedOrders) {
                     val code = result.code ?: continue
+                    AppLogger.recognition("code=$code, type=${result.type}, brand=${result.brand}, pickup=${result.pickupLocation}")
                     val order = OrderEntity(
                         takeoutCode = code,
                         qrCodeData = result.qr,
@@ -474,6 +484,7 @@ class ScreenCaptureService : Service() {
     }
 
     override fun onDestroy() {
+        AppLogger.service("ScreenCaptureService onDestroy")
         scope.cancel()
         virtualDisplay?.release()
         mediaProjection?.stop()

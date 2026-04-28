@@ -2,6 +2,7 @@ package com.Badnng.moe.rules
 
 import org.json.JSONArray
 import org.json.JSONObject
+import com.Badnng.moe.helper.AppLogger
 
 // ─────────── Online Rule Source ───────────
 
@@ -22,6 +23,7 @@ data class OnlineRuleSource(
         put("enabled", enabled)
         put("update_interval_minutes", updateIntervalMinutes)
         android.util.Log.d("RuleModels", "OnlineRuleSource.toJson: name=$name updateIntervalMinutes=$updateIntervalMinutes")
+        AppLogger.update("RuleModels OnlineRuleSource.toJson: name=$name, interval=${updateIntervalMinutes}min")
         put("last_updated", lastUpdated)
         put("last_etag", lastEtag ?: "")
         put("last_modified", lastModified ?: "")
@@ -36,6 +38,7 @@ data class OnlineRuleSource(
                 json.optInt("update_interval_hours", 24) * 60
             }
             android.util.Log.d("RuleModels", "OnlineRuleSource.fromJson: name=${json.optString("name","")} has_minutes=${json.has("update_interval_minutes")} minutes=$minutes raw=${json.opt("update_interval_minutes")}")
+            AppLogger.update("RuleModels OnlineRuleSource.fromJson: name=${json.optString("name","")}, minutes=$minutes")
             return OnlineRuleSource(
                 id = json.optString("id", ""),
                 name = json.optString("name", ""),
@@ -128,8 +131,12 @@ data class RuleSystemConfig(
     }
 
     companion object {
-        fun fromJson(json: JSONObject): RuleSystemConfig = RuleSystemConfig(
-            activeSourceId = json.optString("active_source_id", "local"),
+        fun fromJson(json: JSONObject): RuleSystemConfig {
+            val activeId = json.optString("active_source_id", "local")
+            val onlineCount = json.optJSONArray("online_sources")?.length() ?: 0
+            AppLogger.update("RuleModels RuleSystemConfig.fromJson: activeSource=$activeId, onlineSources=$onlineCount")
+            return RuleSystemConfig(
+            activeSourceId = activeId,
             localConfig = json.optJSONObject("local_config")?.let {
                 LocalRuleSourceConfig.fromJson(it)
             } ?: LocalRuleSourceConfig(),
@@ -139,7 +146,8 @@ data class RuleSystemConfig(
             onlineSources = json.optJSONArray("online_sources")?.let { arr ->
                 (0 until arr.length()).map { OnlineRuleSource.fromJson(arr.getJSONObject(it)) }
             } ?: emptyList()
-        )
+            )
+        }
     }
 }
 
@@ -193,21 +201,26 @@ data class RecognitionRules(
     }
 
     companion object {
-        fun fromJson(json: JSONObject, rawJson: String? = null): RecognitionRules = RecognitionRules(
-            schemaVersion = json.optInt("schema_version", 1),
-            appVersion = json.optString("app_version", ""),
-            updatedAt = json.optString("updated_at", ""),
-            description = json.optString("description", ""),
-            jsonPackage = json.optString("json_package", "").ifEmpty { json.optString("jsonpackage", "") },
-            brands = json.optJSONObject("brands")?.let { BrandConfig.fromJson(it) } ?: BrandConfig(),
-            codeExtraction = json.optJSONObject("code_extraction")?.let { CodeExtractionConfig.fromJson(it) } ?: CodeExtractionConfig(),
-            categoryDetection = json.optJSONObject("category_detection")?.let { CategoryDetectionConfig.fromJson(it) } ?: CategoryDetectionConfig(),
-            homepageDetection = json.optJSONObject("homepage_detection")?.let { HomepageDetectionConfig.fromJson(it) } ?: HomepageDetectionConfig(),
-            textCleaning = json.optJSONObject("text_cleaning")?.let { TextCleaningConfig.fromJson(it) } ?: TextCleaningConfig(),
-            validation = json.optJSONObject("validation")?.let { ValidationConfig.fromJson(it) } ?: ValidationConfig(),
-            scoring = json.optJSONObject("scoring")?.let { ScoringConfig.fromJson(it) } ?: ScoringConfig(),
-            pickupLocation = json.optJSONObject("pickup_location")?.let { PickupLocationConfig.fromJson(it) } ?: PickupLocationConfig()
-        ).also { it.rawJson = rawJson }
+        fun fromJson(json: JSONObject, rawJson: String? = null): RecognitionRules {
+            val schema = json.optInt("schema_version", 1)
+            val pkg = json.optString("json_package", "").ifEmpty { json.optString("jsonpackage", "") }
+            AppLogger.update("RuleModels RecognitionRules.fromJson: schema=$schema, package=$pkg, brands=${json.optJSONObject("brands") != null}")
+            return RecognitionRules(
+                schemaVersion = schema,
+                appVersion = json.optString("app_version", ""),
+                updatedAt = json.optString("updated_at", ""),
+                description = json.optString("description", ""),
+                jsonPackage = pkg,
+                brands = json.optJSONObject("brands")?.let { BrandConfig.fromJson(it) } ?: BrandConfig(),
+                codeExtraction = json.optJSONObject("code_extraction")?.let { CodeExtractionConfig.fromJson(it) } ?: CodeExtractionConfig(),
+                categoryDetection = json.optJSONObject("category_detection")?.let { CategoryDetectionConfig.fromJson(it) } ?: CategoryDetectionConfig(),
+                homepageDetection = json.optJSONObject("homepage_detection")?.let { HomepageDetectionConfig.fromJson(it) } ?: HomepageDetectionConfig(),
+                textCleaning = json.optJSONObject("text_cleaning")?.let { TextCleaningConfig.fromJson(it) } ?: TextCleaningConfig(),
+                validation = json.optJSONObject("validation")?.let { ValidationConfig.fromJson(it) } ?: ValidationConfig(),
+                scoring = json.optJSONObject("scoring")?.let { ScoringConfig.fromJson(it) } ?: ScoringConfig(),
+                pickupLocation = json.optJSONObject("pickup_location")?.let { PickupLocationConfig.fromJson(it) } ?: PickupLocationConfig()
+            ).also { it.rawJson = rawJson }
+        }
     }
 }
 
@@ -840,7 +853,7 @@ data class BrandFoodScoring(
 // ─────────── Pickup Location ───────────
 
 data class PickupLocationConfig(
-    val startKeywords: List<String> = listOf("已到", "已至", "到达", "到了", "在", "于", "己到", "前往", "送到", "前住"),
+    val startKeywords: List<String> = listOf("已到", "已至", "到达", "到了", "在", "于", "己到", "前往", "送到", "前住", "至"),
     val targetKeywords: List<String> = listOf("服务站", "驿站", "菜鸟驿", "菜鸟驿站", "自提点", "快递站", "菜鸟站", "代收点", "代点", "丰巢柜", "快递柜", "智能柜", "门面", "邮政大厅", "大厅"),
     val stopKeywords: List<String> = listOf("领取", "取件", "查看", "请凭", "靖凭", "如有", "如有疑问", "取您的", "复制"),
     val garbagePatterns: List<String> = listOf("代收点(", "代收点（", "\\d{10,}"),
@@ -856,7 +869,7 @@ data class PickupLocationConfig(
 
     companion object {
         fun fromJson(json: JSONObject): PickupLocationConfig = PickupLocationConfig(
-            startKeywords = json.optJSONArray("start_keywords")?.let { arr -> (0 until arr.length()).map { arr.getString(it) } } ?: listOf("已到", "已至", "到达", "到了", "在", "于", "己到", "前往", "送到", "前住"),
+            startKeywords = json.optJSONArray("start_keywords")?.let { arr -> (0 until arr.length()).map { arr.getString(it) } } ?: listOf("已到", "已至", "到达", "到了", "在", "于", "己到", "前往", "送到", "前住", "至"),
             targetKeywords = json.optJSONArray("target_keywords")?.let { arr -> (0 until arr.length()).map { arr.getString(it) } } ?: listOf("服务站", "驿站", "菜鸟驿", "菜鸟驿站", "自提点", "快递站", "菜鸟站", "代收点", "代点", "丰巢柜", "快递柜", "智能柜", "门面", "邮政大厅", "大厅"),
             stopKeywords = json.optJSONArray("stop_keywords")?.let { arr -> (0 until arr.length()).map { arr.getString(it) } } ?: listOf("领取", "取件", "查看", "请凭", "靖凭", "如有", "如有疑问", "取您的", "复制"),
             garbagePatterns = json.optJSONArray("garbage_patterns")?.let { arr -> (0 until arr.length()).map { arr.getString(it) } } ?: listOf("代收点(", "代收点（", "\\d{10,}"),

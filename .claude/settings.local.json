@@ -35,7 +35,25 @@
       "Bash(python3 -c ' *)",
       "Bash(python -c ' *)",
       "Bash(python -c *)",
-      "WebFetch(domain:raw.githubusercontent.com)"
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:dev.mi.com)",
+      "WebFetch(domain:mag-admin.cnbj1.mi-fds.com)",
+      "Bash(curl -L -o /tmp/island_template.pdf \"https://mag-admin.cnbj1.mi-fds.com/mag-admin/island/%E5%B0%8F%E7%B1%B3%E8%B6%85%E7%BA%A7%E5%B2%9B%E6%A8%A1%E6%9D%BF%E5%BA%9320260129.pdf?GalaxyAccessKeyId=5151729087601&Expires=9223372036854775807&Signature=BAXCOHXbEjDgaKSfEnU3UScw4KQ%3D\")",
+      "Read(//c/Users/wsj31/AppData/Local/Temp/**)",
+      "Read(//d//**)",
+      "Bash(pdftotext /tmp/island_template.pdf - -l 5)",
+      "Bash(pdftotext -f 1 -l 10 /tmp/island_template.pdf /tmp/island_page1_10.txt)",
+      "Bash(pdftotext -f 1 -l 30 -layout /tmp/island_template.pdf /tmp/island_layout.txt)",
+      "Bash(pdftotext -f 1 -l 30 -layout /tmp/island_template.pdf /tmp/island_full.txt)",
+      "Bash(sed -n '580,700p' /tmp/island_full.txt)",
+      "Bash(pdftotext -f 1 -l 50 -layout /tmp/island_template.pdf /tmp/island_full2.txt)",
+      "Bash(pdftotext -f 1 -l 60 -layout /tmp/island_template.pdf /tmp/island_full3.txt)",
+      "Bash(curl -sL \"https://github.com/D4vidDf/HyperIsland-ToolKit/raw/refs/heads/main/demo/src/main/java/com/d4viddf/hyperisland_kit/demo/DemoNotificationManager.kt\" -o /tmp/DemoNotificationManager.kt)",
+      "Bash(curl -sL \"https://github.com/D4vidDf/HyperIsland-ToolKit/raw/refs/heads/main/hyperisland-kit/src/main/java/io/github/d4viddf/hyperisland_kit/HyperIslandNotification.kt\" -o /tmp/HyperIslandNotification.kt)",
+      "Bash(gh api *)",
+      "WebFetch(domain:api.github.com)",
+      "Bash(pip install *)",
+      "Bash(python *)"
     ]
   }
 }

@@ -5,6 +5,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
@@ -36,6 +38,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -51,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.Badnng.moe.R
 import com.Badnng.moe.data.db.OrderDatabase
+import com.Badnng.moe.helper.AppLogger
 import com.Badnng.moe.helper.BackupHelper
 import com.Badnng.moe.helper.NotificationHelper
 import com.Badnng.moe.helper.UpdateHelper
@@ -58,7 +62,9 @@ import com.Badnng.moe.helper.UpdateInfo
 import com.Badnng.moe.ui.component.UpdateDialog
 import com.Badnng.moe.ui.component.UpdateProgressDialog
 import com.Badnng.moe.ui.component.PreferenceSection
+import com.Badnng.moe.ui.component.SettingsListItem
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicBoolean
 
 @Composable
@@ -76,6 +82,7 @@ fun AboutSettingsContent(performHaptic: () -> Unit) {
     var isPaused by remember { mutableStateOf(false) }
     val pausedFlag = remember { AtomicBoolean(false) }
     var isChecking by remember { mutableStateOf(false) }
+    var iconTapCount by remember { mutableIntStateOf(0) }
 
     val coroutineScope = rememberCoroutineScope()
     val notificationHelper = remember { NotificationHelper(context) }
@@ -91,7 +98,18 @@ fun AboutSettingsContent(performHaptic: () -> Unit) {
         Spacer(Modifier.height(32.dp))
 
         Surface(
-            modifier = Modifier.size(86.dp),
+            modifier = Modifier
+                .size(86.dp)
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() }
+                ) {
+                    iconTapCount++
+                    if (iconTapCount >= 10) {
+                        iconTapCount = 0
+                        throw RuntimeException("Test crash triggered from About icon")
+                    }
+                },
             shape = RoundedCornerShape(22.dp),
             color = MaterialTheme.colorScheme.primaryContainer,
             shadowElevation = 4.dp
@@ -375,6 +393,57 @@ fun AboutSettingsContent(performHaptic: () -> Unit) {
             }
         }
 
+        Spacer(Modifier.height(48.dp))
+
+        // 日志导出
+        PreferenceSection(title = "日志") {
+            val scope = rememberCoroutineScope()
+            var pendingLogData by remember { mutableStateOf<ByteArray?>(null) }
+
+            val createLogLauncher = rememberLauncherForActivityResult(
+                contract = ActivityResultContracts.CreateDocument("application/zip")
+            ) { uri ->
+                uri?.let {
+                    scope.launch {
+                        try {
+                            pendingLogData?.let { data ->
+                                context.contentResolver.openOutputStream(uri)?.use { outputStream ->
+                                    outputStream.write(data)
+                                }
+                                android.widget.Toast.makeText(context, "日志导出成功！", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        } catch (e: Exception) {
+                            android.util.Log.e("AppLogger", "导出日志失败", e)
+                            android.widget.Toast.makeText(context, "导出失败: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                        } finally {
+                            pendingLogData = null
+                        }
+                    }
+                }
+            }
+
+            SettingsListItem(
+                title = "导出当天日志",
+                description = "将今天的四类日志导出为 ZIP 文件",
+                onClick = {
+                    performHaptic()
+                    scope.launch {
+                        val files = AppLogger.getTodayLogFiles(context)
+                        if (files.isEmpty()) {
+                            android.widget.Toast.makeText(context, "今天暂无日志记录", android.widget.Toast.LENGTH_SHORT).show()
+                            return@launch
+                        }
+                        val zipBytes = createLogZip(files)
+                        if (zipBytes != null) {
+                            pendingLogData = zipBytes
+                            val fileName = "com.Badnng.moe-Log-${java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())}.zip"
+                            createLogLauncher.launch(fileName)
+                        }
+                    }
+                }
+            )
+        }
+
         Spacer(Modifier.height(64.dp))
         val currentYear = remember { java.util.Calendar.getInstance().get(java.util.Calendar.YEAR) }
         Text(
@@ -449,6 +518,27 @@ fun AboutSettingsContent(performHaptic: () -> Unit) {
                 }
             }
         )
+    }
+}
+
+private suspend fun createLogZip(files: List<java.io.File>): ByteArray? {
+    return withContext(kotlinx.coroutines.Dispatchers.IO) {
+        try {
+            val baos = java.io.ByteArrayOutputStream()
+            java.util.zip.ZipOutputStream(baos).use { zos ->
+                zos.setLevel(java.util.zip.Deflater.BEST_COMPRESSION)
+                for (file in files) {
+                    val entry = java.util.zip.ZipEntry(file.name)
+                    zos.putNextEntry(entry)
+                    file.inputStream().use { it.copyTo(zos) }
+                    zos.closeEntry()
+                }
+            }
+            baos.toByteArray()
+        } catch (e: Exception) {
+            android.util.Log.e("AppLogger", "createLogZip failed", e)
+            null
+        }
     }
 }
 

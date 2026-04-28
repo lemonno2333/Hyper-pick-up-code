@@ -14,15 +14,37 @@
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.BROADCAST_CLOSE_SYSTEM_DIALOGS" tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="android.permission.RECEIVE_SMS" />
+    <uses-permission android:name="android.permission.READ_SMS" />
+
+    <uses-feature
+        android:name="android.hardware.telephony"
+        android:required="false" />
 
     <queries>
         <package android:name="moe.shizuku.privileged.api" />
+        <package android:name="com.android.mms" />
+        <package android:name="com.google.android.apps.messaging" />
+        <package android:name="com.miui.mms" />
+        <package android:name="com.huawei.message" />
+        <package android:name="com.samsung.android.messaging" />
+        <package android:name="com.coloros.mms" />
+        <package android:name="com.oneplus.mms" />
         <intent>
             <action android:name="android.intent.action.MAIN" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.SENDTO" />
+            <data android:scheme="smsto" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.APP_MESSAGING" />
         </intent>
     </queries>
 
     <application
+        android:name=".HyperNoteApp"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -131,6 +153,11 @@
             android:foregroundServiceType="specialUse" />
 
         <service
+            android:name=".service.SmsRecognitionService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse" />
+
+        <service
             android:name=".service.VolumeShortcutAccessibilityService"
             android:enabled="true"
             android:exported="false"
@@ -145,6 +172,16 @@
         </service>
 
         <receiver android:name=".receiver.NotificationReceiver" android:exported="false" />
+        <receiver android:name=".receiver.TestNotificationDismissReceiver" android:exported="false" />
+
+        <receiver
+            android:name=".receiver.SmsRecognitionReceiver"
+            android:exported="true"
+            android:permission="android.permission.BROADCAST_SMS">
+            <intent-filter android:priority="1000">
+                <action android:name="android.provider.Telephony.SMS_RECEIVED" />
+            </intent-filter>
+        </receiver>
 
         <provider
             android:name="androidx.core.content.FileProvider"

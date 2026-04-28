@@ -2,6 +2,7 @@ package com.Badnng.moe.rules
 
 import android.content.Context
 import android.util.Log
+import com.Badnng.moe.helper.AppLogger
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,6 +24,7 @@ object RuleAutoUpdateManager {
         if (running) return
         running = true
         Log.d(TAG, "自动更新管理器启动")
+        AppLogger.update("RuleAutoUpdateManager started")
         scope.launch { loop(context.applicationContext) }
     }
 
@@ -109,10 +111,12 @@ object RuleAutoUpdateManager {
                             RecognitionRuleEngine.reload(context)
                         }
                         Log.d(TAG, "后台自动更新成功: ${source.name}")
+                        AppLogger.update("Rule auto-update success: ${source.name}")
                     }
                 },
                 onFailure = { e ->
                     Log.w(TAG, "后台自动更新失败: ${source.name} - ${e.message}")
+                    AppLogger.update("Rule auto-update failed: ${source.name} - ${e.message}")
                 }
             )
         } catch (e: Exception) {

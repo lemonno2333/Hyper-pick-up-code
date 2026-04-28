@@ -21,6 +21,7 @@ import kotlinx.coroutines.withContext
 import com.Badnng.moe.R
 import com.Badnng.moe.data.db.OrderDatabase
 import com.Badnng.moe.data.db.OrderEntity
+import com.Badnng.moe.helper.AppLogger
 import com.Badnng.moe.helper.DailyExpressGroupingHelper
 import com.Badnng.moe.helper.NotificationHelper
 import com.Badnng.moe.ocr.MultiRecognitionResult
@@ -32,6 +33,7 @@ class ShareRecognitionService : Service() {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        AppLogger.service("ShareRecognitionService onStartCommand")
         startForeground(NOTIFICATION_ID, createNotification())
 
         val imageUri = if (Build.VERSION.SDK_INT >= 33) {
@@ -42,16 +44,19 @@ class ShareRecognitionService : Service() {
         }
 
         if (imageUri != null) {
+            AppLogger.service("ShareRecognitionService processing image: $imageUri")
             scope.launch {
                 try {
                     processImage(imageUri)
                 } catch (e: Exception) {
                     Log.e("ShareRecognition", "Error processing image", e)
-                } finally {
-                    stopSelf()
+                    AppLogger.service("ShareRecognitionService error: ${e.message}")
                 }
+                AppLogger.service("ShareRecognitionService stopping")
+                stopSelf()
             }
         } else {
+            AppLogger.service("ShareRecognitionService no imageUri, stopping")
             stopSelf()
         }
 
@@ -93,6 +98,7 @@ class ShareRecognitionService : Service() {
             }
 
             if (recognizedOrders.isEmpty()) {
+                AppLogger.recognition("ShareRecognition: no codes found")
                 withContext(Dispatchers.Main) {
                     Toast.makeText(
                         applicationContext,
@@ -115,6 +121,7 @@ class ShareRecognitionService : Service() {
             val insertedOrders = mutableListOf<OrderEntity>()
             for (result in recognizedOrders) {
                 val code = result.code ?: continue
+                AppLogger.recognition("ShareRecognition code=$code, type=${result.type}, brand=${result.brand}, pickup=${result.pickupLocation}")
                 val order = OrderEntity(
                     takeoutCode = code,
                     qrCodeData = result.qr,

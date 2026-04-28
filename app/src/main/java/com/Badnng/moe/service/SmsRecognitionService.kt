@@ -8,69 +8,64 @@ import android.content.Intent
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
-import android.widget.Toast
-import com.Badnng.moe.helper.AppLogger
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import com.Badnng.moe.R
 import com.Badnng.moe.data.db.OrderDatabase
 import com.Badnng.moe.data.db.OrderEntity
 import com.Badnng.moe.helper.DailyExpressGroupingHelper
 import com.Badnng.moe.helper.NotificationHelper
 import com.Badnng.moe.ocr.TextRecognitionHelper
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class ProcessTextRecognitionService : Service() {
+class SmsRecognitionService : Service() {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        AppLogger.service("ProcessTextRecognitionService onStartCommand")
         startForeground(NOTIFICATION_ID, createNotification())
 
-        val selectedText = intent?.getStringExtra("selectedText")
+        val smsText = intent?.getStringExtra("smsText")
+        val sender = intent?.getStringExtra("sender") ?: "未知"
 
-        if (!selectedText.isNullOrBlank()) {
-            AppLogger.service("ProcessTextRecognitionService text length=${selectedText.length}")
+        if (!smsText.isNullOrBlank()) {
+            Log.d("SmsRecognition", "Service 开始处理短信：sender=$sender, length=${smsText.length}")
             scope.launch {
                 try {
-                    processText(selectedText)
+                    processSms(smsText, sender)
                 } catch (e: Exception) {
-                    Log.e("ProcessTextRecognition", "Error processing text", e)
-                    AppLogger.service("ProcessTextRecognitionService error: ${e.message}")
+                    Log.e("SmsRecognition", "处理短信失败", e)
                 }
-                AppLogger.service("ProcessTextRecognitionService stopping")
                 stopSelf()
             }
         } else {
-            AppLogger.service("ProcessTextRecognitionService no text, stopping")
+            Log.d("SmsRecognition", "Service 无短信内容，停止")
             stopSelf()
         }
-        
+
         return START_NOT_STICKY
     }
-    
-    private suspend fun processText(selectedText: String) {
+
+    private suspend fun processSms(smsText: String, sender: String) {
         val helper = TextRecognitionHelper(applicationContext)
-        // recognizeFromText 不需要 OCR 初始化
-        val result = helper.recognizeFromText(selectedText)
+        val result = helper.recognizeFromText(smsText)
         helper.close()
-        
-        Log.d("ProcessTextRecognition", "Result: code=${result.code}, type=${result.type}, brand=${result.brand}")
-        AppLogger.recognition("code=${result.code}, type=${result.type}, brand=${result.brand}, pickup=${result.pickupLocation}")
-        
+
+        Log.d("SmsRecognition", "识别结果：code=${result.code}, type=${result.type}, brand=${result.brand}")
+
         if (result.code != null) {
             val order = OrderEntity(
                 takeoutCode = result.code,
                 qrCodeData = result.qr,
                 screenshotPath = "",
-                recognizedText = selectedText,
+                recognizedText = smsText,
                 orderType = result.type,
                 brandName = result.brand,
                 fullText = result.fullText,
                 pickupLocation = result.pickupLocation,
-                sourceApp = "文字选择"
+                sourceApp = "短信识别",
+                sourcePackage = sender
             )
 
             val db = OrderDatabase.getDatabase(applicationContext)
@@ -92,44 +87,31 @@ class ProcessTextRecognitionService : Service() {
                     groupOrders.forEach { notificationHelper.cancelNotification(it.id) }
                     groupDao.updateOrderCount(groupId, groupOrders.size)
                     notificationHelper.showGroupNotification(group.copy(orderCount = groupOrders.size), groupOrders)
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(applicationContext, "新识别取件码已自动整理", Toast.LENGTH_SHORT).show()
-                    }
                 } else {
                     notificationHelper.showPromotedLiveUpdate(order, result.brand)
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(applicationContext, "识别成功：${result.code}", Toast.LENGTH_SHORT).show()
-                    }
                 }
             } else {
                 notificationHelper.showPromotedLiveUpdate(order, result.brand)
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(applicationContext, "识别成功：${result.code}", Toast.LENGTH_SHORT).show()
-                }
-            }
-        } else {
-            withContext(Dispatchers.Main) {
-                Toast.makeText(applicationContext, "未识别到取件码", Toast.LENGTH_SHORT).show()
             }
         }
     }
-    
+
     private fun createNotification(): Notification {
-        val channelId = "process_text_recognition"
+        val channelId = "sms_recognition"
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(channelId, "划词识别", NotificationManager.IMPORTANCE_LOW)
+            val channel = NotificationChannel(channelId, "短信识别", NotificationManager.IMPORTANCE_LOW)
             getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         }
         return androidx.core.app.NotificationCompat.Builder(this, channelId)
-            .setContentTitle("正在识别文字")
+            .setContentTitle("正在识别短信")
             .setSmallIcon(R.mipmap.ic_launcher)
             .setOngoing(true)
             .build()
     }
-    
+
     override fun onBind(intent: Intent?): IBinder? = null
-    
+
     companion object {
-        private const val NOTIFICATION_ID = 1003
+        private const val NOTIFICATION_ID = 1004
     }
 }

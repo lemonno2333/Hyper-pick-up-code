@@ -54,7 +54,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.widget.Toast
 import com.Badnng.moe.R
+import com.Badnng.moe.helper.SuperIslandHelper
 import com.Badnng.moe.ui.component.CaptureModeItem
 import com.Badnng.moe.ui.component.ChoiceChip
 import com.Badnng.moe.ui.component.PreferenceSection
@@ -81,6 +85,20 @@ fun PreferenceSettingsContent(performHaptic: () -> Unit) {
     var selectedColorInt by remember { mutableIntStateOf(prefs.getInt("theme_color", Color(0xFF6750A4).toArgb())) }
     var networkUpdateEnabled by remember { mutableStateOf(prefs.getBoolean("network_update_enabled", false)) }
     var updateChannel by remember { mutableStateOf(prefs.getString("update_channel", "stable") ?: "stable") }
+    var notificationType by remember { mutableStateOf(prefs.getString("notification_type", "native") ?: "native") }
+    var smsRecognitionEnabled by remember { mutableStateOf(prefs.getBoolean("sms_recognition_enabled", false)) }
+
+    val smsPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val allGranted = permissions.values.all { it }
+        if (allGranted) {
+            smsRecognitionEnabled = true
+            prefs.edit().putBoolean("sms_recognition_enabled", true).apply()
+        } else {
+            Toast.makeText(context, "需要短信权限才能开启短信识别", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -219,6 +237,58 @@ fun PreferenceSettingsContent(performHaptic: () -> Unit) {
             }
         }
 
+        PreferenceSection(title = "短信识别") {
+            Surface(
+                shape = RoundedCornerShape(15.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f))
+            ) {
+                PreferenceSwitchItem(
+                    title = "短信识别取件码",
+                    description = "自动识别收到的短信中的快递取件码和取餐码",
+                    checked = smsRecognitionEnabled,
+                    onCheckedChange = { newValue ->
+                        performHaptic()
+                        if (newValue) {
+                            smsPermissionLauncher.launch(arrayOf(
+                                android.Manifest.permission.RECEIVE_SMS,
+                                android.Manifest.permission.READ_SMS
+                            ))
+                        } else {
+                            smsRecognitionEnabled = false
+                            prefs.edit().putBoolean("sms_recognition_enabled", false).apply()
+                        }
+                    }
+                )
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            Surface(
+                onClick = {
+                    performHaptic()
+                    val testSms = "【丰巢】凭取件码88306313至XX丰巢柜取您的包裹，超时将收费"
+                    val intent = android.content.Intent(context, com.Badnng.moe.service.SmsRecognitionService::class.java).apply {
+                        putExtra("smsText", testSms)
+                        putExtra("sender", "测试号码")
+                    }
+                    androidx.core.content.ContextCompat.startForegroundService(context, intent)
+                    Toast.makeText(context, "已发送测试短信", Toast.LENGTH_SHORT).show()
+                },
+                shape = RoundedCornerShape(15.dp),
+                color = MaterialTheme.colorScheme.primaryContainer,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "测试短信识别",
+                    modifier = Modifier.padding(16.dp),
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
+        }
+
         PreferenceSection(title = "引导设置") {
             Surface(
                 shape = RoundedCornerShape(15.dp),
@@ -235,6 +305,56 @@ fun PreferenceSettingsContent(performHaptic: () -> Unit) {
                         prefs.edit().putBoolean("show_onboarding_on_next_launch", it).apply()
                     }
                 )
+            }
+        }
+
+        PreferenceSection(title = "通知类型") {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                CaptureModeItem(
+                    title = "安卓原生通知",
+                    description = "使用系统原生通知样式（推荐）",
+                    selected = notificationType == "native",
+                    onClick = {
+                        performHaptic()
+                        notificationType = "native"
+                        prefs.edit().putString("notification_type", "native").apply()
+                    }
+                )
+                CaptureModeItem(
+                    title = "小米超级岛",
+                    description = "在 HyperOS 设备上使用超级岛样式（需要设备支持）",
+                    selected = notificationType == "island",
+                    enabled = SuperIslandHelper.isDeviceSupported(context),
+                    onClick = {
+                        performHaptic()
+                        notificationType = "island"
+                        prefs.edit().putString("notification_type", "island").apply()
+                    }
+                )
+
+                AnimatedVisibility(
+                    visible = notificationType == "island",
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
+                    Surface(
+                        onClick = {
+                            performHaptic()
+                            SuperIslandHelper.sendTestNotification(context)
+                        },
+                        shape = RoundedCornerShape(15.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "测试超级岛通知",
+                            modifier = Modifier.padding(16.dp),
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
             }
         }
 

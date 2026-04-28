@@ -2,6 +2,7 @@ package com.Badnng.moe.rules
 
 import android.content.Context
 import android.util.Log
+import com.Badnng.moe.helper.AppLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.UUID
@@ -23,6 +24,7 @@ object RecognitionRuleEngine {
     private var repository: RuleRepository? = null
 
     suspend fun initialize(context: Context) = withContext(Dispatchers.IO) {
+        AppLogger.update("RuleEngine initialize start, activeSourceId=$activeSourceId")
         repository = RuleRepository(context)
         val config = repository!!.loadSystemConfig()
         activeSourceId = config.activeSourceId
@@ -33,9 +35,11 @@ object RecognitionRuleEngine {
                 _rules = rules
                 precompilePatterns()
                 Log.d(TAG, "规则引擎初始化完成，激活源: $activeSourceId, express patterns: ${_rules.codeExtraction.express.patterns.size}, brands: drink=${_rules.brands.drink.size} food=${_rules.brands.food.size} express=${_rules.brands.express.size}")
+                AppLogger.update("RuleEngine initialized: source=$activeSourceId, express=${_rules.codeExtraction.express.patterns.size}, brands: drink=${_rules.brands.drink.size} food=${_rules.brands.food.size} express=${_rules.brands.express.size}")
             },
             onFailure = { e ->
                 Log.e(TAG, "加载激活规则源失败，回退到本地规则", e)
+                AppLogger.update("RuleEngine init failed, fallback to local: ${e.message}")
                 activeSourceId = "local"
                 _rules = repository!!.loadLocalRules()
                 precompilePatterns()
@@ -44,6 +48,7 @@ object RecognitionRuleEngine {
     }
 
     suspend fun reload(context: Context) = withContext(Dispatchers.IO) {
+        AppLogger.update("RuleEngine reload start, activeSourceId=$activeSourceId")
         repository = RuleRepository(context)
         val config = repository!!.loadSystemConfig()
         activeSourceId = config.activeSourceId
@@ -54,9 +59,11 @@ object RecognitionRuleEngine {
                 _rules = rules
                 precompilePatterns()
                 Log.d(TAG, "规则引擎重新加载完成")
+                AppLogger.update("RuleEngine reloaded: source=$activeSourceId")
             },
             onFailure = { e ->
                 Log.e(TAG, "重新加载失败，使用当前规则", e)
+                AppLogger.update("RuleEngine reload failed: ${e.message}")
             }
         )
     }

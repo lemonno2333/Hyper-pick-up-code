@@ -73,6 +73,7 @@ object UpdateHelper {
     suspend fun checkUpdate(isDev: Boolean): UpdateInfo? = withContext(Dispatchers.IO) {
         try {
             val url = if (isDev) DEV_URL else STABLE_URL
+            AppLogger.update("UpdateHelper checkUpdate: channel=${if (isDev) "dev" else "stable"}, url=$url")
             Log.d(TAG, "开始检查更新 - 通道: ${if (isDev) "测试版" else "正式版"}")
             Log.d(TAG, "请求URL: $url")
 
@@ -81,10 +82,12 @@ object UpdateHelper {
 
             Log.d(TAG, "HTTP响应码: ${response.code}")
             Log.d(TAG, "HTTP响应消息: ${response.message}")
+            AppLogger.update("UpdateHelper HTTP ${response.code} ${response.message}")
 
             val body = response.body?.string()
             if (body == null) {
                 Log.e(TAG, "响应体为空")
+                AppLogger.update("UpdateHelper response body is null")
                 return@withContext null
             }
 
@@ -101,6 +104,7 @@ object UpdateHelper {
             Log.d(TAG, "  - versionName: $versionName")
             Log.d(TAG, "  - releaseNotes: $releaseNotes")
             Log.d(TAG, "  - downloadUrl: $downloadUrl")
+            AppLogger.update("UpdateHelper parsed: version=$versionName($versionCode), notes=$releaseNotes")
 
             return@withContext UpdateInfo(
                 versionCode = versionCode,
@@ -110,6 +114,7 @@ object UpdateHelper {
             )
         } catch (e: Exception) {
             Log.e(TAG, "检查更新失败", e)
+            AppLogger.update("UpdateHelper checkUpdate failed: ${e.message}")
             e.printStackTrace()
             null
         }
@@ -142,6 +147,7 @@ object UpdateHelper {
             setDownloadingState(true, updateInfo)
 
             val downloadUrl = DOWNLOAD_BASE_URL + updateInfo.downloadUrl
+            AppLogger.update("UpdateHelper download start: ${updateInfo.versionName}, url=$downloadUrl")
             Log.d(TAG, "开始下载: $downloadUrl")
 
             val downloadsDir = File(context.filesDir, "downloads")
@@ -166,6 +172,7 @@ object UpdateHelper {
                 if (!response.isSuccessful) {
                     response.close()
                     Log.e(TAG, "下载失败: http=${response.code}")
+                    AppLogger.update("UpdateHelper download failed: HTTP ${response.code}")
                     return@withContext null
                 }
                 val body = response.body ?: return@withContext null
@@ -216,10 +223,12 @@ object UpdateHelper {
 
             // 下载完成，设置下载状态
             Log.d(TAG, "下载完成: ${file.name}")
+            AppLogger.update("UpdateHelper download complete: ${file.name} (${file.length()} bytes)")
             setDownloadingState(false, null, file)
             file
         } catch (e: Exception) {
             Log.e(TAG, "下载失败", e)
+            AppLogger.update("UpdateHelper download exception: ${e.message}")
             setDownloadingState(false)
             e.printStackTrace()
             null
@@ -227,6 +236,7 @@ object UpdateHelper {
     }
 
     fun installUpdate(context: Context, file: File) {
+        AppLogger.update("UpdateHelper installUpdate: ${file.name}")
         val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
         } else {

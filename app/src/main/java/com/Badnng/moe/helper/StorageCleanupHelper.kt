@@ -24,8 +24,10 @@ object StorageCleanupHelper {
     }
 
     suspend fun runStartupCleanup(context: Context) {
+        AppLogger.update("StorageCleanup runStartupCleanup start")
         cleanupPendingUpdateApks(context)
         cleanupExpiredCompletedScreenshots(context)
+        AppLogger.update("StorageCleanup runStartupCleanup done")
     }
 
     private fun cleanupPendingUpdateApks(context: Context) {

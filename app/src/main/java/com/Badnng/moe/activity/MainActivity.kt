@@ -26,7 +26,6 @@ import androidx.lifecycle.lifecycleScope
 import com.Badnng.moe.data.db.OrderDatabase
 import com.Badnng.moe.helper.DailyExpressGroupingHelper
 import com.Badnng.moe.helper.EdgeToEdgeHelper
-import com.Badnng.moe.helper.LogManager
 import com.Badnng.moe.helper.StorageCleanupHelper
 import com.Badnng.moe.ocr.PaddleOcrHelper
 import com.Badnng.moe.rules.RecognitionRuleEngine
@@ -34,6 +33,7 @@ import com.Badnng.moe.service.ScreenCaptureService
 import com.Badnng.moe.ui.screen.HomeScreen
 import com.Badnng.moe.ui.screen.OnboardingScreen
 import com.Badnng.moe.ui.theme.澎湃记Theme
+import com.Badnng.moe.helper.AppLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -65,11 +65,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        com.Badnng.moe.helper.AppLogger.app("MainActivity onCreate")
         EdgeToEdgeHelper.applyGestureEdgeToEdge(this)
         settingsPrefs = getSharedPreferences("settings", Context.MODE_PRIVATE)
         settingsPrefs.registerOnSharedPreferenceChangeListener(settingsListener)
-
-        LogManager.startCollecting()
 
         lifecycleScope.launch(Dispatchers.IO) {
             // 初始化规则引擎
@@ -146,12 +145,14 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         intentToProcess = intent
+        AppLogger.app("MainActivity onNewIntent, fromNotification=${intent?.getBooleanExtra("from_notification", false)}")
         // 检查是否从通知进入
         isFromNotification = intent?.getBooleanExtra("from_notification", false) == true
     }
 
     override fun onResume() {
         super.onResume()
+        AppLogger.app("MainActivity onResume")
         EdgeToEdgeHelper.applyGestureEdgeToEdge(this)
     }
 
@@ -159,11 +160,14 @@ class MainActivity : ComponentActivity() {
         if (::settingsPrefs.isInitialized) {
             settingsPrefs.unregisterOnSharedPreferenceChangeListener(settingsListener)
         }
+        com.Badnng.moe.helper.AppLogger.app("MainActivity onDestroy")
+        com.Badnng.moe.helper.AppLogger.flush()
         super.onDestroy()
     }
 
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
+        AppLogger.app("MainActivity onUserLeaveHint, fromNotification=$isFromNotification")
         // 从通知进入后，按 Home 键离开时从最近任务移除
         if (isFromNotification) {
             finishAndRemoveTask()
@@ -187,3 +191,4 @@ class MainActivity : ComponentActivity() {
         isFromNotification = false
     }
 }
+
