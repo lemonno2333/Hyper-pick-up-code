@@ -337,22 +337,38 @@ fun PreferenceSettingsContent(performHaptic: () -> Unit) {
                     enter = expandVertically() + fadeIn(),
                     exit = shrinkVertically() + fadeOut()
                 ) {
-                    Surface(
-                        onClick = {
-                            performHaptic()
-                            SuperIslandHelper.sendTestNotification(context)
-                        },
-                        shape = RoundedCornerShape(15.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            text = "测试超级岛通知",
-                            modifier = Modifier.padding(16.dp),
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Surface(
+                            onClick = {
+                                performHaptic()
+                                SuperIslandHelper.sendTestNotification(context)
+                            },
+                            shape = RoundedCornerShape(15.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = "测试超级岛通知",
+                                modifier = Modifier.padding(16.dp),
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.4f))
+                        ) {
+                            Text(
+                                text = "⚠ 小米超级岛功能仅接入，无白名单。如被非法滥用，与此应用无关，开发者不承担任何责任，也不会提供绕过方法。",
+                                modifier = Modifier.padding(12.dp),
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.error,
+                                lineHeight = 16.sp
+                            )
+                        }
                     }
                 }
             }

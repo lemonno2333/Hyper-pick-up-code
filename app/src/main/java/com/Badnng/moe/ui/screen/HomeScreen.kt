@@ -317,6 +317,14 @@ fun HomeScreen(
         }
     }
 
+    // 从更新下载通知进入时，跳转到设置页
+    LaunchedEffect(intentToProcess) {
+        if (intentToProcess?.getBooleanExtra("show_update_download", false) == true) {
+            coroutineScope.launch { pagerState.animateScrollToPage(2) }
+            activity?.intentToProcess = null
+        }
+    }
+
     val backgroundColor = MaterialTheme.colorScheme.background
     val backdrop = rememberLayerBackdrop {
         drawRect(backgroundColor)

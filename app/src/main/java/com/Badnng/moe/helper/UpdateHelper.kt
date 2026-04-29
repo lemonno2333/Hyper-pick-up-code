@@ -52,6 +52,11 @@ object UpdateHelper {
     var downloadedFile: File? = null
         private set
 
+    // 当前下载进度
+    @Volatile
+    var currentProgress: Float = 0f
+        private set
+
     // 本次下载是否由用户暂停结束（用于避免提示“已损坏/失效”）
     @Volatile
     private var pausedStop = false
@@ -67,7 +72,12 @@ object UpdateHelper {
         isDownloading = downloading
         currentDownloadingVersion = if (downloading) version else null
         downloadedFile = if (downloading) null else file
+        if (downloading) currentProgress = 0f
         Log.d(TAG, "下载状态更新: isDownloading=$downloading, version=${version?.versionName}, file=${file?.name}")
+    }
+
+    fun updateProgress(progress: Float) {
+        currentProgress = progress
     }
 
     suspend fun checkUpdate(isDev: Boolean): UpdateInfo? = withContext(Dispatchers.IO) {
@@ -208,7 +218,9 @@ object UpdateHelper {
                             output.write(buffer, 0, bytesRead)
                             downloadedBytes += bytesRead
                             if (totalBytes > 0L) {
-                                onProgress((downloadedBytes.toFloat() / totalBytes.toFloat()).coerceIn(0f, 1f))
+                                val progress = (downloadedBytes.toFloat() / totalBytes.toFloat()).coerceIn(0f, 1f)
+                                currentProgress = progress
+                                onProgress(progress)
                             }
                         }
                     }

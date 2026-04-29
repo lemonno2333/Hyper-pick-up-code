@@ -36,6 +36,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -63,6 +64,7 @@ import com.Badnng.moe.ui.component.UpdateDialog
 import com.Badnng.moe.ui.component.UpdateProgressDialog
 import com.Badnng.moe.ui.component.PreferenceSection
 import com.Badnng.moe.ui.component.SettingsListItem
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicBoolean
@@ -86,6 +88,18 @@ fun AboutSettingsContent(performHaptic: () -> Unit) {
 
     val coroutineScope = rememberCoroutineScope()
     val notificationHelper = remember { NotificationHelper(context) }
+
+    // 从更新下载通知进入时，自动弹出更新进度弹窗
+    LaunchedEffect(Unit) {
+        if (prefs.getBoolean("show_update_download", false)) {
+            prefs.edit().putBoolean("show_update_download", false).apply()
+            if (UpdateHelper.isDownloading && UpdateHelper.currentDownloadingVersion != null) {
+                updateInfo = UpdateHelper.currentDownloadingVersion
+                downloadProgress = UpdateHelper.currentProgress
+                showProgressDialog = true
+            }
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -472,13 +486,11 @@ fun AboutSettingsContent(performHaptic: () -> Unit) {
                         updateInfo = updateInfo!!,
                         onProgress = {
                             downloadProgress = it
-                            if (!showProgressDialog) {
-                                notificationHelper.showUpdateDownloadNotification(
-                                    versionName = updateInfo!!.versionName,
-                                    progress = it,
-                                    isPaused = pausedFlag.get()
-                                )
-                            }
+                            notificationHelper.showUpdateDownloadNotification(
+                                versionName = updateInfo!!.versionName,
+                                progress = it,
+                                isPaused = pausedFlag.get()
+                            )
                         },
                         isPaused = { pausedFlag.get() }
                     )
@@ -494,6 +506,13 @@ fun AboutSettingsContent(performHaptic: () -> Unit) {
 
     // 下载进度弹窗
     if (showProgressDialog && updateInfo != null) {
+        // 持续同步下载进度（从通知进入时也能更新）
+        LaunchedEffect(Unit) {
+            while (showProgressDialog && UpdateHelper.isDownloading) {
+                downloadProgress = UpdateHelper.currentProgress
+                delay(200)
+            }
+        }
         UpdateProgressDialog(
             progress = downloadProgress,
             isPaused = isPaused,

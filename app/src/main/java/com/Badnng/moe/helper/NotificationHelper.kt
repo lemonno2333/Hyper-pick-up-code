@@ -279,39 +279,57 @@ class NotificationHelper(private val context: Context) {
     }
 
     fun showUpdateDownloadNotification(versionName: String, progress: Float, isPaused: Boolean = false) {
-        val clampedProgress = progress.coerceIn(0f, 1f)
-        val percent = (clampedProgress * 100).toInt()
         val contentIntent = PendingIntent.getActivity(
             context,
             updateNotificationId,
             Intent(context, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                putExtra("show_update_download", true)
             },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val builder = Notification.Builder(context, updateChannelId)
-            .setContentTitle(if (isPaused) "更新下载已暂停" else "正在后台下载更新")
-            .setContentText("v$versionName  $percent%")
-            .setSmallIcon(android.R.drawable.stat_sys_download)
-            .setOnlyAlertOnce(true)
-            .setOngoing(true)
-            .setContentIntent(contentIntent)
-            .setProgress(100, percent, false)
+        // 设置标记，让 SettingsAbout 检测到后自动弹出更新进度弹窗
+        context.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE)
+            .edit().putBoolean("show_update_download", true).apply()
 
-        if (Build.VERSION.SDK_INT >= 35) {
-            val extras = Bundle()
-            extras.putBoolean("android.requestPromotedOngoing", true)
-            builder.addExtras(extras)
-            try {
-                if (Build.VERSION.SDK_INT >= 36) {
-                    builder.setShortCriticalText(" $percent%")
-                }
-            } catch (_: Exception) {
+        val notification = if (isIslandMode()) {
+            SuperIslandHelper.buildUpdateDownloadNotification(
+                context = context,
+                channelId = updateChannelId,
+                versionName = versionName,
+                progress = progress,
+                isPaused = isPaused,
+                contentIntent = contentIntent,
+                pauseResumeIntent = null
+            )
+        } else {
+            val clampedProgress = progress.coerceIn(0f, 1f)
+            val percent = (clampedProgress * 100).toInt()
+            val builder = Notification.Builder(context, updateChannelId)
+                .setContentTitle(if (isPaused) "更新下载已暂停" else "正在后台下载更新")
+                .setContentText("v$versionName  $percent%")
+                .setSmallIcon(android.R.drawable.stat_sys_download)
+                .setOnlyAlertOnce(true)
+                .setOngoing(true)
+                .setContentIntent(contentIntent)
+                .setProgress(100, percent, false)
+
+            if (Build.VERSION.SDK_INT >= 35) {
+                val extras = Bundle()
+                extras.putBoolean("android.requestPromotedOngoing", true)
+                builder.addExtras(extras)
+                try {
+                    if (Build.VERSION.SDK_INT >= 36) {
+                        builder.setShortCriticalText(" $percent%")
+                    }
+                } catch (_: Exception) {}
             }
+
+            builder.build()
         }
 
-        notificationManager.notify(updateNotificationId, builder.build())
+        notificationManager.notify(updateNotificationId, notification)
     }
 
     fun cancelUpdateDownloadNotification() {

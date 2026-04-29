@@ -8,9 +8,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.BufferedReader
 import java.io.BufferedWriter
 import java.io.File
 import java.io.FileWriter
+import java.io.InputStreamReader
 import java.io.PrintWriter
 import java.io.StringWriter
 import java.text.SimpleDateFormat
@@ -25,15 +27,26 @@ object AppLogger {
     private const val TAG = "AppLogger"
     private const val LOG_DIR = "logs"
     private const val RETENTION_DAYS = 3
+    private const val MAX_APP_LOG_SIZE = 6L * 1024 * 1024 // 6MB
 
-    private var recognitionWriter: BufferedWriter? = null
-    private var appWriter: BufferedWriter? = null
-    private var updateWriter: BufferedWriter? = null
+    // 识别相关 tag，匹配的行写入 recognition.log
+    private val RECOGNITION_TAGS = setOf(
+        "ExpressExtract", "ProcessTextActivity", "ProcessTextRecognition",
+        "RecognitionMonitor", "ShareReceiver", "ShareRecognition",
+        "SmsRecognition", "PaddleOcrHelper"
+    )
+    // 更新相关 tag，匹配的行写入 update.log
+    private val UPDATE_TAGS = setOf(
+        "UpdateCheck", "RuleEngine", "RuleModels",
+        "RuleOnlineUpdater", "RuleRepository", "RulesScreen"
+    )
+
     private var crashWriter: BufferedWriter? = null
 
     private var currentDate: String = ""
     private var logsDir: File? = null
     private val scope = CoroutineScope(Dispatchers.IO)
+    private var logcatProcess: Process? = null
 
     private val timeFormat = SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault())
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
@@ -63,28 +76,123 @@ object AppLogger {
         }
 
         app("AppLogger initialized, date=$currentDate")
+
+        // 启动 logcat 捕获，记录全部系统日志
+        startLogcatCapture()
     }
 
-    // ==================== 日志写入 ====================
+    // ==================== Logcat 捕获 ====================
+
+    private fun startLogcatCapture() {
+        scope.launch {
+            try {
+                Runtime.getRuntime().exec(arrayOf("logcat", "-c")).waitFor()
+
+                val process = Runtime.getRuntime().exec(
+                    arrayOf("logcat", "-v", "time")
+                )
+                logcatProcess = process
+
+                val reader = BufferedReader(InputStreamReader(process.inputStream), 8192)
+                val dir = File(logsDir, currentDate).apply { mkdirs() }
+
+                val appFile = File(dir, "app.log")
+                val recogFile = File(dir, "recognition.log")
+                val updateFile = File(dir, "update.log")
+
+                val appWriter = BufferedWriter(FileWriter(appFile, true), 8192)
+                val recogWriter = BufferedWriter(FileWriter(recogFile, true), 8192)
+                val updateWriter = BufferedWriter(FileWriter(updateFile, true), 8192)
+
+                try {
+                    var line: String?
+                    while (reader.readLine().also { line = it } != null) {
+                        line?.let { l ->
+                            // 全部写入 app.log
+                            appWriter.write(l)
+                            appWriter.newLine()
+                            appWriter.flush()
+
+                            // 按 tag 分流到 recognition.log / update.log
+                            val tag = extractLogTag(l)
+                            if (tag != null) {
+                                if (tag in RECOGNITION_TAGS) {
+                                    recogWriter.write(l)
+                                    recogWriter.newLine()
+                                    recogWriter.flush()
+                                }
+                                if (tag in UPDATE_TAGS) {
+                                    updateWriter.write(l)
+                                    updateWriter.newLine()
+                                    updateWriter.flush()
+                                }
+                            }
+                        }
+
+                        if (appFile.length() > MAX_APP_LOG_SIZE) {
+                            truncateFile(appFile)
+                        }
+                    }
+                } finally {
+                    appWriter.close()
+                    recogWriter.close()
+                    updateWriter.close()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "logcat capture failed", e)
+            }
+        }
+    }
+
+    /** 从 logcat -v time 格式行中提取 tag，格式: "04-29 17:13:58.239 PID TID D Tag: message" */
+    private fun extractLogTag(line: String): String? {
+        return try {
+            // logcat -v time 格式: "MM-DD HH:MM:SS.mmm PID TID LEVEL TAG: message"
+            val parts = line.split(" ")
+            if (parts.size >= 6) parts[5].removeSuffix(":") else null
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun truncateFile(file: File, keepBytes: Long = 4L * 1024 * 1024) {
+        try {
+            if (!file.exists() || file.length() <= MAX_APP_LOG_SIZE) return
+            val lines = file.readLines()
+            val totalChars = lines.sumOf { it.length + 1 }
+            var skipChars = totalChars - keepBytes.toInt()
+            if (skipChars <= 0) return
+
+            val keptLines = mutableListOf<String>()
+            for (line in lines) {
+                skipChars -= line.length + 1
+                if (skipChars <= 0) {
+                    keptLines.add(line)
+                }
+            }
+
+            file.writeText(keptLines.joinToString("\n") + "\n")
+        } catch (e: Exception) {
+            Log.e(TAG, "truncateFile failed", e)
+        }
+    }
+
+    // ==================== 日志方法（保留接口兼容，实际由 logcat 捕获写入） ====================
 
     fun recognition(message: String) {
         checkDateSwitch()
-        writeLog(recognitionWriter, "RECOGNITION", message)
     }
 
     fun app(message: String) {
         checkDateSwitch()
-        writeLog(appWriter, "APP", message)
     }
 
     fun update(message: String) {
         checkDateSwitch()
-        writeLog(updateWriter, "UPDATE", message)
     }
 
     fun service(message: String) {
         checkDateSwitch()
-        writeLog(appWriter, "SERVICE", message)
     }
 
     fun crash(throwable: Throwable, tag: String = "") {
@@ -121,9 +229,8 @@ object AppLogger {
 
     private fun openWriters() {
         val dir = File(logsDir, currentDate).apply { mkdirs() }
-        recognitionWriter = getWriter(File(dir, "recognition.log"))
-        appWriter = getWriter(File(dir, "app.log"))
-        updateWriter = getWriter(File(dir, "update.log"))
+        // recognition.log 和 update.log 由 logcat 捕获线程按 tag 分流写入
+        // crash.log 仍由 crash() 方法直接写入
         crashWriter = getWriter(File(dir, "crash.log"))
     }
 
@@ -132,28 +239,14 @@ object AppLogger {
     }
 
     private fun closeWriters() {
-        fun closeQuietly(w: BufferedWriter?) {
-            try { w?.close() } catch (_: Exception) {}
-        }
-        closeQuietly(recognitionWriter)
-        closeQuietly(appWriter)
-        closeQuietly(updateWriter)
-        closeQuietly(crashWriter)
-        recognitionWriter = null
-        appWriter = null
-        updateWriter = null
+        try { crashWriter?.close() } catch (_: Exception) {}
         crashWriter = null
     }
 
     // ==================== 压缩 ====================
 
     fun flush() {
-        try {
-            recognitionWriter?.flush()
-            appWriter?.flush()
-            updateWriter?.flush()
-            crashWriter?.flush()
-        } catch (_: Exception) {}
+        try { crashWriter?.flush() } catch (_: Exception) {}
     }
 
     fun compressTodayLogs(context: Context): File? {

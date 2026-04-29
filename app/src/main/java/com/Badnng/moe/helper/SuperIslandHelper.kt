@@ -353,6 +353,175 @@ object SuperIslandHelper {
         return notification
     }
 
+    // ==================== 更新下载通知模板 ====================
+    // 展开态(模板20): IM图文组件(chatInfo) + 进度组件2(progressInfo)
+    // 摘要态(模板5): 图文组件1 + 进度文本组件(combinePicInfo)
+    // 进度颜色: 天蓝色过渡 (#4FC3F7 → #0288D1)
+    private const val DOWNLOAD_TEMPLATE = """
+{
+    "param_v2": {
+        "protocol": 3,
+        "business": "update",
+        "updatable": true,
+        "ticker": "{{ticker}}",
+        "enableFloat": false,
+        "isShowNotification": true,
+        "islandFirstFloat": true,
+        "aodTitle": "{{progressText}}",
+        "picInfo": {
+            "type": 2,
+            "loop": false,
+            "autoplay": false,
+            "number": 0
+        },
+        "smallWindowInfo": {
+            "targetPage": "{{targetPage}}"
+        },
+        "chatInfo": {
+            "picProfile": "miui.focus.pic_icon_main",
+            "title": "{{chatTitle}}",
+            "content": "{{chatContent}}",
+            "colorTitle": "#000000",
+            "colorTitleDark": "#FFFFFF",
+            "colorContent": "#666666",
+            "colorContentDark": "#AAAAAA"
+        },
+        "progressInfo": {
+            "progress": {{progressPercent}},
+            "colorProgress": "#4FC3F7",
+            "colorProgressEnd": "#0288D1"
+        },
+        "param_island": {
+            "islandProperty": 2,
+            "islandOrder": false,
+            "dismissIsland": false,
+            "needCloseAnimation": true,
+            "bigIslandArea": {
+                "imageTextInfoLeft": {
+                    "type": 1,
+                    "picInfo": {
+                        "type": 1,
+                        "pic": "miui.focus.pic_icon_main",
+                        "loop": false,
+                        "autoplay": false,
+                        "number": 0
+                    }
+                },
+                "textInfo": {
+                    "frontTitle": "{{frontTitle}}",
+                    "title": "{{title}}",
+                    "content": "{{content}}",
+                    "showHighlightColor": false,
+                    "narrowFont": false
+                },
+                "progressTextInfo": {
+                    "progressInfo": {
+                        "progress": "{{progressPercent}}",
+                        "colorReach": "	#1E90FF",
+                        "colorUnReach": "#333333",
+                        "isCCW": "True"
+                    }
+                }
+            },
+            "smallIslandArea": {
+                "combinePicInfo":{
+                    "picInfo": {
+                        "type": 1,
+                        "pic": "miui.focus.pic_icon_main"
+                    },
+                    "progressInfo":{
+                        "progress": "{{progressPercent}}",
+                        "colorReach": "	#1E90FF",
+                        "colorUnReach": "#333333",
+                        "isCCW": "True"
+                    }
+                }
+            }
+        },
+        "hintInfo": {
+            "type": 1,
+            "title": "{{hintTitle}}",
+            "colorTitleDark": "#FFFFFF",
+            "colorContentBg": "#4FC3F7",
+            "actionInfo": {
+                "action": "{{hintAction}}",
+                "actionTitle": "{{hintActionTitle}}",
+                "actionTitleColor": "#FFFFFF",
+                "actionBgColor": "#4FC3F7",
+                "actionIntentType": 1
+            }
+        }
+    }
+}
+"""
+
+    fun buildUpdateDownloadNotification(
+        context: Context,
+        channelId: String,
+        versionName: String,
+        progress: Float,
+        isPaused: Boolean,
+        contentIntent: PendingIntent,
+        pauseResumeIntent: PendingIntent?
+    ): Notification {
+        val clampedProgress = progress.coerceIn(0f, 1f)
+        val percent = (clampedProgress * 100).toInt()
+        val progressText = "$percent%"
+
+        val targetPage = "${context.packageName}.MainActivity"
+
+        val hintAction = "pause_resume"
+        val hintActionTitle = if (isPaused) "继续下载" else "暂停"
+        val frontTitle = if (isPaused) "更新下载已暂停" else "正在后台下载更新"
+
+        val paramsJson = DOWNLOAD_TEMPLATE
+            .replace("{{ticker}}", progressText)
+            .replace("{{progressText}}", progressText)
+            .replace("{{frontTitle}}", frontTitle)
+            .replace("{{title}}", progressText)
+            .replace("{{content}}", "v$versionName")
+            .replace("{{chatTitle}}", progressText)
+            .replace("{{chatContent}}", "v$versionName 更新")
+            .replace("{{hintTitle}}", frontTitle)
+            .replace("{{hintAction}}", hintAction)
+            .replace("{{hintActionTitle}}", hintActionTitle)
+            .replace("{{progressPercent}}", percent.toString())
+            .replace("{{targetPage}}", targetPage)
+
+        val picsBundle = buildPicsBundle(context, android.R.drawable.stat_sys_download)
+
+        val actionsBundle = Bundle().apply {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && pauseResumeIntent != null) {
+                putParcelable("miui.focus.action_pause_resume",
+                    Notification.Action.Builder(null, hintActionTitle, pauseResumeIntent).build())
+            }
+        }
+
+        val notification = Notification.Builder(context, channelId)
+            .setContentTitle(frontTitle)
+            .setContentText(progressText)
+            .setSmallIcon(android.R.drawable.stat_sys_download)
+            .setContentIntent(contentIntent)
+            .setOnlyAlertOnce(true)
+            .setOngoing(true)
+            .setProgress(100, percent, false)
+            .addExtras(picsBundle)
+            .addExtras(actionsBundle)
+            .build()
+
+        notification.extras.putString("miui.focus.param", paramsJson)
+
+        if (Build.VERSION.SDK_INT >= 35) {
+            notification.extras.putBoolean("android.requestPromotedOngoing", true)
+            try {
+                if (Build.VERSION.SDK_INT >= 36)
+                    notification.extras.putString("android.shortCriticalText", " $percent%")
+            } catch (_: Exception) {}
+        }
+
+        return notification
+    }
+
     // ==================== 构建组通知 ====================
     fun buildGroupNotification(
         context: Context,

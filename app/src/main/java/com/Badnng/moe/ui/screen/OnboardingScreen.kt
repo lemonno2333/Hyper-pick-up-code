@@ -385,7 +385,7 @@ private fun PermissionsStep(
             description = "防止系统休眠时清理应用，确保后台正常运行",
             icon = Icons.Default.BatterySaver,
             isGranted = isIgnoringBattery,
-            isRequired = true,
+            isRequired = false,
             onClick = {
                 try {
                     val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
