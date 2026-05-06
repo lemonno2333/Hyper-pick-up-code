@@ -83,7 +83,8 @@ class MainActivity : ComponentActivity() {
                 val db = OrderDatabase.getDatabase(applicationContext)
                 DailyExpressGroupingHelper.regroupPendingExpressByDay(
                     orderDao = db.orderDao(),
-                    groupDao = db.orderGroupDao()
+                    groupDao = db.orderGroupDao(),
+                    context = applicationContext
                 )
             }
         }

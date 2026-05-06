@@ -21,5 +21,6 @@ data class OrderGroup(
     val createdAt: Long = System.currentTimeMillis(),  // 创建时间
     val isCompleted: Boolean = false,  // 是否已完成
     val completedAt: Long? = null,  // 完成时间
-    val orderCount: Int = 0  // 包含的订单数量
+    val orderCount: Int = 0,  // 包含的订单数量
+    val iconResName: String? = null  // 自定义图标资源名，如 "ic_mcdonalds"
 )

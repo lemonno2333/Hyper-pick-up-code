@@ -1,5 +1,6 @@
 package com.Badnng.moe.helper
 
+import android.content.Context
 import com.Badnng.moe.data.db.OrderDao
 import com.Badnng.moe.data.db.OrderEntity
 import com.Badnng.moe.data.db.OrderGroup
@@ -18,8 +19,15 @@ data class DailyGroupingResult(
 object DailyExpressGroupingHelper {
     suspend fun regroupPendingExpressByDay(
         orderDao: OrderDao,
-        groupDao: OrderGroupDao
+        groupDao: OrderGroupDao,
+        context: Context? = null
     ) {
+        // 检查自动合并开关
+        if (context != null) {
+            val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
+            if (!prefs.getBoolean("auto_group_enabled", true)) return
+        }
+
         val allOrders = orderDao.getAllOrdersList()
         val pendingExpress = allOrders.filter { it.orderType == "快递" && !it.isCompleted }
         if (pendingExpress.isEmpty()) return

@@ -26,6 +26,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import com.Badnng.moe.helper.BrandIconResolver
 import com.Badnng.moe.rules.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -233,7 +235,7 @@ fun RulesScreen(
                 TopAppBar(
                     title = { Text("识别规则") },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
-                    windowInsets = TopAppBarDefaults.windowInsets
+                    windowInsets = WindowInsets.statusBars
                 )
             }
         },
@@ -538,6 +540,197 @@ fun RulesScreen(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text("添加规则源")
+                            }
+                        }
+                    }
+
+                    // 自定义取件地点
+                    item {
+                        var customLocationsExpanded by remember { mutableStateOf(false) }
+                        val customLocationsPrefs = remember { context.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE) }
+                        var customLocationsText by remember { mutableStateOf(customLocationsPrefs.getString("custom_pickup_locations", "") ?: "") }
+                        val keywordCount = customLocationsText.split(",").map { it.trim() }.filter { it.isNotBlank() }.size
+
+                        SectionCard(
+                            title = "自定义取件地点",
+                            subtitle = if (keywordCount > 0) "$keywordCount 个关键词" else "未设置",
+                            expanded = customLocationsExpanded,
+                            onToggle = { performHaptic(); customLocationsExpanded = !customLocationsExpanded }
+                        ) {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(
+                                    text = "当识别文本中包含以下关键词时，直接将其作为取件地点。多个关键词用逗号分隔，留空则不生效。",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                OutlinedTextField(
+                                    value = customLocationsText,
+                                    onValueChange = { customLocationsText = it },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    placeholder = { Text("输入自定义取件地点关键词，用逗号分隔") },
+                                    minLines = 2,
+                                    maxLines = 5,
+                                    shape = RoundedCornerShape(15.dp),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                                        focusedBorderColor = MaterialTheme.colorScheme.primary
+                                    )
+                                )
+                                Button(
+                                    onClick = {
+                                        performHaptic()
+                                        customLocationsPrefs.edit().putString("custom_pickup_locations", customLocationsText).apply()
+                                        Toast.makeText(context, "已保存", Toast.LENGTH_SHORT).show()
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(15.dp)
+                                ) {
+                                    Text("保存")
+                                }
+                            }
+                        }
+                    }
+
+                    // 自定义品牌图标
+                    item {
+                        var brandIconExpanded by remember { mutableStateOf(false) }
+                        var brandIconMappings by remember { mutableStateOf(BrandIconResolver.getCustomMappings(context)) }
+                        var pendingImageIndex by remember { mutableIntStateOf(-1) }
+                        val imagePickerLauncher = rememberLauncherForActivityResult(
+                            contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
+                        ) { uri ->
+                            if (uri != null && pendingImageIndex >= 0) {
+                                val savedPath = BrandIconResolver.saveCustomIcon(context, uri)
+                                if (savedPath != null) {
+                                    brandIconMappings = brandIconMappings.toMutableList().apply {
+                                        set(pendingImageIndex, BrandIconResolver.IconMapping(savedPath, this[pendingImageIndex].keywords))
+                                    }
+                                }
+                                pendingImageIndex = -1
+                            }
+                        }
+
+                        SectionCard(
+                            title = "自定义品牌图标",
+                            subtitle = if (brandIconMappings.isNotEmpty()) "${brandIconMappings.size} 条规则" else "未设置",
+                            expanded = brandIconExpanded,
+                            onToggle = { performHaptic(); brandIconExpanded = !brandIconExpanded }
+                        ) {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(
+                                    text = "当品牌名称包含关键词时显示自定义图标。点击图标从相册选择，图片不小于 224x224px。",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+
+                                brandIconMappings.forEachIndexed { index, mapping ->
+                                    Card(
+                                        shape = RoundedCornerShape(12.dp),
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                                        )
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.padding(12.dp),
+                                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                Surface(
+                                                    onClick = {
+                                                        performHaptic()
+                                                        pendingImageIndex = index
+                                                        imagePickerLauncher.launch("image/*")
+                                                    },
+                                                    shape = RoundedCornerShape(8.dp),
+                                                    color = if (mapping.iconPath.isNotEmpty()) Color.Transparent
+                                                        else MaterialTheme.colorScheme.surfaceVariant,
+                                                    modifier = Modifier.size(48.dp)
+                                                ) {
+                                                    Box(contentAlignment = Alignment.Center) {
+                                                        if (mapping.iconPath.isNotEmpty()) {
+                                                            AsyncImage(
+                                                                model = java.io.File(mapping.iconPath),
+                                                                contentDescription = null,
+                                                                modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(8.dp))
+                                                            )
+                                                        } else {
+                                                            Icon(
+                                                                Icons.Default.Add,
+                                                                contentDescription = "选择图标",
+                                                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                                            )
+                                                        }
+                                                    }
+                                                }
+
+                                                OutlinedTextField(
+                                                    value = mapping.keywords,
+                                                    onValueChange = { newKeywords ->
+                                                        brandIconMappings = brandIconMappings.toMutableList().apply {
+                                                            set(index, BrandIconResolver.IconMapping(mapping.iconPath, newKeywords))
+                                                        }
+                                                    },
+                                                    modifier = Modifier.weight(1f),
+                                                    label = { Text("关键词") },
+                                                    placeholder = { Text("品牌A,品牌B") },
+                                                    singleLine = true,
+                                                    shape = RoundedCornerShape(10.dp),
+                                                    colors = OutlinedTextFieldDefaults.colors(
+                                                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                                                        focusedBorderColor = MaterialTheme.colorScheme.primary
+                                                    )
+                                                )
+
+                                                IconButton(
+                                                    onClick = {
+                                                        performHaptic()
+                                                        BrandIconResolver.saveCustomMappings(context, brandIconMappings)
+                                                        Toast.makeText(context, "已保存", Toast.LENGTH_SHORT).show()
+                                                    }
+                                                ) {
+                                                    Icon(
+                                                        Icons.Default.Check,
+                                                        contentDescription = "保存",
+                                                        tint = MaterialTheme.colorScheme.primary,
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                }
+
+                                                IconButton(
+                                                    onClick = {
+                                                        performHaptic()
+                                                        if (mapping.iconPath.isNotEmpty()) {
+                                                            BrandIconResolver.deleteCustomIcon(mapping.iconPath)
+                                                        }
+                                                        brandIconMappings = brandIconMappings.toMutableList().apply { removeAt(index) }
+                                                    }
+                                                ) {
+                                                    Icon(
+                                                        Icons.Default.Close,
+                                                        contentDescription = "删除",
+                                                        tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                OutlinedButton(
+                                    onClick = {
+                                        performHaptic()
+                                        brandIconMappings = brandIconMappings + BrandIconResolver.IconMapping("", "")
+                                    },
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("添加规则")
+                                }
                             }
                         }
                     }

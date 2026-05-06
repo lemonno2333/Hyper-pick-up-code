@@ -113,13 +113,14 @@ class NotificationHelper(private val context: Context) {
             )
             notificationManager.notify(order.id.hashCode(), islandNotification)
         } else {
-            val iconRes = getBrandIcon(brandToUse, order.orderType)
+            val customIcon = getCustomIcon(brandToUse)
+            val fallbackRes = BrandIconResolver.resolveBuiltinFallbackResId(context, brandToUse, order.orderType)
             val label = if (isExpress) "取件码" else "取餐码"
 
             val builder = Notification.Builder(context, channelId)
                 .setContentTitle(if (isExpress) "快递待取 - ${brandToUse ?: "新包裹"}" else "取餐提醒 - ${brandToUse ?: "新订单"}")
                 .setContentText("$label: ${order.takeoutCode}")
-                .setSmallIcon(iconRes)
+                .setSmallIcon(customIcon ?: android.graphics.drawable.Icon.createWithResource(context, fallbackRes))
                 .setOngoing(true)
                 .setContentIntent(viewPendingIntent)
                 .setStyle(Notification.BigTextStyle().bigText("$label: ${order.takeoutCode}"))
@@ -154,22 +155,9 @@ class NotificationHelper(private val context: Context) {
         }
     }
 
-    private fun getBrandIcon(brandName: String?, orderType: String): Int {
-        return when (brandName) {
-            "麦当劳" -> R.drawable.ic_mcdonalds
-            "肯德基", "KFC" -> R.drawable.ic_kfc
-            "瑞幸" -> R.drawable.ic_luckin
-            "喜茶" -> R.drawable.ic_heytea
-            "星巴克" -> R.drawable.ic_starbucks
-            "霸王茶姬" -> R.drawable.ic_chagee
-            "古茗" -> R.drawable.ic_goodme
-            "蜜雪冰城" -> R.drawable.ic_mixue
-            else -> when (orderType) {
-                "饮品" -> R.drawable.ic_drink
-                "快递" -> R.drawable.ic_package
-                else -> R.drawable.ic_restaurant
-            }
-        }
+    private fun getCustomIcon(brandName: String?): android.graphics.drawable.Icon? {
+        val bitmap = BrandIconResolver.resolveCustomIconBitmap(context, brandName) ?: return null
+        return android.graphics.drawable.Icon.createWithBitmap(bitmap)
     }
 
     fun cancelNotification(orderId: String) {
@@ -230,7 +218,8 @@ class NotificationHelper(private val context: Context) {
             )
             notificationManager.notify(group.id.hashCode(), islandNotification)
         } else {
-            val iconRes = getBrandIcon(brandToUse, group.orderType)
+            val customIcon = getCustomIcon(brandToUse)
+            val fallbackRes = BrandIconResolver.resolveBuiltinFallbackResId(context, brandToUse, group.orderType)
             val label = if (isExpress) "取件码" else "取餐码"
             val codesText = orders.take(3).joinToString(", ") { it.takeoutCode }
             val moreText = if (orders.size > 3) " 等${orders.size}件" else ""
@@ -239,7 +228,7 @@ class NotificationHelper(private val context: Context) {
             val builder = Notification.Builder(context, channelId)
                 .setContentTitle(if (isExpress) "快递待取 - ${brandToUse ?: "新包裹"}" else "取餐提醒 - ${brandToUse ?: "新订单"}")
                 .setContentText(contentText)
-                .setSmallIcon(iconRes)
+                .setSmallIcon(customIcon ?: android.graphics.drawable.Icon.createWithResource(context, fallbackRes))
                 .setOngoing(true)
                 .setContentIntent(groupDetailPendingIntent)
                 .setStyle(Notification.BigTextStyle().bigText("$contentText\n已完成 $completedCount/$totalCount"))

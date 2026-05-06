@@ -429,6 +429,18 @@ class TextRecognitionHelper(private val context: Context) {
     }
 
     private fun findPickupLocation(mergedText: String, blocks: List<PaddleOcrHelper.TextBlock>): String? {
+        // 优先匹配用户自定义地点关键词（SharedPreferences）
+        val customLocationsStr = context.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE)
+            .getString("custom_pickup_locations", "") ?: ""
+        if (customLocationsStr.isNotBlank()) {
+            val customKeywords = customLocationsStr.split(",").map { it.trim() }.filter { it.isNotBlank() }
+            for (keyword in customKeywords) {
+                if (mergedText.contains(keyword)) {
+                    return keyword
+                }
+            }
+        }
+
         val plConfig = engine.rules.pickupLocation
         val startKeywords = plConfig.startKeywords
         val targetKeywords = plConfig.targetKeywords
