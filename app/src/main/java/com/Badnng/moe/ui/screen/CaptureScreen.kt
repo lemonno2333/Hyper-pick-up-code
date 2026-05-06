@@ -5,8 +5,11 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import com.Badnng.moe.receiver.ScheduledNotificationReceiver
 import android.graphics.Bitmap
 import android.os.Build
+import android.widget.Toast
+import java.io.File
 import androidx.compose.animation.*
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -21,10 +24,14 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.LazyItemScope
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import coil.compose.AsyncImage
@@ -62,14 +69,21 @@ import com.Badnng.moe.R
 import com.Badnng.moe.activity.MainActivity
 import com.Badnng.moe.data.db.OrderEntity
 import com.Badnng.moe.data.db.OrderGroup
+import com.Badnng.moe.helper.BrandIconResolver
 import com.Badnng.moe.helper.NotificationHelper
+import com.Badnng.moe.helper.NotificationScheduler
 import com.Badnng.moe.viewmodel.OrderViewModel
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
 import java.text.SimpleDateFormat
 import java.util.*
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import androidx.compose.runtime.snapshotFlow
 
 @Composable
 fun CaptureScreen(
@@ -77,7 +91,8 @@ fun CaptureScreen(
     bottomPadding: Dp = 0.dp,
     backdrop: com.kyant.backdrop.Backdrop,
     onEditModeChange: (Boolean) -> Unit = {},
-    onNavigateToDetail: (Any) -> Unit = {}
+    onNavigateToDetail: (Any) -> Unit = {},
+    onScrollStateChange: (Boolean) -> Unit = {}
 ) {
     val viewModel: OrderViewModel = viewModel()
     val incompleteOrders by viewModel.incompleteOrders.collectAsState()
@@ -126,6 +141,7 @@ fun CaptureScreen(
         onDeleteGroup = { group -> viewModel.deleteGroup(group) },
         onEditModeChange = onEditModeChange,
         onNavigateToDetail = onNavigateToDetail,
+        onScrollStateChange = onScrollStateChange,
         modifier = modifier,
         bottomPadding = bottomPadding,
         backdrop = backdrop
@@ -148,6 +164,7 @@ fun CaptureScreenContent(
     onDeleteGroup: (OrderGroup) -> Unit,
     onEditModeChange: (Boolean) -> Unit,
     onNavigateToDetail: (Any) -> Unit,
+    onScrollStateChange: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
     bottomPadding: Dp = 0.dp,
     backdrop: com.kyant.backdrop.Backdrop
@@ -163,6 +180,7 @@ fun CaptureScreenContent(
     var selectedGroupIds by remember { mutableStateOf(setOf<Long>()) }
     var showMultiDeleteConfirm by remember { mutableStateOf(false) }
     var showClearAllConfirm by remember { mutableStateOf(false) }
+    var showMergeGroupDialog by remember { mutableStateOf(false) }
     var expandedGroupId by remember { mutableStateOf<Long?>(null) }
 
     var showCategoryFilters by remember { mutableStateOf(false) }
@@ -197,6 +215,7 @@ fun CaptureScreenContent(
 
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
+    val scope = rememberCoroutineScope()
     val prefs = remember { context.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE) }
     val hapticEnabled = remember(prefs) { prefs.getBoolean("haptic_enabled", true) }
 
@@ -212,6 +231,52 @@ fun CaptureScreenContent(
 
     LaunchedEffect(isEditMode) {
         onEditModeChange(isEditMode)
+    }
+
+    // 切换待取/已取时重置滚动状态
+    LaunchedEffect(showCompletedOnly) {
+        onScrollStateChange(false)
+    }
+
+    // 滚动方向检测：向下滚动时隐藏底栏和FAB，向上滚动时显示
+    LaunchedEffect(incompleteListState) {
+        var prevIndex = 0
+        var prevOffset = 0
+        snapshotFlow {
+            val idx = incompleteListState.firstVisibleItemIndex
+            val off = incompleteListState.firstVisibleItemScrollOffset
+            Triple(idx, off, incompleteListState.canScrollForward)
+        }.collect { (index, offset, canScrollForward) ->
+            if (!showCompletedOnly) {
+                if (index != prevIndex || offset != prevOffset) {
+                    val down = index > prevIndex || (index == prevIndex && offset > prevOffset)
+                    if (down && canScrollForward) onScrollStateChange(true)
+                    else if (!down) onScrollStateChange(false)
+                    prevIndex = index
+                    prevOffset = offset
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(completedListState) {
+        var prevIndex = 0
+        var prevOffset = 0
+        snapshotFlow {
+            val idx = completedListState.firstVisibleItemIndex
+            val off = completedListState.firstVisibleItemScrollOffset
+            Triple(idx, off, completedListState.canScrollForward)
+        }.collect { (index, offset, canScrollForward) ->
+            if (showCompletedOnly) {
+                if (index != prevIndex || offset != prevOffset) {
+                    val down = index > prevIndex || (index == prevIndex && offset > prevOffset)
+                    if (down && canScrollForward) onScrollStateChange(true)
+                    else if (!down) onScrollStateChange(false)
+                    prevIndex = index
+                    prevOffset = offset
+                }
+            }
+        }
     }
 
     LaunchedEffect(activity?.intentToProcess, incompleteOrders, completedOrders) {
@@ -254,48 +319,56 @@ fun CaptureScreenContent(
                 .background(MaterialTheme.colorScheme.background)
                 .windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.safeDrawing.only(androidx.compose.foundation.layout.WindowInsetsSides.Top))
         ) {
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(text = "澎湃记", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(horizontal = 16.dp))
+            Surface(
+                color = MaterialTheme.colorScheme.surface,
+                shape = RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp),
+                shadowElevation = 0.dp
+            ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(text = "澎湃记", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(horizontal = 16.dp))
 
-            Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
-            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    StatusButton(
-                        selected = !showCompletedOnly,
-                        label = "待取",
-                        count = incompleteOrders.size,
-                        onClick = {
-                            if (!isEditMode) {
-                                performHaptic()
-                                if (!showCompletedOnly) {
-                                    showCategoryFilters = !showCategoryFilters
-                                } else {
-                                    showCompletedOnly = false
+                    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            StatusButton(
+                                selected = !showCompletedOnly,
+                                label = "待取",
+                                count = incompleteOrders.size,
+                                onClick = {
+                                    if (!isEditMode) {
+                                        performHaptic()
+                                        if (!showCompletedOnly) {
+                                            showCategoryFilters = !showCategoryFilters
+                                        } else {
+                                            showCompletedOnly = false
+                                        }
+                                    }
                                 }
-                            }
+                            )
+                            StatusButton(
+                                selected = showCompletedOnly,
+                                label = "已取",
+                                count = completedOrders.size,
+                                onClick = {
+                                    if (!isEditMode) {
+                                        performHaptic()
+                                        showCompletedOnly = true
+                                        showCategoryFilters = false
+                                    }
+                                }
+                            )
                         }
-                    )
-                    StatusButton(
-                        selected = showCompletedOnly,
-                        label = "已取",
-                        count = completedOrders.size,
-                        onClick = {
-                            if (!isEditMode) {
-                                performHaptic()
-                                showCompletedOnly = true
-                                showCategoryFilters = false
-                            }
-                        }
-                    )
-                }
 
-                IconButton(onClick = {
-                    performHaptic()
-                    isEditMode = !isEditMode
-                    if (!isEditMode) selectedIds = emptySet()
-                }) {
-                    Icon(if (isEditMode) Icons.Default.Close else Icons.Default.SettingsSuggest, contentDescription = "管理", tint = if (isEditMode) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
+                        IconButton(onClick = {
+                            performHaptic()
+                            isEditMode = !isEditMode
+                            if (!isEditMode) selectedIds = emptySet()
+                        }) {
+                            Icon(if (isEditMode) Icons.Default.Close else Icons.Default.SettingsSuggest, contentDescription = "管理", tint = if (isEditMode) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
+                        }
+                    }
                 }
             }
 
@@ -360,9 +433,9 @@ fun CaptureScreenContent(
                     }
 
                     // 操作按钮区域
-                    Row(
+                    Column(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         // 订单操作按钮（也适用于组）
                         AnimatedVisibility(
@@ -371,7 +444,7 @@ fun CaptureScreenContent(
                             exit = fadeOut() + shrinkVertically()
                         ) {
                             Row(
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 if (!showCompletedOnly) {
@@ -407,6 +480,21 @@ fun CaptureScreenContent(
                             }
                         }
 
+                        // 合并为组按钮（仅选中 standalone 订单 > 1 时显示）
+                        AnimatedVisibility(
+                            visible = selectedIds.size > 1 && !showCompletedOnly,
+                            enter = fadeIn() + expandVertically(),
+                            exit = fadeOut() + shrinkVertically()
+                        ) {
+                            OutlinedButton(
+                                onClick = { performHaptic(); showMergeGroupDialog = true },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(15.dp)
+                            ) {
+                                Text("合并为组(${selectedIds.size})")
+                            }
+                        }
+
                         // 清空全部按钮
                         AnimatedVisibility(
                             visible = selectedIds.isEmpty() && selectedGroupIds.isEmpty() && showCompletedOnly && completedOrders.isNotEmpty(),
@@ -415,6 +503,7 @@ fun CaptureScreenContent(
                         ) {
                             OutlinedButton(
                                 onClick = { performHaptic(); showClearAllConfirm = true },
+                                modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(15.dp)
                             ) {
                                 Text("清空全部")
@@ -489,20 +578,22 @@ fun CaptureScreenContent(
                                     modifier = Modifier.animateItem(),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    AnimatedVisibility(
-                                        visible = isEditMode,
-                                        enter = expandHorizontally() + fadeIn(),
-                                        exit = shrinkHorizontally() + fadeOut()
-                                    ) {
-                                        Checkbox(
-                                            checked = selectedIds.contains(order.id),
-                                            onCheckedChange = { checked ->
-                                                performHaptic()
-                                                if (checked == true) selectedIds += order.id
-                                                else selectedIds -= order.id
-                                            },
-                                            modifier = Modifier.padding(end = 8.dp)
-                                        )
+                                    Box(modifier = Modifier.width(if (isEditMode) 40.dp else 0.dp)) {
+                                        androidx.compose.animation.AnimatedVisibility(
+                                            visible = isEditMode,
+                                            enter = expandHorizontally() + fadeIn(),
+                                            exit = shrinkHorizontally() + fadeOut()
+                                        ) {
+                                            Checkbox(
+                                                checked = selectedIds.contains(order.id),
+                                                onCheckedChange = { checked ->
+                                                    performHaptic()
+                                                    if (checked == true) selectedIds += order.id
+                                                    else selectedIds -= order.id
+                                                },
+                                                modifier = Modifier.padding(end = 8.dp)
+                                            )
+                                        }
                                     }
 
                                     OrderCard(
@@ -546,6 +637,66 @@ fun CaptureScreenContent(
 
         if (showClearAllConfirm) {
             DeleteConfirmDialog(title = "确认清空？", description = "确定要清空所有已完成的记录吗？该操作不可撤销！", onDismiss = { showClearAllConfirm = false }, onConfirm = { onClearAllCompleted(); isEditMode = false; showClearAllConfirm = false })
+        }
+
+        if (showMergeGroupDialog) {
+            MergeGroupDialog(
+                existingGroups = incompleteOrderGroups,
+                selectedOrderCount = selectedIds.size,
+                onDismiss = { showMergeGroupDialog = false },
+                onConfirm = { mode, groupName, targetGroupId, iconResName ->
+                    performHaptic()
+                    scope.launch {
+                        withContext(Dispatchers.IO) {
+                            val db = com.Badnng.moe.data.db.OrderDatabase.getDatabase(context)
+                            val orderDao = db.orderDao()
+                            val groupDao = db.orderGroupDao()
+
+                            // 收集所有需要合并的订单（仅 standalone 订单）
+                            val ordersToMerge = mutableListOf<com.Badnng.moe.data.db.OrderEntity>()
+
+                            for (orderId in selectedIds) {
+                                orderDao.getOrderById(orderId)?.let { ordersToMerge.add(it) }
+                            }
+
+                            if (ordersToMerge.isEmpty()) return@withContext
+
+                            if (mode == "new" && groupName != null) {
+                                // 创建新组
+                                val firstOrder = ordersToMerge.first()
+                                val newGroup = com.Badnng.moe.data.db.OrderGroup(
+                                    name = groupName,
+                                    orderType = firstOrder.orderType,
+                                    brandName = firstOrder.brandName,
+                                    screenshotPath = firstOrder.screenshotPath,
+                                    sourceApp = firstOrder.sourceApp,
+                                    sourcePackage = firstOrder.sourcePackage,
+                                    recognizedText = firstOrder.recognizedText,
+                                    createdAt = System.currentTimeMillis(),
+                                    iconResName = iconResName
+                                )
+                                val groupId = groupDao.insertGroup(newGroup)
+                                for (order in ordersToMerge) {
+                                    orderDao.update(order.copy(groupId = groupId))
+                                }
+                                groupDao.updateOrderCount(groupId, ordersToMerge.size)
+                            } else if (mode == "existing" && targetGroupId != null) {
+                                // 添加到已有组
+                                for (order in ordersToMerge) {
+                                    orderDao.update(order.copy(groupId = targetGroupId))
+                                }
+                                // 重新计算组的订单数
+                                val count = groupDao.getOrderCountInGroup(targetGroupId)
+                                groupDao.updateOrderCount(targetGroupId, count)
+                            }
+                        }
+                        selectedIds = emptySet()
+                        selectedGroupIds = emptySet()
+                        isEditMode = false
+                        showMergeGroupDialog = false
+                    }
+                }
+            )
         }
 
         if (selectedOrderForQr != null) {
@@ -598,6 +749,188 @@ fun QrCodeDialog(order: OrderEntity, onDismiss: () -> Unit) {
     )
 }
 
+// 可选图标列表：资源名 to 显示名
+private val AVAILABLE_GROUP_ICONS = listOf(
+    "ic_mcdonalds" to "麦当劳",
+    "ic_kfc" to "肯德基",
+    "ic_luckin" to "瑞幸",
+    "ic_heytea" to "喜茶",
+    "ic_starbucks" to "星巴克",
+    "ic_chagee" to "霸王茶姬",
+    "ic_goodme" to "古茗",
+    "ic_mixue" to "蜜雪冰城",
+    "ic_drink" to "饮品",
+    "ic_package" to "快递",
+    "ic_restaurant" to "餐食"
+)
+
+@Composable
+fun MergeGroupDialog(
+    existingGroups: List<OrderGroup>,
+    selectedOrderCount: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (mode: String, groupName: String?, targetGroupId: Long?, iconResName: String?) -> Unit
+) {
+    var mergeMode by remember { mutableStateOf("new") }
+    var groupName by remember { mutableStateOf("") }
+    var selectedExistingGroupId by remember { mutableStateOf<Long?>(null) }
+    var selectedIcon by remember { mutableStateOf<String?>(null) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("合并为组") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    text = "将 $selectedOrderCount 条选中记录合并",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        label = "创建新组",
+                        selected = mergeMode == "new",
+                        onClick = { mergeMode = "new" }
+                    )
+                    FilterChip(
+                        label = "添加到已有组",
+                        selected = mergeMode == "existing",
+                        onClick = { mergeMode = "existing" }
+                    )
+                }
+
+                if (mergeMode == "new") {
+                    OutlinedTextField(
+                        value = groupName,
+                        onValueChange = { groupName = it },
+                        label = { Text("组名称") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(15.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    // 图标选择
+                    Text(
+                        text = "选择图标",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    val context = LocalContext.current
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(4),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.heightIn(max = 200.dp)
+                    ) {
+                        items(AVAILABLE_GROUP_ICONS.size) { index ->
+                            val (resName, displayName) = AVAILABLE_GROUP_ICONS[index]
+                            val resId = context.resources.getIdentifier(resName, "drawable", context.packageName)
+                            val isSelected = selectedIcon == resName
+
+                            Surface(
+                                onClick = {
+                                    selectedIcon = if (isSelected) null else resName
+                                },
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (isSelected)
+                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                                else
+                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (isSelected)
+                                        MaterialTheme.colorScheme.primary
+                                    else
+                                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f)
+                                ),
+                                modifier = Modifier.aspectRatio(1f)
+                            ) {
+                                Column(
+                                    modifier = Modifier.fillMaxSize().padding(4.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+                                    if (resId != 0) {
+                                        Icon(
+                                            painter = painterResource(id = resId),
+                                            contentDescription = displayName,
+                                            modifier = Modifier.size(28.dp),
+                                            tint = Color.Unspecified
+                                        )
+                                    }
+                                    Text(
+                                        text = displayName,
+                                        fontSize = 9.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    if (existingGroups.isEmpty()) {
+                        Text(
+                            text = "暂无已有组",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 13.sp
+                        )
+                    } else {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            existingGroups.forEach { group ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { selectedExistingGroupId = group.id }
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .then(
+                                            if (selectedExistingGroupId == group.id)
+                                                Modifier.background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f))
+                                            else Modifier
+                                        )
+                                        .padding(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    RadioButton(
+                                        selected = selectedExistingGroupId == group.id,
+                                        onClick = { selectedExistingGroupId = group.id }
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        text = "${group.name} (${group.orderCount}单)",
+                                        fontSize = 14.sp
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    if (mergeMode == "new" && groupName.isNotBlank()) {
+                        onConfirm("new", groupName, null, selectedIcon)
+                    } else if (mergeMode == "existing" && selectedExistingGroupId != null) {
+                        onConfirm("existing", null, selectedExistingGroupId, null)
+                    }
+                },
+                enabled = (mergeMode == "new" && groupName.isNotBlank()) ||
+                        (mergeMode == "existing" && selectedExistingGroupId != null)
+            ) {
+                Text("确定")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("取消") }
+        }
+    )
+}
+
 @Composable
 fun OrderQuickViewDialog(order: OrderEntity, onDismiss: () -> Unit) {
     val context = LocalContext.current
@@ -616,31 +949,26 @@ fun OrderQuickViewDialog(order: OrderEntity, onDismiss: () -> Unit) {
                     horizontalArrangement = Arrangement.Center,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    val brandIcon = remember(order.brandName, order.orderType) {
-                        val resName = when (order.brandName) {
-                            "麦当劳" -> "ic_mcdonalds"
-                            "肯德基", "KFC" -> "ic_kfc"
-                            "瑞幸" -> "ic_luckin"
-                            "喜茶" -> "ic_heytea"
-                            "星巴克" -> "ic_starbucks"
-                            "霸王茶姬" -> "ic_chagee"
-                            "古茗" -> "ic_goodme"
-                            "蜜雪冰城" -> "ic_mixue"
-                            else -> null
-                        }
-                        val resId = if (resName != null) context.resources.getIdentifier(resName, "drawable", context.packageName) else 0
-                        if (resId != 0) resId else when (order.orderType) {
-                            "饮品" -> R.drawable.ic_drink
-                            "快递" -> R.drawable.ic_package
-                            else -> R.drawable.ic_restaurant
-                        }
+                    val customIconBitmap = remember(order.brandName) {
+                        BrandIconResolver.resolveCustomIconBitmap(context, order.brandName)
                     }
-                    Icon(
-                        painter = painterResource(id = brandIcon),
-                        contentDescription = null,
-                        modifier = Modifier.size(28.dp),
-                        tint = Color.Unspecified
-                    )
+                    val brandIconRes = remember(order.brandName, order.orderType) {
+                        BrandIconResolver.resolveBuiltinFallbackResId(context, order.brandName, order.orderType)
+                    }
+                    if (customIconBitmap != null) {
+                        Image(
+                            bitmap = customIconBitmap.asImageBitmap(),
+                            contentDescription = null,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    } else {
+                        Icon(
+                            painter = painterResource(id = brandIconRes),
+                            contentDescription = null,
+                            modifier = Modifier.size(28.dp),
+                            tint = Color.Unspecified
+                        )
+                    }
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = order.brandName ?: if (isExpress) "快递" else "取餐码",
@@ -801,24 +1129,19 @@ fun OrderGroupCard(
         }
     }
     val timeStr = remember(group.createdAt) { val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()); sdf.format(Date(group.createdAt)) }
-    val brandIcon = remember(group.brandName, group.orderType) {
-        val resName = when (group.brandName) {
-            "麦当劳" -> "ic_mcdonalds"
-            "肯德基", "KFC" -> "ic_kfc"
-            "瑞幸" -> "ic_luckin"
-            "喜茶" -> "ic_heytea"
-            "星巴克" -> "ic_starbucks"
-            "霸王茶姬" -> "ic_chagee"
-            "古茗" -> "ic_goodme"
-            "蜜雪冰城" -> "ic_mixue"
-            else -> null
+    val groupIconBitmap = remember(group.brandName, group.iconResName) {
+        if (group.iconResName != null) {
+            val customResId = context.resources.getIdentifier(group.iconResName, "drawable", context.packageName)
+            if (customResId != 0) return@remember null
         }
-        val resId = if (resName != null) context.resources.getIdentifier(resName, "drawable", context.packageName) else 0
-        if (resId != 0) resId else when (group.orderType) {
-            "饮品" -> R.drawable.ic_drink
-            "快递" -> R.drawable.ic_package
-            else -> R.drawable.ic_restaurant
+        BrandIconResolver.resolveCustomIconBitmap(context, group.brandName)
+    }
+    val groupIconRes = remember(group.brandName, group.orderType, group.iconResName) {
+        if (group.iconResName != null) {
+            val customResId = context.resources.getIdentifier(group.iconResName, "drawable", context.packageName)
+            if (customResId != 0) return@remember customResId
         }
+        BrandIconResolver.resolveBuiltinFallbackResId(context, group.brandName, group.orderType)
     }
 
     // 获取组内的订单列表
@@ -840,19 +1163,21 @@ fun OrderGroupCard(
         verticalAlignment = Alignment.CenterVertically
     ) {
         // 多选框在最左边，和取餐码卡片对齐
-        AnimatedVisibility(
-            visible = isEditMode,
-            enter = expandHorizontally() + fadeIn(),
-            exit = shrinkHorizontally() + fadeOut()
-        ) {
-            Checkbox(
-                checked = isSelected,
-                onCheckedChange = {
-                    performHaptic()
-                    onSelectionChange(it)
-                },
-                modifier = Modifier.padding(end = 8.dp)
-            )
+        Box(modifier = Modifier.width(if (isEditMode) 40.dp else 0.dp)) {
+            androidx.compose.animation.AnimatedVisibility(
+                visible = isEditMode,
+                enter = expandHorizontally() + fadeIn(),
+                exit = shrinkHorizontally() + fadeOut()
+            ) {
+                Checkbox(
+                    checked = isSelected,
+                    onCheckedChange = {
+                        performHaptic()
+                        onSelectionChange(it)
+                    },
+                    modifier = Modifier.padding(end = 8.dp)
+                )
+            }
         }
 
         // 组卡片内容
@@ -874,7 +1199,11 @@ fun OrderGroupCard(
             ) {
                 // 顶部区域：图标 + 标题
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(painter = painterResource(id = brandIcon), contentDescription = null, modifier = Modifier.size(32.dp), tint = Color.Unspecified)
+                    if (groupIconBitmap != null) {
+                        Image(bitmap = groupIconBitmap.asImageBitmap(), contentDescription = null, modifier = Modifier.size(32.dp))
+                    } else {
+                        Icon(painter = painterResource(id = groupIconRes), contentDescription = null, modifier = Modifier.size(32.dp), tint = Color.Unspecified)
+                    }
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(text = group.name, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                 }
@@ -921,27 +1250,82 @@ fun OrderGroupCard(
 
                             // 再次推送实时通知按钮
                             if (!group.isCompleted) {
-                                FilledTonalButton(
-                                    onClick = {
-                                        performHaptic()
-                                        val notificationGroup = OrderGroup(
-                                            id = group.id,
-                                            name = group.name,
-                                            orderType = group.orderType,
-                                            brandName = group.brandName,
-                                            screenshotPath = group.screenshotPath,
-                                            recognizedText = group.recognizedText,
-                                            sourceApp = group.sourceApp
-                                        )
-                                        NotificationHelper(context).showGroupNotification(notificationGroup, groupOrders)
-                                    },
+                                var showGroupTimePicker by remember { mutableStateOf(false) }
+                                val groupRequestCode = remember(group.id) { NotificationScheduler.getGroupRequestCode(group.id) }
+                                var isGroupScheduled by remember { mutableStateOf(NotificationScheduler.isScheduled(context, groupRequestCode)) }
+                            DisposableEffect(groupRequestCode) {
+                                val receiver = object : BroadcastReceiver() {
+                                    override fun onReceive(ctx: Context?, intent: Intent?) {
+                                        isGroupScheduled = NotificationScheduler.isScheduled(context, groupRequestCode)
+                                    }
+                                }
+                                val filter = IntentFilter(ScheduledNotificationReceiver.ACTION_SCHEDULED_NOTIFICATION_FIRED)
+                                ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+                                onDispose { context.unregisterReceiver(receiver) }
+                            }
+
+                                Row(
                                     modifier = Modifier.fillMaxWidth().height(44.dp),
-                                    shape = RoundedCornerShape(12.dp),
-                                    colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    Icon(Icons.Default.NotificationAdd, null, Modifier.size(18.dp))
-                                    Spacer(Modifier.width(8.dp))
-                                    Text("再次推送实时通知", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    FilledTonalButton(
+                                        onClick = {
+                                            performHaptic()
+                                            val notificationGroup = OrderGroup(
+                                                id = group.id,
+                                                name = group.name,
+                                                orderType = group.orderType,
+                                                brandName = group.brandName,
+                                                screenshotPath = group.screenshotPath,
+                                                recognizedText = group.recognizedText,
+                                                sourceApp = group.sourceApp
+                                            )
+                                            NotificationHelper(context).showGroupNotification(notificationGroup, groupOrders)
+                                        },
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(15.dp),
+                                        colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+                                    ) {
+                                        Icon(Icons.Default.NotificationAdd, null, Modifier.size(18.dp))
+                                        Spacer(Modifier.width(8.dp))
+                                        Text("再次推送实时通知", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    }
+
+                                    FilledTonalButton(
+                                        onClick = {
+                                            performHaptic()
+                                            if (isGroupScheduled) {
+                                                NotificationScheduler.cancel(context, groupRequestCode)
+                                                isGroupScheduled = false
+                                                Toast.makeText(context, "已取消定时", Toast.LENGTH_SHORT).show()
+                                            } else {
+                                                showGroupTimePicker = true
+                                            }
+                                        },
+                                        modifier = Modifier.height(44.dp).width(44.dp),
+                                        shape = RoundedCornerShape(15.dp),
+                                        contentPadding = PaddingValues(0.dp),
+                                        colors = ButtonDefaults.filledTonalButtonColors(
+                                            containerColor = if (isGroupScheduled) MaterialTheme.colorScheme.errorContainer
+                                            else MaterialTheme.colorScheme.secondaryContainer
+                                        )
+                                    ) {
+                                        Icon(Icons.Default.Alarm, null, Modifier.size(18.dp))
+                                    }
+                                }
+
+                                if (showGroupTimePicker) {
+                                    ScheduledNotificationSheet(
+                                        onDismiss = { showGroupTimePicker = false },
+                                        onSchedule = { triggerAtMillis ->
+                                            NotificationScheduler.scheduleGroup(context, group, triggerAtMillis)
+                                            isGroupScheduled = true
+                                            val cal = java.util.Calendar.getInstance().apply { timeInMillis = triggerAtMillis }
+                                            val timeStr = String.format("%02d:%02d", cal.get(java.util.Calendar.HOUR_OF_DAY), cal.get(java.util.Calendar.MINUTE))
+                                            Toast.makeText(context, "已设置 $timeStr 推送", Toast.LENGTH_SHORT).show()
+                                            showGroupTimePicker = false
+                                        }
+                                    )
                                 }
                             }
                         }
@@ -949,25 +1333,6 @@ fun OrderGroupCard(
                 }
 
                 // 显示时间
-                AnimatedVisibility(
-                    visible = false,
-                    enter = expandVertically() + fadeIn(),
-                    exit = shrinkVertically() + fadeOut()
-                ) {
-                    OutlinedButton(
-                        onClick = { performHaptic(); onDeleteGroup() },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 8.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.error
-                        ),
-                        shape = RoundedCornerShape(15.dp)
-                    ) {
-                        Text("删除组")
-                    }
-                }
-
                 Text(text = "时间: $timeStr", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
 
                 // 点击展开/折叠的区域
@@ -1007,8 +1372,7 @@ fun OrderGroupCard(
                 }
 
                 // 展开/折叠内容（只在非编辑模式下显示）
-                Box(modifier = Modifier.fillMaxWidth().clipToBounds()) {
-                androidx.compose.animation.AnimatedVisibility(
+                AnimatedVisibility(
                     visible = isExpanded && !isEditMode,
                     enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(),
                     exit = shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut()
@@ -1036,7 +1400,6 @@ fun OrderGroupCard(
                         }
                     }
                 }
-                }
             }
         }
     }
@@ -1056,6 +1419,13 @@ fun OrderCard(
     onNavigateToDetail: (Any) -> Unit = {}
 ) {
     val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
+    val prefs = remember { context.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE) }
+    val performHaptic = {
+        if (prefs.getBoolean("haptic_enabled", true)) {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        }
+    }
     val isPureBlackPalette = MaterialTheme.colorScheme.background.luminance() < 0.02f &&
         MaterialTheme.colorScheme.surfaceVariant.luminance() < 0.02f
     val orderCardColor = if (isPureBlackPalette) {
@@ -1064,16 +1434,11 @@ fun OrderCard(
         MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
     }
     val timeStr = remember(order.createdAt) { val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()); sdf.format(Date(order.createdAt)) }
-    val brandIcon = remember(order.brandName, order.orderType) {
-        val resName = when (order.brandName) {
-            "麦当劳" -> "ic_mcdonalds"; "肯德基", "KFC" -> "ic_kfc"; "瑞幸" -> "ic_luckin"; "喜茶" -> "ic_heytea"; "星巴克" -> "ic_starbucks"; "霸王茶姬" -> "ic_chagee"; "古茗" -> "ic_goodme"; "蜜雪冰城" -> "ic_mixue"; else -> null
-        }
-        val resId = if (resName != null) context.resources.getIdentifier(resName, "drawable", context.packageName) else 0
-        if (resId != 0) resId else when (order.orderType) {
-            "饮品" -> R.drawable.ic_drink
-            "快递" -> R.drawable.ic_package
-            else -> R.drawable.ic_restaurant
-        }
+    val orderIconBitmap = remember(order.brandName) {
+        BrandIconResolver.resolveCustomIconBitmap(context, order.brandName)
+    }
+    val orderIconRes = remember(order.brandName, order.orderType) {
+        BrandIconResolver.resolveBuiltinFallbackResId(context, order.brandName, order.orderType)
     }
     val highlightColor by animateColorAsState(targetValue = if (isHighlighted) MaterialTheme.colorScheme.primary.copy(alpha = 0.8f) else Color.Transparent, animationSpec = tween(1000), label = "highlight")
 
@@ -1092,7 +1457,11 @@ fun OrderCard(
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(painter = painterResource(id = brandIcon), contentDescription = null, modifier = Modifier.size(32.dp), tint = Color.Unspecified)
+                    if (orderIconBitmap != null) {
+                        Image(bitmap = orderIconBitmap.asImageBitmap(), contentDescription = null, modifier = Modifier.size(32.dp))
+                    } else {
+                        Icon(painter = painterResource(id = orderIconRes), contentDescription = null, modifier = Modifier.size(32.dp), tint = Color.Unspecified)
+                    }
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
                         if (order.orderType == "快递") {
@@ -1148,15 +1517,70 @@ fun OrderCard(
                         }
 
                         if (!isCompleted && showRealtimeNotification) {
-                            FilledTonalButton(
-                                onClick = { NotificationHelper(context).showPromotedLiveUpdate(order) },
+                            var showTimePicker by remember { mutableStateOf(false) }
+                            val orderRequestCode = remember(order.id) { NotificationScheduler.getOrderRequestCode(order.id) }
+                            var isScheduled by remember { mutableStateOf(NotificationScheduler.isScheduled(context, orderRequestCode)) }
+                            DisposableEffect(orderRequestCode) {
+                                val receiver = object : BroadcastReceiver() {
+                                    override fun onReceive(ctx: Context?, intent: Intent?) {
+                                        isScheduled = NotificationScheduler.isScheduled(context, orderRequestCode)
+                                    }
+                                }
+                                val filter = IntentFilter(ScheduledNotificationReceiver.ACTION_SCHEDULED_NOTIFICATION_FIRED)
+                                ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+                                onDispose { context.unregisterReceiver(receiver) }
+                            }
+
+                            Row(
                                 modifier = Modifier.fillMaxWidth().height(44.dp),
-                                shape = RoundedCornerShape(15.dp),
-                                colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Icon(Icons.Default.NotificationAdd, null, Modifier.size(18.dp))
-                                Spacer(Modifier.width(8.dp))
-                                Text("再次推送实时通知", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                FilledTonalButton(
+                                    onClick = { NotificationHelper(context).showPromotedLiveUpdate(order) },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(15.dp),
+                                    colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+                                ) {
+                                    Icon(Icons.Default.NotificationAdd, null, Modifier.size(18.dp))
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("再次推送实时通知", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                }
+
+                                FilledTonalButton(
+                                    onClick = {
+                                        performHaptic()
+                                        if (isScheduled) {
+                                            NotificationScheduler.cancel(context, orderRequestCode)
+                                            isScheduled = false
+                                            Toast.makeText(context, "已取消定时", Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            showTimePicker = true
+                                        }
+                                    },
+                                    modifier = Modifier.height(42.dp).width(42.dp),
+                                    shape = RoundedCornerShape(15.dp),
+                                    contentPadding = PaddingValues(0.dp),
+                                    colors = ButtonDefaults.filledTonalButtonColors(
+                                        containerColor = if (isScheduled) MaterialTheme.colorScheme.errorContainer
+                                        else MaterialTheme.colorScheme.secondaryContainer
+                                    )
+                                ) {
+                                    Icon(Icons.Default.Alarm, null, Modifier.size(18.dp))
+                                }
+                            }
+
+                            if (showTimePicker) {
+                                ScheduledNotificationSheet(
+                                    onDismiss = { showTimePicker = false },
+                                    onSchedule = { triggerAtMillis ->
+                                        NotificationScheduler.schedule(context, order, triggerAtMillis)
+                                        isScheduled = true
+                                        val cal = java.util.Calendar.getInstance().apply { timeInMillis = triggerAtMillis }
+                                        val timeStr = String.format("%02d:%02d", cal.get(java.util.Calendar.HOUR_OF_DAY), cal.get(java.util.Calendar.MINUTE))
+                                        Toast.makeText(context, "已设置 $timeStr 推送", Toast.LENGTH_SHORT).show()
+                                        showTimePicker = false
+                                    }
+                                )
                             }
                         }
                     }
@@ -1209,6 +1633,168 @@ fun Modifier.verticalScrollbar(state: LazyListState, width: Dp = 6.dp, color: Co
             val scrollbarHeight = ((viewportHeight / totalContentHeight) * viewportHeight).coerceIn(32.dp.toPx(), viewportHeight)
             val scrollProgress = (scrollOffset / (totalContentHeight - viewportHeight).coerceAtLeast(1f)).coerceIn(0f, 1f)
             drawRoundRect(color = color.copy(alpha = 0.5f), topLeft = Offset(size.width - width.toPx() - 2.dp.toPx(), (viewportHeight - scrollbarHeight) * scrollProgress), size = Size(width.toPx(), scrollbarHeight), cornerRadius = CornerRadius(width.toPx() / 2))
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ScheduledNotificationSheet(
+    onDismiss: () -> Unit,
+    onSchedule: (Long) -> Unit
+) {
+    val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
+    val prefs = remember { context.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE) }
+    val performHaptic = {
+        if (prefs.getBoolean("haptic_enabled", true)) {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        }
+    }
+
+    var showCustomTimePicker by remember { mutableStateOf(false) }
+    val timePickerState = rememberTimePickerState(
+        initialHour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY),
+        initialMinute = java.util.Calendar.getInstance().get(java.util.Calendar.MINUTE) + 5
+    )
+
+    // 全屏展开状态
+    val sheetState = rememberModalBottomSheetState(
+        skipPartiallyExpanded = true,
+        confirmValueChange = { true }
+    )
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = "选择推送时间",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center
+            )
+
+            // 切换动画核心：AnimatedContent
+            AnimatedContent(
+                targetState = showCustomTimePicker,
+                transitionSpec = {
+                    // 淡入淡出 + 轻微滑动效果
+                    (fadeIn(animationSpec = tween(300)) + slideInVertically(
+                        initialOffsetY = { it / 4 },
+                        animationSpec = tween(300)
+                    )) togetherWith (fadeOut(animationSpec = tween(200)) + slideOutVertically(
+                        targetOffsetY = { -it / 4 },
+                        animationSpec = tween(200)
+                    )) using SizeTransform(clip = false)
+                },
+                label = "timePickerSwitch"
+            ) { customMode ->
+                if (!customMode) {
+                    // 快速选择模式
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            text = "快速选择",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        val presets = listOf(
+                            "5 分钟" to 5L,
+                            "10 分钟" to 10L,
+                            "30 分钟" to 30L,
+                            "1 小时" to 60L,
+                            "2 小时" to 120L
+                        )
+
+                        presets.chunked(2).forEach { row ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                row.forEach { (label, minutes) ->
+                                    OutlinedButton(
+                                        onClick = {
+                                            performHaptic()
+                                            val triggerAt = System.currentTimeMillis() + minutes * 60 * 1000
+                                            onSchedule(triggerAt)
+                                        },
+                                        modifier = Modifier.weight(1f).height(44.dp),
+                                        shape = RoundedCornerShape(15.dp)
+                                    ) {
+                                        Text(label)
+                                    }
+                                }
+                                if (row.size < 2) Spacer(modifier = Modifier.weight(1f))
+                            }
+                        }
+
+                        HorizontalDivider()
+
+                        FilledTonalButton(
+                            onClick = { performHaptic(); showCustomTimePicker = true },
+                            modifier = Modifier.fillMaxWidth().height(44.dp),
+                            shape = RoundedCornerShape(15.dp)
+                        ) {
+                            Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("自定义时间")
+                        }
+                    }
+                } else {
+                    // 自定义时间模式
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        TimePicker(state = timePickerState, modifier = Modifier.fillMaxWidth())
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = { performHaptic(); showCustomTimePicker = false },
+                                modifier = Modifier.weight(1f).height(44.dp),
+                                shape = RoundedCornerShape(15.dp)
+                            ) {
+                                Text("返回")
+                            }
+                            FilledTonalButton(
+                                onClick = {
+                                    performHaptic()
+                                    val now = java.util.Calendar.getInstance()
+                                    val target = java.util.Calendar.getInstance().apply {
+                                        set(java.util.Calendar.HOUR_OF_DAY, timePickerState.hour)
+                                        set(java.util.Calendar.MINUTE, timePickerState.minute)
+                                        set(java.util.Calendar.SECOND, 0)
+                                        set(java.util.Calendar.MILLISECOND, 0)
+                                    }
+                                    if (target.before(now)) {
+                                        target.add(java.util.Calendar.DAY_OF_MONTH, 1)
+                                    }
+                                    onSchedule(target.timeInMillis)
+                                },
+                                modifier = Modifier.weight(1f).height(44.dp),
+                                shape = RoundedCornerShape(15.dp)
+                            ) {
+                                Text("确认")
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 }

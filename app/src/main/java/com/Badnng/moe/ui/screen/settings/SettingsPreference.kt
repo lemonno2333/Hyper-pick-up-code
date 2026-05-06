@@ -63,9 +63,10 @@ import com.Badnng.moe.ui.component.CaptureModeItem
 import com.Badnng.moe.ui.component.ChoiceChip
 import com.Badnng.moe.ui.component.PreferenceSection
 import com.Badnng.moe.ui.component.PreferenceSwitchItem
+import com.Badnng.moe.ui.component.SettingsListItem
 
 @Composable
-fun PreferenceSettingsContent(performHaptic: () -> Unit) {
+fun PreferenceSettingsContent(performHaptic: () -> Unit, onNavigate: (SettingsPage) -> Unit = {}) {
     val context = LocalContext.current; val prefs = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
     val configuration = LocalConfiguration.current
     val isLargeScreen = configuration.screenWidthDp >= 700
@@ -166,6 +167,27 @@ fun PreferenceSettingsContent(performHaptic: () -> Unit) {
                         hapticEnabled = it
                         prefs.edit().putBoolean("haptic_enabled", it).apply()
                         performHaptic()
+                    }
+                )
+            }
+        }
+
+        var autoGroupEnabled by remember { mutableStateOf(prefs.getBoolean("auto_group_enabled", true)) }
+
+        PreferenceSection(title = "订单管理") {
+            Surface(
+                shape = RoundedCornerShape(15.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f))
+            ) {
+                PreferenceSwitchItem(
+                    title = "快递自动合并",
+                    description = "自动将同一天的快递订单合并为一个组",
+                    checked = autoGroupEnabled,
+                    onCheckedChange = {
+                        performHaptic()
+                        autoGroupEnabled = it
+                        prefs.edit().putBoolean("auto_group_enabled", it).apply()
                     }
                 )
             }

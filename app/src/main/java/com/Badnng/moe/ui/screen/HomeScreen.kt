@@ -154,6 +154,8 @@ fun HomeScreen(
     val layoutInfo by windowInfoTracker.windowLayoutInfo(context).collectAsState(initial = null)
     val foldingFeature = layoutInfo?.displayFeatures?.filterIsInstance<FoldingFeature>()?.firstOrNull()
     val isFolded = foldingFeature?.state == FoldingFeature.State.HALF_OPENED
+    val imeBottomPadding = WindowInsets.ime.getBottom(LocalDensity.current)
+    val isImeVisible = imeBottomPadding > 0
     val navAdaptiveActive = isLargeScreen && largeScreenNavAdaptiveEnabled
     val effectiveNavAlignment = if (navAdaptiveActive) (dynamicNavAlignment ?: navAlignment) else navAlignment
     var allowPagerHorizontalSwipe by remember { mutableStateOf(true) }
@@ -337,7 +339,13 @@ fun HomeScreen(
     val miuixBackdrop = rememberMiuixBackdrop()
 
     var isSettingsSubPageOpen by remember { mutableStateOf(false) }
+    var isScrollingDown by remember { mutableStateOf(false) }
     val isUiHidden = isSettingsSubPageOpen || isManaging
+
+    // 切换页面时重置滚动状态，确保底栏和FAB正确显示
+    LaunchedEffect(pagerState.currentPage) {
+        isScrollingDown = false
+    }
 
     // 全屏菜单状态
     var showMenu by remember { mutableStateOf(false) }
@@ -359,7 +367,7 @@ fun HomeScreen(
                 val barHeight = bottomBarHeight
 
                 AnimatedVisibility(
-                    visible = !isUiHidden && !isFolded,
+                    visible = !isUiHidden && !isFolded && !isImeVisible && !isScrollingDown,
                     enter = fadeIn() + slideInVertically { it },
                     exit = fadeOut() + slideOutVertically { it }
                 ) {
@@ -511,7 +519,7 @@ fun HomeScreen(
                         allowPagerHorizontalSwipe
                 ) { page ->
                     when (page) {
-                        0 -> CaptureScreen(modifier = Modifier.fillMaxSize(), bottomPadding = 100.dp, backdrop = backdrop, onEditModeChange = { isManaging = it }, onNavigateToDetail = { detailItem ->
+                        0 -> CaptureScreen(modifier = Modifier.fillMaxSize(), bottomPadding = 100.dp, backdrop = backdrop, onEditModeChange = { isManaging = it }, onScrollStateChange = { isScrollingDown = it }, onNavigateToDetail = { detailItem ->
                             when (detailItem) {
                                 is OrderEntity -> detailOrder = detailItem
                                 is OrderGroup -> detailGroup = detailItem
@@ -649,7 +657,7 @@ fun HomeScreen(
         }
 
         AnimatedVisibility(
-            visible = pagerState.currentPage == 0 && !isUiHidden,
+            visible = pagerState.currentPage == 0 && !isUiHidden && !isScrollingDown,
             enter = scaleIn() + fadeIn(),
             exit = scaleOut() + fadeOut(),
             modifier = if (isLargeScreen) {

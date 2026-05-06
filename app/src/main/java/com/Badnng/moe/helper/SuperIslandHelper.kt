@@ -61,28 +61,22 @@ object SuperIslandHelper {
     private const val ACT_IDENTITY = "miui.focus.action_identity"
 
     // ==================== 图标映射 ====================
-    private fun brandIconRes(brandName: String?, orderType: String?): Int = when (brandName) {
-        "麦当劳" -> R.drawable.ic_mcdonalds
-        "肯德基", "KFC" -> R.drawable.ic_kfc
-        "瑞幸" -> R.drawable.ic_luckin
-        "喜茶" -> R.drawable.ic_heytea
-        "星巴克" -> R.drawable.ic_starbucks
-        "霸王茶姬" -> R.drawable.ic_chagee
-        "古茗" -> R.drawable.ic_goodme
-        "蜜雪冰城" -> R.drawable.ic_mixue
-        else -> when (orderType) {
-            "饮品" -> R.drawable.ic_drink
-            "快递" -> R.drawable.ic_package
-            else -> R.drawable.ic_restaurant
-        }
+    private fun brandIconRes(context: Context, brandName: String?, orderType: String?): Int {
+        return BrandIconResolver.resolveBuiltinFallbackResId(context, brandName, orderType ?: "餐食")
+    }
+
+    private fun brandIcon(context: Context, brandName: String?): android.graphics.drawable.Icon? {
+        val bitmap = BrandIconResolver.resolveCustomIconBitmap(context, brandName) ?: return null
+        return android.graphics.drawable.Icon.createWithBitmap(bitmap)
     }
 
     // ==================== miui.focus.pics Bundle ====================
-    private fun buildPicsBundle(context: Context, iconRes: Int): Bundle {
+    private fun buildPicsBundle(context: Context, iconRes: Int, customIcon: android.graphics.drawable.Icon? = null): Bundle {
+        val mainIcon = customIcon ?: Icon.createWithResource(context, iconRes)
         val picsBundle = Bundle().apply {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                putParcelable(PIC_MAIN, Icon.createWithResource(context, iconRes))
-                putParcelable(PIC_LAND, Icon.createWithResource(context, iconRes))
+                putParcelable(PIC_MAIN, mainIcon)
+                putParcelable(PIC_LAND, mainIcon)
                 putParcelable(PIC_TICKER, Icon.createWithResource(context, R.mipmap.ic_launcher))
                 putParcelable(PIC_AOD, Icon.createWithResource(context, R.mipmap.ic_launcher))
             }
@@ -312,9 +306,9 @@ object SuperIslandHelper {
     ): Notification {
         val label = if (isExpress) "取件码" else "取餐码"
         val contentText = "$label: ${order.takeoutCode}"
-        val iconRes = brandIconRes(brandName, order.orderType)
+        val iconRes = brandIconRes(context, brandName, order.orderType)
 
-        val picsBundle = buildPicsBundle(context, iconRes)
+        val picsBundle = buildPicsBundle(context, iconRes, brandIcon(context, brandName))
         val actionsBundle = buildActionsBundle(
             context, iconRes,
             completePendingIntent, identityChooserPendingIntent, isExpress
@@ -333,7 +327,7 @@ object SuperIslandHelper {
         val notification = Notification.Builder(context, channelId)
             .setContentTitle(if (isExpress) "快递待取 - ${brandName ?: "新包裹"}" else "取餐提醒 - ${brandName ?: "新订单"}")
             .setContentText(contentText)
-            .setSmallIcon(iconRes)
+            .setSmallIcon(brandIcon(context, brandName) ?: Icon.createWithResource(context, iconRes))
             .setContentIntent(viewPendingIntent)
             .setOngoing(true)
             .addExtras(picsBundle)
@@ -537,9 +531,9 @@ object SuperIslandHelper {
         val more = if (orders.size > 3) " 等${orders.size}件" else ""
         val label = if (isExpress) "取件码" else "取餐码"
         val contentText = "$label: $codes$more"
-        val iconRes = brandIconRes(group.brandName, group.orderType)
+        val iconRes = brandIconRes(context, group.brandName, group.orderType)
 
-        val picsBundle = buildPicsBundle(context, iconRes)
+        val picsBundle = buildPicsBundle(context, iconRes, brandIcon(context, group.brandName))
         val actionsBundle = buildActionsBundle(
             context, iconRes,
             completeAllPendingIntent, identityChooserPendingIntent, isExpress
@@ -558,7 +552,7 @@ object SuperIslandHelper {
         val notification = Notification.Builder(context, channelId)
             .setContentTitle(if (isExpress) "快递待取 - ${group.brandName ?: "新包裹"}" else "取餐提醒 - ${group.brandName ?: "新订单"}")
             .setContentText(contentText)
-            .setSmallIcon(iconRes)
+            .setSmallIcon(brandIcon(context, group.brandName) ?: Icon.createWithResource(context, iconRes))
             .setContentIntent(groupDetailPendingIntent)
             .setOngoing(true)
             .addExtras(picsBundle)

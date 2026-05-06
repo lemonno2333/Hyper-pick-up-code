@@ -395,7 +395,7 @@ class ScreenCaptureService : Service() {
                 if (insertedOrders.isEmpty()) return@launch
 
                 // 每次新识别后立即重整分组：不依赖打开 App。
-                DailyExpressGroupingHelper.regroupPendingExpressByDay(orderDao, orderGroupDao)
+                DailyExpressGroupingHelper.regroupPendingExpressByDay(orderDao, orderGroupDao, applicationContext)
                 val notificationHelper = NotificationHelper(applicationContext)
                 val refreshedInsertedOrders = insertedOrders.mapNotNull { orderDao.getOrderById(it.id) }
                 val groupedIds = refreshedInsertedOrders.mapNotNull { it.groupId }.toSet()

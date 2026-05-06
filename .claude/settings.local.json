@@ -53,7 +53,9 @@
       "Bash(gh api *)",
       "WebFetch(domain:api.github.com)",
       "Bash(pip install *)",
-      "Bash(python *)"
+      "Bash(python *)",
+      "PowerShell(Get-Command *)",
+      "Bash(Remove-Item *)"
     ]
   }
 }

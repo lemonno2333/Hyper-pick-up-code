@@ -139,7 +139,7 @@ class ShareRecognitionService : Service() {
             if (insertedOrders.isEmpty()) return
 
             // 每次新识别后立即重整分组：不依赖打开 App。
-            DailyExpressGroupingHelper.regroupPendingExpressByDay(orderDao, orderGroupDao)
+            DailyExpressGroupingHelper.regroupPendingExpressByDay(orderDao, orderGroupDao, this)
             val notificationHelper = NotificationHelper(applicationContext)
             val refreshedInsertedOrders = insertedOrders.mapNotNull { orderDao.getOrderById(it.id) }
             val groupedIds = refreshedInsertedOrders.mapNotNull { it.groupId }.toSet()

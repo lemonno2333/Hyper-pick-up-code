@@ -140,8 +140,23 @@ fun QuickViewDialogContent(order: OrderEntity, onDismiss: () -> Unit) {
         val database = OrderDatabase.getDatabase(context)
         val notificationHelper = NotificationHelper(context)
         scope.launch {
+            val groupId = order.groupId
             database.orderDao().markAsCompleted(orderId, completedTime)
             notificationHelper.cancelNotification(orderId)
+            if (groupId != null) {
+                val orderDao = database.orderDao()
+                val groupDao = database.orderGroupDao()
+                val incompleteCount = orderDao.getAllOrdersList().count { it.groupId == groupId && !it.isCompleted }
+                if (incompleteCount < 2) {
+                    val remaining = orderDao.getAllOrdersList().filter { it.groupId == groupId }
+                    val group = groupDao.getGroupById(groupId)
+                    remaining.forEach { orderDao.update(it.copy(groupId = null)) }
+                    if (group != null) groupDao.deleteGroup(group)
+                    notificationHelper.cancelGroupNotification(groupId)
+                } else {
+                    groupDao.updateOrderCount(groupId, incompleteCount)
+                }
+            }
             onDismiss()
         }
     }

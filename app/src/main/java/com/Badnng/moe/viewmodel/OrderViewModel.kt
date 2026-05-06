@@ -95,15 +95,20 @@ class OrderViewModel(application: Application) : AndroidViewModel(application) {
 
     fun markAsCompleted(orderId: String) {
         viewModelScope.launch {
+            val order = orderDao.getOrderById(orderId)
+            val groupId = order?.groupId
             repository.markAsCompleted(orderId)
             notificationHelper.cancelNotification(orderId)
+            if (groupId != null) checkAndDissolveGroup(groupId)
         }
     }
 
     fun deleteOrder(order: OrderEntity) {
         viewModelScope.launch {
+            val groupId = order.groupId
             repository.deleteOrder(order)
             notificationHelper.cancelNotification(order.id)
+            if (groupId != null) checkAndDissolveGroup(groupId)
         }
     }
 
@@ -157,6 +162,22 @@ class OrderViewModel(application: Application) : AndroidViewModel(application) {
     fun deleteCompletedGroups() {
         viewModelScope.launch {
             groupRepository.deleteCompletedGroups()
+        }
+    }
+
+    suspend fun checkAndDissolveGroup(groupId: Long) {
+        val group = orderGroupDao.getGroupById(groupId) ?: return
+        if (group.isCompleted) return
+        val incompleteCount = orderDao.getAllOrdersList().count { it.groupId == groupId && !it.isCompleted }
+        if (incompleteCount < 2) {
+            val remaining = orderDao.getAllOrdersList().filter { it.groupId == groupId }
+            remaining.forEach { order ->
+                orderDao.update(order.copy(groupId = null))
+            }
+            orderGroupDao.deleteGroup(group)
+            notificationHelper.cancelGroupNotification(groupId)
+        } else {
+            orderGroupDao.updateOrderCount(groupId, incompleteCount)
         }
     }
 }

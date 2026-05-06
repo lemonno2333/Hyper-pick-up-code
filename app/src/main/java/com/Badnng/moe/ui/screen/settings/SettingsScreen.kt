@@ -110,13 +110,32 @@ fun SettingsScreen(
                 SettingsPage.Sponsor -> "赞助"
                 else -> ""
             }
-            Box(modifier = Modifier.fillMaxSize().graphicsLayer { scaleX = currentScale; scaleY = currentScale; translationX = currentTranslationX; shape = RoundedCornerShape(currentCornerRadius); clip = true }.border(width = if (isPredictiveBackInProgress) 1.dp else 0.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = backProgress), shape = RoundedCornerShape(currentCornerRadius)).background(MaterialTheme.colorScheme.background)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        scaleX = currentScale
+                        scaleY = currentScale
+                        translationX = currentTranslationX
+                        shape = RoundedCornerShape(currentCornerRadius)
+                        clip = true
+                    }
+                    .border(
+                        width = if (isPredictiveBackInProgress) 1.dp else 0.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = backProgress),
+                        shape = RoundedCornerShape(currentCornerRadius)
+                    )
+                    .background(MaterialTheme.colorScheme.background)
+            ) {
                 SubPage(
                     title = title,
                     page = displayPage,
                     performHaptic = performHaptic,
-                    onNavigate = { currentPage = it },
-                    onBack = { performHaptic(); currentPage = SettingsPage.Main }
+                    onNavigate = { performHaptic(); currentPage = it },
+                    onBack = {
+                        performHaptic()
+                        currentPage = SettingsPage.Main
+                    }
                 )
             }
         }
@@ -179,16 +198,24 @@ fun SubPage(
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
     Column(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))) {
-        TopAppBar(title = { Text(text = title, fontSize = 20.sp, fontWeight = FontWeight.Bold) }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } }, colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent))
+        TopAppBar(
+            title = { Text(text = title, fontSize = 20.sp, fontWeight = FontWeight.Bold) },
+            navigationIcon = {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
+                }
+            },
+            colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
+        )
         when (page) {
             SettingsPage.Screenshot -> ScreenshotSettingsContent(performHaptic)
             SettingsPage.Permission -> PermissionSettingsContent(performHaptic)
-            SettingsPage.Preference -> PreferenceSettingsContent(performHaptic)
+            SettingsPage.Preference -> PreferenceSettingsContent(performHaptic, onNavigate)
             SettingsPage.KeepAlive -> KeepAliveSettingsContent(performHaptic)
             SettingsPage.Storage -> StorageSettingsContent(performHaptic, prefs)
             SettingsPage.About -> AboutSettingsContent(performHaptic)
             SettingsPage.Sponsor -> SponsorSettingsContent()
-            else -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(text = "正在开发中...", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)) }
+            SettingsPage.Main -> {}
         }
     }
 }

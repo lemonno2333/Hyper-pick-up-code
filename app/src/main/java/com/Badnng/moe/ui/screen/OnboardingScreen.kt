@@ -187,7 +187,7 @@ fun OnboardingScreen(onComplete: () -> Unit) {
         ) {
             when (currentStep) {
                 OnboardingStep.Permissions -> {
-                    val allRequiredGranted = hasNotificationPermission && isIgnoringBattery
+                    val allRequiredGranted = hasNotificationPermission
                     Button(
                         onClick = {
                             if (allRequiredGranted) {
@@ -380,6 +380,16 @@ private fun PermissionsStep(
             }
         )
 
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+        // 可选权限部分
+        Text(
+            text = "可选权限（推荐）",
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
         PermissionCard(
             title = "忽略电池优化",
             description = "防止系统休眠时清理应用，确保后台正常运行",
@@ -397,16 +407,6 @@ private fun PermissionsStep(
                     context.startActivity(intent)
                 }
             }
-        )
-
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-        // 可选权限部分
-        Text(
-            text = "可选权限（推荐）",
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
         PermissionCard(

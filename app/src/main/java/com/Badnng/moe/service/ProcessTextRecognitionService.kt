@@ -78,7 +78,7 @@ class ProcessTextRecognitionService : Service() {
             val groupDao = db.orderGroupDao()
             orderDao.insert(order)
 
-            DailyExpressGroupingHelper.regroupPendingExpressByDay(orderDao, groupDao)
+            DailyExpressGroupingHelper.regroupPendingExpressByDay(orderDao, groupDao, this)
 
             val notificationHelper = NotificationHelper(applicationContext)
             val refreshedOrder = orderDao.getOrderById(order.id)

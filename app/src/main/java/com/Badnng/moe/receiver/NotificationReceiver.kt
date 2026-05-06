@@ -24,8 +24,22 @@ class NotificationReceiver : BroadcastReceiver() {
                 when (intent.action) {
                     "ACTION_MARK_COMPLETED" -> {
                         val orderId = intent.getStringExtra("order_id") ?: return@launch
+                        val orderBefore = orderDao.getOrderById(orderId)
+                        val groupId = orderBefore?.groupId
                         orderDao.markAsCompleted(orderId, System.currentTimeMillis())
                         notificationHelper.cancelNotification(orderId)
+                        if (groupId != null) {
+                            val incompleteCount = orderDao.getAllOrdersList().count { it.groupId == groupId && !it.isCompleted }
+                            if (incompleteCount < 2) {
+                                val remaining = orderDao.getAllOrdersList().filter { it.groupId == groupId }
+                                val group = orderGroupDao.getGroupById(groupId)
+                                remaining.forEach { orderDao.update(it.copy(groupId = null)) }
+                                if (group != null) orderGroupDao.deleteGroup(group)
+                                notificationHelper.cancelGroupNotification(groupId)
+                            } else {
+                                orderGroupDao.updateOrderCount(groupId, incompleteCount)
+                            }
+                        }
                     }
 
                     "ACTION_MARK_GROUP_COMPLETED" -> {

@@ -64,6 +64,7 @@
             android:theme="@style/Theme.澎湃记"
             android:resizeableActivity="true"
             android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustPan"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|density|uiMode|smallestScreenSize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -173,6 +174,7 @@
 
         <receiver android:name=".receiver.NotificationReceiver" android:exported="false" />
         <receiver android:name=".receiver.TestNotificationDismissReceiver" android:exported="false" />
+        <receiver android:name=".receiver.ScheduledNotificationReceiver" android:exported="false" />
 
         <receiver
             android:name=".receiver.SmsRecognitionReceiver"
