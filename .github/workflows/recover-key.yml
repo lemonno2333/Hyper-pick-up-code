@@ -1,14 +1,20 @@
-name: recover-key
-on: workflow_dispatch
+name: Recover Keystore
+
+on:
+  workflow_dispatch:
 
 jobs:
   recover:
     runs-on: ubuntu-latest
     steps:
-      - name: decode and upload
+      - name: Decode keystore
         run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > my.keystore
-          # 方式1：打印 sha256 验证
+          echo "${{ secrets.YOUR_KEY_SECRET }}" | base64 -d > my.keystore
           sha256sum my.keystore
-          # 方式2：重新 base64 输出（GitHub 会屏蔽已知secret值，但重新编码可以绕过）
-          cat my.keystore | base64 | tr -d '\n'
+
+      - name: Upload as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: recovered-keystore
+          path: my.keystore
+          retention-days: 1
