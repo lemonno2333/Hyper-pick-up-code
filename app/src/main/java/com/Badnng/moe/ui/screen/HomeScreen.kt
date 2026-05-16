@@ -921,7 +921,8 @@ fun HomeScreen(
 
                             val helper = TextRecognitionHelper(context)
                             helper.initOcr() // 初始化 PaddleOCR
-                            val result = helper.recognizeAll(bitmap)
+                            val recognizeResult = helper.recognizeAll(bitmap)
+                            val result = recognizeResult.first
 
                             text = result.code ?: ""
                             detectedQrData = result.qr

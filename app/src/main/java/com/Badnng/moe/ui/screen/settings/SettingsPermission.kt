@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationManagerCompat
 import com.Badnng.moe.R
 import com.Badnng.moe.helper.AccessibilityShortcutHelper
+import com.Badnng.moe.service.KeepAliveService
 import com.Badnng.moe.ui.component.PermissionItem
 import com.Badnng.moe.ui.component.PreferenceSection
 import com.Badnng.moe.ui.component.PreferenceSwitchItem
@@ -42,7 +43,9 @@ fun PermissionSettingsContent(performHaptic: () -> Unit) {
     var hasUsageStatsPermission by remember { mutableStateOf(checkUsageStatsPermission(context)) }
     var shizukuReady by remember { mutableStateOf(false) }
     var keepAliveEnabled by remember { mutableStateOf(prefs.getBoolean("keep_alive_enabled", false)) }
+    var persistentNotificationEnabled by remember { mutableStateOf(prefs.getBoolean("persistent_notification_enabled", true)) }
     var isIgnoringBattery by remember { mutableStateOf(false) }
+    var hasNotificationListenerPermission by remember { mutableStateOf(com.Badnng.moe.service.NotificationListenerRecognitionService.isNotificationListenerEnabled(context)) }
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -50,6 +53,7 @@ fun PermissionSettingsContent(performHaptic: () -> Unit) {
             hasUsageStatsPermission = checkUsageStatsPermission(context)
             shizukuReady = withContext(Dispatchers.IO) { isShizukuReady() }
             isIgnoringBattery = checkBatteryOptimization(context)
+            hasNotificationListenerPermission = com.Badnng.moe.service.NotificationListenerRecognitionService.isNotificationListenerEnabled(context)
             delay(1500)
         }
     }
@@ -108,6 +112,21 @@ fun PermissionSettingsContent(performHaptic: () -> Unit) {
                         }
                     } } else null
                 )
+
+                PermissionItem(
+                    title = "通知监听权限",
+                    description = "用于自动识别外卖、快递等App通知中的取件码",
+                    isGranted = hasNotificationListenerPermission,
+                    actionButton = if (!hasNotificationListenerPermission) { {
+                        Button(onClick = {
+                            performHaptic()
+                            val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+                            context.startActivity(intent)
+                        }, shape = RoundedCornerShape(15.dp), modifier = Modifier.fillMaxWidth().height(56.dp)) {
+                            Icon(Icons.Default.Build, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("去授权")
+                        }
+                    } } else null
+                )
             }
         }
 
@@ -154,6 +173,28 @@ fun PermissionSettingsContent(performHaptic: () -> Unit) {
                             performHaptic()
                             keepAliveEnabled = enabled
                             prefs.edit().putBoolean("keep_alive_enabled", enabled).apply()
+                        }
+                    )
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(15.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f))
+                ) {
+                    PreferenceSwitchItem(
+                        title = "后台通知",
+                        description = "应用在后台时显示通知，帮助系统识别活跃应用以减少被杀概率",
+                        checked = persistentNotificationEnabled,
+                        onCheckedChange = { enabled ->
+                            performHaptic()
+                            persistentNotificationEnabled = enabled
+                            prefs.edit().putBoolean("persistent_notification_enabled", enabled).apply()
+                            if (enabled) {
+                                KeepAliveService.showNotification(context)
+                            } else {
+                                KeepAliveService.hideNotification(context)
+                            }
                         }
                     )
                 }

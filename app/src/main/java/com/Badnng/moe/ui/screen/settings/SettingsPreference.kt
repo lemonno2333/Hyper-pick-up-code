@@ -88,6 +88,8 @@ fun PreferenceSettingsContent(performHaptic: () -> Unit, onNavigate: (SettingsPa
     var updateChannel by remember { mutableStateOf(prefs.getString("update_channel", "stable") ?: "stable") }
     var notificationType by remember { mutableStateOf(prefs.getString("notification_type", "native") ?: "native") }
     var smsRecognitionEnabled by remember { mutableStateOf(prefs.getBoolean("sms_recognition_enabled", false)) }
+    var notificationListenerEnabled by remember { mutableStateOf(prefs.getBoolean("notification_listener_recognition_enabled", false)) }
+    var notificationListenerPermissionReady by remember { mutableStateOf(com.Badnng.moe.service.NotificationListenerRecognitionService.isNotificationListenerEnabled(context)) }
 
     val smsPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
@@ -98,6 +100,13 @@ fun PreferenceSettingsContent(performHaptic: () -> Unit, onNavigate: (SettingsPa
             prefs.edit().putBoolean("sms_recognition_enabled", true).apply()
         } else {
             Toast.makeText(context, "需要短信权限才能开启短信识别", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        while (true) {
+            notificationListenerPermissionReady = com.Badnng.moe.service.NotificationListenerRecognitionService.isNotificationListenerEnabled(context)
+            kotlinx.coroutines.delay(2000)
         }
     }
 
@@ -308,6 +317,82 @@ fun PreferenceSettingsContent(performHaptic: () -> Unit, onNavigate: (SettingsPa
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
+            }
+        }
+
+        PreferenceSection(title = "通知识别") {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Surface(
+                    shape = RoundedCornerShape(15.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f))
+                ) {
+                    PreferenceSwitchItem(
+                        title = "通知识别取件码",
+                        description = "自动识别其他应用（如外卖、快递App）通知中的取件码和取餐码",
+                        checked = notificationListenerEnabled,
+                        onCheckedChange = { newValue ->
+                            performHaptic()
+                            if (newValue && !notificationListenerPermissionReady) {
+                                val intent = android.content.Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+                                context.startActivity(intent)
+                                Toast.makeText(context, "请在系统设置中启用澎湃记的通知监听", Toast.LENGTH_LONG).show()
+                            } else {
+                                notificationListenerEnabled = newValue
+                                prefs.edit().putBoolean("notification_listener_recognition_enabled", newValue).apply()
+                            }
+                        }
+                    )
+                }
+
+                AnimatedVisibility(
+                    visible = notificationListenerEnabled && notificationListenerPermissionReady,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Surface(
+                            onClick = {
+                                performHaptic()
+                                onNavigate(SettingsPage.NotificationApps)
+                            },
+                            shape = RoundedCornerShape(15.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = "管理应用",
+                                modifier = Modifier.padding(16.dp),
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+
+                        Spacer(Modifier.height(8.dp))
+
+                        Surface(
+                            onClick = {
+                                performHaptic()
+                                val testText = "【美团外卖】您的餐已准备好，取餐码 A1234，请到店取餐"
+                                com.Badnng.moe.service.NotificationListenerRecognitionService.testNotificationRecognition(context, testText)
+                                Toast.makeText(context, "已发送测试通知识别", Toast.LENGTH_SHORT).show()
+                            },
+                            shape = RoundedCornerShape(15.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = "测试通知识别",
+                                modifier = Modifier.padding(16.dp),
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                    }
+                }
             }
         }
 

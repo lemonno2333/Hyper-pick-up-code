@@ -55,7 +55,8 @@
       "Bash(pip install *)",
       "Bash(python *)",
       "PowerShell(Get-Command *)",
-      "Bash(Remove-Item *)"
+      "Bash(Remove-Item *)",
+      "WebFetch(domain:www.boltuix.com)"
     ]
   }
 }

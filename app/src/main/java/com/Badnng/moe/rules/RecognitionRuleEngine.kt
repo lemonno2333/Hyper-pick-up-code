@@ -20,6 +20,10 @@ object RecognitionRuleEngine {
     private var activeSourceId: String = "local"
     val currentSourceId: String get() = activeSourceId
 
+    @Volatile
+    var isInitialized: Boolean = false
+        private set
+
     private val compiledPatterns = mutableMapOf<String, Regex>()
     private var repository: RuleRepository? = null
 
@@ -34,6 +38,7 @@ object RecognitionRuleEngine {
             onSuccess = { rules ->
                 _rules = rules
                 precompilePatterns()
+                isInitialized = true
                 Log.d(TAG, "规则引擎初始化完成，激活源: $activeSourceId, express patterns: ${_rules.codeExtraction.express.patterns.size}, brands: drink=${_rules.brands.drink.size} food=${_rules.brands.food.size} express=${_rules.brands.express.size}")
                 AppLogger.update("RuleEngine initialized: source=$activeSourceId, express=${_rules.codeExtraction.express.patterns.size}, brands: drink=${_rules.brands.drink.size} food=${_rules.brands.food.size} express=${_rules.brands.express.size}")
             },
@@ -43,6 +48,7 @@ object RecognitionRuleEngine {
                 activeSourceId = "local"
                 _rules = repository!!.loadLocalRules()
                 precompilePatterns()
+                isInitialized = true
             }
         )
     }
@@ -100,6 +106,14 @@ object RecognitionRuleEngine {
                 compiledPatterns[it.id] = Regex(it.regex)
             } catch (e: Exception) {
                 Log.e(TAG, "编译口令正则失败: ${e.message}")
+            }
+        }
+
+        _rules.codeExtraction.food.patterns.hashCodePattern?.let {
+            try {
+                compiledPatterns[it.id] = Regex(it.regex)
+            } catch (e: Exception) {
+                Log.e(TAG, "编译井号取餐码正则失败: ${e.message}")
             }
         }
 

@@ -19,6 +19,7 @@ import com.Badnng.moe.data.db.OrderEntity
 import com.Badnng.moe.helper.DailyExpressGroupingHelper
 import com.Badnng.moe.helper.NotificationHelper
 import com.Badnng.moe.ocr.TextRecognitionHelper
+import com.Badnng.moe.rules.RecognitionRuleEngine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -52,15 +53,32 @@ class ProcessTextRecognitionService : Service() {
     }
     
     private suspend fun processText(selectedText: String) {
+        if (!RecognitionRuleEngine.isInitialized) {
+            RecognitionRuleEngine.initialize(applicationContext)
+        }
         val helper = TextRecognitionHelper(applicationContext)
-        // recognizeFromText 不需要 OCR 初始化
-        val result = helper.recognizeFromText(selectedText)
+        val results = helper.recognizeFromText(selectedText)
         helper.close()
-        
-        Log.d("ProcessTextRecognition", "Result: code=${result.code}, type=${result.type}, brand=${result.brand}")
-        AppLogger.recognition("code=${result.code}, type=${result.type}, brand=${result.brand}, pickup=${result.pickupLocation}")
-        
-        if (result.code != null) {
+
+        Log.d("ProcessTextRecognition", "识别结果：${results.size}个, codes=${results.map { it.code }}")
+        results.forEach { r ->
+            AppLogger.recognition("code=${r.code}, type=${r.type}, brand=${r.brand}, pickup=${r.pickupLocation}")
+        }
+
+        if (results.isEmpty()) {
+            withContext(Dispatchers.Main) {
+                Toast.makeText(applicationContext, "未识别到取件码", Toast.LENGTH_SHORT).show()
+            }
+            return
+        }
+
+        val db = OrderDatabase.getDatabase(applicationContext)
+        val orderDao = db.orderDao()
+        val groupDao = db.orderGroupDao()
+        val insertedOrders = mutableListOf<OrderEntity>()
+
+        for (result in results) {
+            if (result.code == null) continue
             val order = OrderEntity(
                 takeoutCode = result.code,
                 qrCodeData = result.qr,
@@ -72,44 +90,45 @@ class ProcessTextRecognitionService : Service() {
                 pickupLocation = result.pickupLocation,
                 sourceApp = "文字选择"
             )
-
-            val db = OrderDatabase.getDatabase(applicationContext)
-            val orderDao = db.orderDao()
-            val groupDao = db.orderGroupDao()
             orderDao.insert(order)
+            insertedOrders.add(order)
+        }
 
-            DailyExpressGroupingHelper.regroupPendingExpressByDay(orderDao, groupDao, this)
+        if (insertedOrders.isEmpty()) {
+            withContext(Dispatchers.Main) {
+                Toast.makeText(applicationContext, "未识别到取件码", Toast.LENGTH_SHORT).show()
+            }
+            return
+        }
 
-            val notificationHelper = NotificationHelper(applicationContext)
-            val refreshedOrder = orderDao.getOrderById(order.id)
-            val groupId = refreshedOrder?.groupId
-            if (groupId != null) {
-                val group = groupDao.getGroupById(groupId)
+        DailyExpressGroupingHelper.regroupPendingExpressByDay(orderDao, groupDao, this)
+
+        val notificationHelper = NotificationHelper(applicationContext)
+        val refreshedOrders = insertedOrders.mapNotNull { orderDao.getOrderById(it.id) }
+        val groupedIds = refreshedOrders.mapNotNull { it.groupId }.toSet()
+
+        if (groupedIds.isNotEmpty()) {
+            groupedIds.forEach { groupId ->
+                val group = groupDao.getGroupById(groupId) ?: return@forEach
                 val groupOrders = orderDao.getAllOrdersList()
                     .filter { it.groupId == groupId && !it.isCompleted }
                     .sortedByDescending { it.createdAt }
-                if (group != null && groupOrders.size >= 2) {
+                if (groupOrders.size >= 2) {
                     groupOrders.forEach { notificationHelper.cancelNotification(it.id) }
                     groupDao.updateOrderCount(groupId, groupOrders.size)
                     notificationHelper.showGroupNotification(group.copy(orderCount = groupOrders.size), groupOrders)
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(applicationContext, "新识别取件码已自动整理", Toast.LENGTH_SHORT).show()
-                    }
-                } else {
-                    notificationHelper.showPromotedLiveUpdate(order, result.brand)
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(applicationContext, "识别成功：${result.code}", Toast.LENGTH_SHORT).show()
-                    }
-                }
-            } else {
-                notificationHelper.showPromotedLiveUpdate(order, result.brand)
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(applicationContext, "识别成功：${result.code}", Toast.LENGTH_SHORT).show()
                 }
             }
-        } else {
             withContext(Dispatchers.Main) {
-                Toast.makeText(applicationContext, "未识别到取件码", Toast.LENGTH_SHORT).show()
+                Toast.makeText(applicationContext, "新识别取件码已自动整理", Toast.LENGTH_SHORT).show()
+            }
+        } else {
+            refreshedOrders.forEach { order ->
+                notificationHelper.showPromotedLiveUpdate(order, order.brandName)
+            }
+            val firstCode = refreshedOrders.firstOrNull()?.takeoutCode
+            withContext(Dispatchers.Main) {
+                Toast.makeText(applicationContext, if (firstCode != null) "识别成功：$firstCode" else "识别成功", Toast.LENGTH_SHORT).show()
             }
         }
     }

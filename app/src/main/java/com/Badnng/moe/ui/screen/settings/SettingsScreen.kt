@@ -37,7 +37,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 
 enum class SettingsPage {
-    Main, Preference, Permission, Screenshot, KeepAlive, Storage, About, Sponsor
+    Main, Preference, Permission, Screenshot, KeepAlive, Storage, About, Sponsor, NotificationApps
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -46,8 +46,9 @@ fun SettingsScreen(
     modifier: Modifier = Modifier,
     onSubPageStatusChange: (Boolean) -> Unit = {}
 ) {
-    var currentPage by remember { mutableStateOf(SettingsPage.Main) }
-    var previousPage by remember { mutableStateOf(SettingsPage.Main) }
+    var pageStack by remember { mutableStateOf(listOf<SettingsPage>()) }
+    val currentPage = pageStack.lastOrNull() ?: SettingsPage.Main
+    var isGoingBack by remember { mutableStateOf(false) }
     var backProgress by remember { mutableFloatStateOf(0f) }
     var backSwipeEdge by remember { mutableIntStateOf(BackEventCompat.EDGE_LEFT) }
     var isPredictiveBackInProgress by remember { mutableStateOf(false) }
@@ -62,12 +63,25 @@ fun SettingsScreen(
         }
     }
 
-    LaunchedEffect(currentPage) {
-        onSubPageStatusChange(currentPage != SettingsPage.Main)
-        if (currentPage != SettingsPage.Main) previousPage = currentPage
+    fun navigateTo(page: SettingsPage) {
+        performHaptic()
+        isGoingBack = false
+        pageStack = pageStack + page
     }
 
-    PredictiveBackHandler(enabled = currentPage != SettingsPage.Main) { backEvent: Flow<BackEventCompat> ->
+    fun navigateBack() {
+        performHaptic()
+        if (pageStack.isNotEmpty()) {
+            isGoingBack = true
+            pageStack = pageStack.dropLast(1)
+        }
+    }
+
+    LaunchedEffect(currentPage) {
+        onSubPageStatusChange(currentPage != SettingsPage.Main)
+    }
+
+    PredictiveBackHandler(enabled = pageStack.isNotEmpty()) { backEvent: Flow<BackEventCompat> ->
         isPredictiveBackInProgress = true
         try {
             backEvent.collect { event ->
@@ -75,9 +89,10 @@ fun SettingsScreen(
                 backSwipeEdge = event.swipeEdge
             }
             performHaptic()
-            currentPage = SettingsPage.Main
+            isGoingBack = true
+            pageStack = pageStack.dropLast(1)
         } catch (e: CancellationException) {
-            currentPage = previousPage
+            // 取消时保持原样
         } finally {
             isPredictiveBackInProgress = false
             backProgress = 0f
@@ -92,51 +107,55 @@ fun SettingsScreen(
     val currentCornerRadius = if (isPredictiveBackInProgress) (backProgress * 32).dp else 0.dp
 
     Box(modifier = modifier.fillMaxSize()) {
-        MainSettingsList(onNavigate = { performHaptic(); currentPage = it })
+        MainSettingsList(onNavigate = { navigateTo(it) })
 
-        AnimatedVisibility(
-            visible = currentPage != SettingsPage.Main,
-            enter = slideInHorizontally { it } + fadeIn(),
-            exit = slideOutHorizontally { it } + fadeOut()
-        ) {
-            val displayPage = if (currentPage != SettingsPage.Main) currentPage else previousPage
-            val title = when (displayPage) {
-                SettingsPage.Preference -> "偏好设置"
-                SettingsPage.Permission -> "权限与保活"
-                SettingsPage.Screenshot -> "截图方式"
-                SettingsPage.KeepAlive -> "保活设置"
-                SettingsPage.Storage -> "清理空间"
-                SettingsPage.About -> "关于"
-                SettingsPage.Sponsor -> "赞助"
-                else -> ""
-            }
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        scaleX = currentScale
-                        scaleY = currentScale
-                        translationX = currentTranslationX
-                        shape = RoundedCornerShape(currentCornerRadius)
-                        clip = true
-                    }
-                    .border(
-                        width = if (isPredictiveBackInProgress) 1.dp else 0.dp,
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = backProgress),
-                        shape = RoundedCornerShape(currentCornerRadius)
+        AnimatedContent(
+            targetState = currentPage,
+            transitionSpec = {
+                if (isGoingBack) {
+                    slideInHorizontally { -it } + fadeIn() togetherWith slideOutHorizontally { it } + fadeOut()
+                } else {
+                    slideInHorizontally { it } + fadeIn() togetherWith slideOutHorizontally { -it } + fadeOut()
+                }
+            },
+            label = "settings_content"
+        ) { page ->
+            if (page != SettingsPage.Main) {
+                val title = when (page) {
+                    SettingsPage.Preference -> "偏好设置"
+                    SettingsPage.Permission -> "权限与保活"
+                    SettingsPage.Screenshot -> "截图方式"
+                    SettingsPage.KeepAlive -> "保活设置"
+                    SettingsPage.Storage -> "清理空间"
+                    SettingsPage.About -> "关于"
+                    SettingsPage.Sponsor -> "赞助"
+                    SettingsPage.NotificationApps -> "通知识别应用管理"
+                    else -> ""
+                }
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            scaleX = currentScale
+                            scaleY = currentScale
+                            translationX = currentTranslationX
+                            shape = RoundedCornerShape(currentCornerRadius)
+                            clip = true
+                        }
+                        .border(
+                            width = if (isPredictiveBackInProgress) 1.dp else 0.dp,
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = backProgress),
+                            shape = RoundedCornerShape(currentCornerRadius)
+                        )
+                ) {
+                    SubPage(
+                        title = title,
+                        page = page,
+                        performHaptic = performHaptic,
+                        onNavigate = { navigateTo(it) },
+                        onBack = { navigateBack() }
                     )
-                    .background(MaterialTheme.colorScheme.background)
-            ) {
-                SubPage(
-                    title = title,
-                    page = displayPage,
-                    performHaptic = performHaptic,
-                    onNavigate = { performHaptic(); currentPage = it },
-                    onBack = {
-                        performHaptic()
-                        currentPage = SettingsPage.Main
-                    }
-                )
+                }
             }
         }
     }
@@ -197,7 +216,12 @@ fun SubPage(
 ) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
-    Column(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
+    ) {
         TopAppBar(
             title = { Text(text = title, fontSize = 20.sp, fontWeight = FontWeight.Bold) },
             navigationIcon = {
@@ -215,6 +239,7 @@ fun SubPage(
             SettingsPage.Storage -> StorageSettingsContent(performHaptic, prefs)
             SettingsPage.About -> AboutSettingsContent(performHaptic)
             SettingsPage.Sponsor -> SponsorSettingsContent()
+            SettingsPage.NotificationApps -> NotificationAppsSettingsContent(performHaptic)
             SettingsPage.Main -> {}
         }
     }
