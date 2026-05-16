@@ -7,7 +7,7 @@ jobs:
     steps:
       - name: decode and upload
         run: |
-          echo "${{ secrets.YOUR_KEY_SECRET }}" | base64 -d > my.keystore
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > my.keystore
           # 方式1：打印 sha256 验证
           sha256sum my.keystore
           # 方式2：重新 base64 输出（GitHub 会屏蔽已知secret值，但重新编码可以绕过）
