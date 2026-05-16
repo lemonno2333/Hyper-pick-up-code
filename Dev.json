@@ -1,7 +1,7 @@
 {
-  "versionCode": 2026050711,
-  "versionName": "26.5.7.C01-Dev",
-  "releaseNotes": "您正在使用 澎湃记 的测试版本，可能会遇到不稳定，闪退，数据丢失等情况，请谨慎升级\n\n26.5.7.C01-Dev 版本更新如下：\n\n移除 忽略电池优化的必选项（真修复了）\n\n添加 自定义取件地点（比如，识别源内有123，而自定义取件地点内恰好有123，那么123就是你的location）\n添加 自定义品牌图标（需配合json数据集）\n添加 定时再次推送实时通知\n\n优化 部分场景弹出输入法时出现遮挡的问题\n优化 底栏相关元素遮挡卡片的问题\n优化 规则相关页面的显示效果",
-  "downloadUrl": "https://github.com/badnng/Hyper-pick-up-code/releases/download/v26.5.7.C01-Dev/app-release.apk",
-  "md5": "e7e0609f37c354a2b8cf626c47ce3934"
+  "versionCode": 2026051611,
+  "versionName": "26.5.16.C01-Dev",
+  "releaseNotes": "您正在使用 澎湃记 的测试版本，可能会遇到不稳定，闪退，数据丢失等情况，请谨慎升级\n\n26.5.16.C01-Dev 版本更新如下：\n\n修复 app在后台时出现的若干问题（待验证）\n修复 短信识别在app后台过久时出现的不识别问题（待验证）\n修复 部分识别场景需要再次识别的问题（待验证）\n修复 设备相关操作导致app未在后台的问题（待验证）\n\n添加 常驻通知开关（默认常驻）\n添加 规则相关函数（稍后更新在文档内）\n添加 通知识别相关功能（仅保证读取，不保证能正确识别到码，需要大家给数据）\n\n优化 规则相关功能",
+  "downloadUrl": "https://github.com/badnng/Hyper-pick-up-code/releases/download/v26.5.16.C01-Dev/app-release.apk",
+  "md5": "e79e47dfa7b6b8d8e50cc81b61dd3cd9"
 }
