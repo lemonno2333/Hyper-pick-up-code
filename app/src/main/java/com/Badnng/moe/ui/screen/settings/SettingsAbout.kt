@@ -480,6 +480,8 @@ fun AboutSettingsContent(performHaptic: () -> Unit, topPadding: androidx.compose
                 showProgressDialog = true
                 isPaused = false
                 pausedFlag.set(false)
+                context.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE)
+                    .edit().putBoolean("show_update_download", true).apply()
                 coroutineScope.launch {
                     val file = UpdateHelper.downloadUpdate(
                         context = context,

@@ -267,7 +267,18 @@ class NotificationHelper(private val context: Context) {
         notificationManager.cancel(groupId.hashCode())
     }
 
+    private var lastNotifyTime = 0L
+    private var lastNotifyPercent = -1
+
     fun showUpdateDownloadNotification(versionName: String, progress: Float, isPaused: Boolean = false) {
+        val now = System.currentTimeMillis()
+        val clampedProgress = progress.coerceIn(0f, 1f)
+        val percent = (clampedProgress * 100).toInt()
+        // 限流：每 500ms 或进度变化 1% 才更新通知
+        if (!isPaused && now - lastNotifyTime < 500 && percent == lastNotifyPercent) return
+        lastNotifyTime = now
+        lastNotifyPercent = percent
+
         val contentIntent = PendingIntent.getActivity(
             context,
             updateNotificationId,
@@ -277,10 +288,6 @@ class NotificationHelper(private val context: Context) {
             },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-
-        // 设置标记，让 SettingsAbout 检测到后自动弹出更新进度弹窗
-        context.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE)
-            .edit().putBoolean("show_update_download", true).apply()
 
         val notification = if (isIslandMode()) {
             SuperIslandHelper.buildUpdateDownloadNotification(
@@ -293,8 +300,6 @@ class NotificationHelper(private val context: Context) {
                 pauseResumeIntent = null
             )
         } else {
-            val clampedProgress = progress.coerceIn(0f, 1f)
-            val percent = (clampedProgress * 100).toInt()
             val builder = Notification.Builder(context, updateChannelId)
                 .setContentTitle(if (isPaused) "更新下载已暂停" else "正在后台下载更新")
                 .setContentText("v$versionName  $percent%")
@@ -308,11 +313,6 @@ class NotificationHelper(private val context: Context) {
                 val extras = Bundle()
                 extras.putBoolean("android.requestPromotedOngoing", true)
                 builder.addExtras(extras)
-                try {
-                    if (Build.VERSION.SDK_INT >= 36) {
-                        builder.setShortCriticalText(" $percent%")
-                    }
-                } catch (_: Exception) {}
             }
 
             builder.build()
