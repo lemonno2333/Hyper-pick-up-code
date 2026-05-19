@@ -20,12 +20,16 @@ object BrandIconResolver {
         "古茗" to "ic_goodme", "蜜雪冰城" to "ic_mixue"
     )
 
+    private val bitmapCache = android.util.LruCache<String, Bitmap>(50)
+
     private const val MIN_ICON_SIZE = 224
 
     data class IconMapping(val iconPath: String, val keywords: String)
 
     fun resolveCustomIconBitmap(context: Context, brandName: String?): Bitmap? {
         if (brandName.isNullOrBlank()) return null
+        val cacheKey = "custom_${brandName}"
+        bitmapCache.get(cacheKey)?.let { return it }
         val mappings = getCustomMappings(context)
         for (mapping in mappings) {
             if (mapping.iconPath.isEmpty()) continue
@@ -33,7 +37,9 @@ object BrandIconResolver {
             if (keywordList.any { brandName.contains(it, ignoreCase = true) }) {
                 val file = File(mapping.iconPath)
                 if (file.exists()) {
-                    return BitmapFactory.decodeFile(file.absolutePath)
+                    val bmp = BitmapFactory.decodeFile(file.absolutePath)
+                    if (bmp != null) bitmapCache.put(cacheKey, bmp)
+                    return bmp
                 }
             }
         }

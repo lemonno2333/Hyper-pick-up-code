@@ -26,7 +26,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 @Composable
-fun ScreenshotSettingsContent(performHaptic: () -> Unit) {
+fun ScreenshotSettingsContent(performHaptic: () -> Unit, topPadding: androidx.compose.ui.unit.Dp = 0.dp, scrollState: androidx.compose.foundation.ScrollState = androidx.compose.foundation.rememberScrollState()) {
     val context = LocalContext.current; val prefs = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
     var captureMode by remember { mutableStateOf(prefs.getString("capture_mode", "media_projection") ?: "media_projection") }
     var volumeKeyShortcutEnabled by remember { mutableStateOf(prefs.getBoolean("volume_key_shortcut_enabled", false)) }
@@ -90,11 +90,11 @@ fun ScreenshotSettingsContent(performHaptic: () -> Unit) {
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 16.dp)
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scrollState)
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom)),
         verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(topPadding))
         Text("截图技术方案", fontSize = 14.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
         CaptureModeItem(
             title = "共享屏幕",
@@ -144,7 +144,7 @@ fun ScreenshotSettingsContent(performHaptic: () -> Unit) {
                     }
                 }
             },
-            shape = RoundedCornerShape(15.dp),
+            shape = RoundedCornerShape(16.dp),
             color = if (captureMode == "media_projection" && shizukuReady) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f),
             modifier = Modifier.fillMaxWidth(),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (captureMode == "media_projection" && shizukuReady) 0.65f else 0.35f)),
@@ -211,7 +211,7 @@ fun ScreenshotSettingsContent(performHaptic: () -> Unit) {
                     }
                 }
             },
-            shape = RoundedCornerShape(15.dp),
+            shape = RoundedCornerShape(16.dp),
             color = if (currentShortcutBackend != null) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f),
             modifier = Modifier.fillMaxWidth(),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (currentShortcutBackend != null) 0.65f else 0.35f)),

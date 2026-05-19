@@ -269,7 +269,7 @@ fun RulesSettingsContent(performHaptic: () -> Unit) {
                         OutlinedButton(
                             onClick = { performHaptic(); showAddSourceDialog = true },
                             modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(15.dp),
+                            shape = RoundedCornerShape(16.dp),
                             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
                         ) {
                             Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -289,7 +289,7 @@ fun RulesSettingsContent(performHaptic: () -> Unit) {
                                 }
                             },
                             modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(15.dp),
+                            shape = RoundedCornerShape(16.dp),
                             border = BorderStroke(
                                 1.dp,
                                 if (isAutoUpdating) MaterialTheme.colorScheme.error.copy(alpha = 0.5f)
@@ -390,9 +390,9 @@ private fun SectionCard(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(15.dp))
+            .clip(RoundedCornerShape(16.dp))
             .animateContentSize(),
-        shape = RoundedCornerShape(15.dp),
+        shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f))
     ) {
@@ -401,7 +401,7 @@ private fun SectionCard(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(15.dp))
+                    .clip(RoundedCornerShape(16.dp))
                     .clickable { onToggle() }
                     .padding(horizontal = 16.dp, vertical = 12.dp)
             ) {
@@ -617,7 +617,7 @@ private fun ActionButton(
     OutlinedButton(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(15.dp),
+        shape = RoundedCornerShape(16.dp),
         border = BorderStroke(
             1.dp,
             if (isDestructive) MaterialTheme.colorScheme.error.copy(alpha = 0.5f)

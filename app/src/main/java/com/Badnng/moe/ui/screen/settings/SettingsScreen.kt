@@ -8,9 +8,12 @@ import android.os.Build
 import androidx.activity.BackEventCompat
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.*
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -22,7 +25,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
@@ -32,9 +39,19 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.Badnng.moe.R
 import com.Badnng.moe.service.CaptureTileService
+import com.Badnng.moe.ui.component.GroupPosition
+import com.Badnng.moe.ui.component.SettingsGroup
+import com.Badnng.moe.ui.component.SettingsGroupItem
 import com.Badnng.moe.ui.component.SettingsListItem
+import top.yukonga.miuix.kmp.blur.BlurColors
+import top.yukonga.miuix.kmp.blur.isRenderEffectSupported
+import top.yukonga.miuix.kmp.blur.layerBackdrop
+import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
+import top.yukonga.miuix.kmp.blur.textureBlur
+import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.collect
 
 enum class SettingsPage {
     Main, Preference, Permission, Screenshot, KeepAlive, Storage, About, Sponsor, NotificationApps
@@ -172,24 +189,38 @@ fun MainSettingsList(onNavigate: (SettingsPage) -> Unit) {
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top)).padding(horizontal = 16.dp).verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))) {
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(text = "设置", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold)
-        Spacer(modifier = Modifier.height(24.dp))
-        SettingsListItem(title = "偏好设置", description = "管理自行习惯的设置", onClick = { onNavigate(SettingsPage.Preference) })
-        SettingsListItem(title = "权限与保活", description = "管理权限和防止系统清理后台", onClick = { onNavigate(SettingsPage.Permission) })
-        SettingsListItem(title = "截图方式", description = "管理App截图的方式", onClick = { onNavigate(SettingsPage.Screenshot) })
+    LazyColumn(
+        modifier = Modifier.fillMaxSize()
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
+            .padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(24.dp),
+        contentPadding = PaddingValues(top = 16.dp, bottom = 100.dp + WindowInsets.safeDrawing.asPaddingValues().calculateBottomPadding())
+    ) {
+        item {
+            Text(text = "设置", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold)
+        }
 
-        SettingsListItem(
-            title = "添加到控制中心",
-            description = "将「截图识别」磁贴添加到控制中心快捷栏",
-            onClick = { performHaptic(); requestAddTile(context) }
-        )
+        item {
+            SettingsGroup {
+                SettingsGroupItem(title = "偏好设置", description = "管理自行习惯的设置", position = GroupPosition.First, onClick = { onNavigate(SettingsPage.Preference) })
+                SettingsGroupItem(title = "权限与保活", description = "管理权限和防止系统清理后台", position = GroupPosition.Middle, onClick = { onNavigate(SettingsPage.Permission) })
+                SettingsGroupItem(title = "截图方式", description = "管理App截图的方式", position = GroupPosition.Middle, onClick = { onNavigate(SettingsPage.Screenshot) })
+                SettingsGroupItem(title = "添加到控制中心", description = "将「截图识别」磁贴添加到控制中心快捷栏", position = GroupPosition.Last, onClick = { performHaptic(); requestAddTile(context) })
+            }
+        }
 
-        SettingsListItem(title = "清理空间", description = "管理App占用的缓存与截图空间", onClick = { onNavigate(SettingsPage.Storage) })
-        SettingsListItem(title = "关于", description = "应用信息与开源许可", onClick = { onNavigate(SettingsPage.About) })
-        SettingsListItem(title = "赞助", description = "支持项目持续更新", onClick = { onNavigate(SettingsPage.Sponsor) })
-        Spacer(modifier = Modifier.height(100.dp))
+        item {
+            SettingsGroup {
+                SettingsGroupItem(title = "清理空间", description = "管理App占用的缓存与截图空间", position = GroupPosition.Single, onClick = { onNavigate(SettingsPage.Storage) })
+            }
+        }
+
+        item {
+            SettingsGroup {
+                SettingsGroupItem(title = "关于", description = "应用信息与开源许可", position = GroupPosition.First, onClick = { onNavigate(SettingsPage.About) })
+                SettingsGroupItem(title = "赞助", description = "支持项目持续更新", position = GroupPosition.Last, onClick = { onNavigate(SettingsPage.Sponsor) })
+            }
+        }
     }
 }
 
@@ -216,31 +247,116 @@ fun SubPage(
 ) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
-    Column(
+    val surfaceColor = MaterialTheme.colorScheme.surface
+    val scrollState = rememberScrollState()
+    var isScrolled by remember { mutableStateOf(false) }
+
+    LaunchedEffect(scrollState) {
+        snapshotFlow { scrollState.value }
+            .collect { value ->
+                isScrolled = value > 30
+            }
+    }
+
+    val animatedBrightness by animateFloatAsState(
+        targetValue = if (isScrolled) -0.1f else 0f,
+        animationSpec = tween(300),
+        label = "brightness"
+    )
+
+    val backdrop = rememberLayerBackdrop {
+        drawRect(surfaceColor)
+        drawContent()
+    }
+    val canBlur = isRenderEffectSupported()
+
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
     ) {
-        TopAppBar(
-            title = { Text(text = title, fontSize = 20.sp, fontWeight = FontWeight.Bold) },
-            navigationIcon = {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
-                }
-            },
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
-        )
-        when (page) {
-            SettingsPage.Screenshot -> ScreenshotSettingsContent(performHaptic)
-            SettingsPage.Permission -> PermissionSettingsContent(performHaptic)
-            SettingsPage.Preference -> PreferenceSettingsContent(performHaptic, onNavigate)
-            SettingsPage.KeepAlive -> KeepAliveSettingsContent(performHaptic)
-            SettingsPage.Storage -> StorageSettingsContent(performHaptic, prefs)
-            SettingsPage.About -> AboutSettingsContent(performHaptic)
-            SettingsPage.Sponsor -> SponsorSettingsContent()
-            SettingsPage.NotificationApps -> NotificationAppsSettingsContent(performHaptic)
-            SettingsPage.Main -> {}
+        // 内容层：延伸到顶栏下方
+        val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+        val topContentPadding = statusBarHeight + 64.dp
+        Box(modifier = Modifier.fillMaxSize().layerBackdrop(backdrop)) {
+            when (page) {
+                SettingsPage.Screenshot -> ScreenshotSettingsContent(performHaptic, topContentPadding, scrollState)
+                SettingsPage.Permission -> PermissionSettingsContent(performHaptic, topContentPadding, scrollState)
+                SettingsPage.Preference -> PreferenceSettingsContent(performHaptic, onNavigate, topContentPadding, scrollState)
+                SettingsPage.KeepAlive -> KeepAliveSettingsContent(performHaptic, topContentPadding, scrollState)
+                SettingsPage.Storage -> StorageSettingsContent(performHaptic, prefs, topContentPadding, scrollState)
+                SettingsPage.About -> AboutSettingsContent(performHaptic, topContentPadding, scrollState)
+                SettingsPage.Sponsor -> SponsorSettingsContent(topContentPadding, scrollState)
+                SettingsPage.NotificationApps -> NotificationAppsSettingsContent(performHaptic, topContentPadding)
+                SettingsPage.Main -> {}
+            }
+        }
+
+        // 毛玻璃 TopAppBar 覆盖层
+        if (canBlur) {
+            Box(modifier = Modifier.fillMaxWidth()) {
+                // 模糊背景层（底层）
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .textureBlur(
+                            backdrop = backdrop,
+                            shape = RectangleShape,
+                            blurRadius = 80f,
+                            colors = BlurColors(brightness = animatedBrightness)
+                        )
+                        .frostedGlassMask()
+                )
+                // TopAppBar 内容层（顶层）
+                TopAppBar(
+                    title = {
+                        AnimatedVisibility(
+                            visible = !isScrolled,
+                            enter = fadeIn() + slideInVertically(),
+                            exit = fadeOut() + slideOutVertically()
+                        ) {
+                            Text(text = title, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                        }
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
+                )
+            }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
+            ) {
+                TopAppBar(
+                    title = { Text(text = title, fontSize = 20.sp, fontWeight = FontWeight.Bold) },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
+                )
+            }
         }
     }
+}
+
+private fun Modifier.frostedGlassMask(): Modifier = this.drawWithContent {
+    drawContent()
+    drawRect(
+        brush = Brush.verticalGradient(
+            colorStops = arrayOf(
+                0f to Color.Black,
+                0.75f to Color.Black,
+                1f to Color.Transparent
+            )
+        ),
+        blendMode = BlendMode.DstIn
+    )
 }

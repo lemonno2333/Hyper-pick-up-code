@@ -31,7 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
-fun SponsorSettingsContent() {
+fun SponsorSettingsContent(topPadding: androidx.compose.ui.unit.Dp = 0.dp, scrollState: androidx.compose.foundation.ScrollState = androidx.compose.foundation.rememberScrollState()) {
     val context = LocalContext.current
     val alipayImage = remember {
         runCatching {
@@ -52,14 +52,14 @@ fun SponsorSettingsContent() {
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 16.dp)
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scrollState)
             .windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.safeDrawing.only(androidx.compose.foundation.layout.WindowInsetsSides.Bottom)),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(topPadding))
 
         Surface(
-            shape = RoundedCornerShape(15.dp),
+            shape = RoundedCornerShape(16.dp),
             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f)),
             modifier = Modifier.fillMaxWidth()
@@ -77,7 +77,7 @@ fun SponsorSettingsContent() {
 
         if (alipayImage != null) {
             Surface(
-                shape = RoundedCornerShape(15.dp),
+                shape = RoundedCornerShape(16.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f)),
                 modifier = Modifier.fillMaxWidth()
@@ -95,7 +95,7 @@ fun SponsorSettingsContent() {
 
         if (wechatImage != null) {
             Surface(
-                shape = RoundedCornerShape(15.dp),
+                shape = RoundedCornerShape(16.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f)),
                 modifier = Modifier.fillMaxWidth()

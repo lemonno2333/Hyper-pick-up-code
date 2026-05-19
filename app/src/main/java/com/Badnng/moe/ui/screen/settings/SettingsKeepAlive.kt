@@ -26,7 +26,7 @@ import com.Badnng.moe.ui.component.PreferenceSwitchItem
 import kotlinx.coroutines.delay
 
 @Composable
-fun KeepAliveSettingsContent(performHaptic: () -> Unit) {
+fun KeepAliveSettingsContent(performHaptic: () -> Unit, topPadding: androidx.compose.ui.unit.Dp = 0.dp, scrollState: androidx.compose.foundation.ScrollState = androidx.compose.foundation.rememberScrollState()) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
     var keepAliveEnabled by remember { mutableStateOf(prefs.getBoolean("keep_alive_enabled", false)) }
@@ -49,11 +49,11 @@ fun KeepAliveSettingsContent(performHaptic: () -> Unit) {
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 16.dp)
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scrollState)
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom)),
         verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(topPadding))
         // 说明卡片
         Surface(
             shape = RoundedCornerShape(16.dp),
@@ -82,7 +82,7 @@ fun KeepAliveSettingsContent(performHaptic: () -> Unit) {
 
         PreferenceSection(title = "基础设置") {
             Surface(
-                shape = RoundedCornerShape(15.dp),
+                shape = RoundedCornerShape(16.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f))
             ) {
@@ -120,7 +120,7 @@ fun KeepAliveSettingsContent(performHaptic: () -> Unit) {
                                     context.startActivity(intent)
                                 }
                             },
-                            shape = RoundedCornerShape(15.dp),
+                            shape = RoundedCornerShape(16.dp),
                             modifier = Modifier.fillMaxWidth().height(56.dp)
                         ) {
                             Icon(Icons.Default.BatterySaver, null, Modifier.size(20.dp))
@@ -139,7 +139,7 @@ fun KeepAliveSettingsContent(performHaptic: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Surface(
-                shape = RoundedCornerShape(15.dp),
+                shape = RoundedCornerShape(16.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
                 modifier = Modifier.fillMaxWidth(),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f))
@@ -220,7 +220,7 @@ fun VendorKeepAliveItem(vendor: String, steps: List<String>, performHaptic: () -
 
     Surface(
         onClick = { performHaptic(); expanded = !expanded },
-        shape = RoundedCornerShape(15.dp),
+        shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
         modifier = Modifier.fillMaxWidth(),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f))

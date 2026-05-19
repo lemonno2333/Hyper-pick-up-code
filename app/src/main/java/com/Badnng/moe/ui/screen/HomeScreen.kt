@@ -593,7 +593,7 @@ fun HomeScreen(
                     }
                 }
                 Card(
-                    shape = RoundedCornerShape(15.dp),
+                    shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
                     ),
@@ -618,9 +618,9 @@ fun HomeScreen(
                             val isFirst = index == 0
                             val isLast = index == menuItems.lastIndex
                             val shape = when {
-                                isFirst && isLast -> RoundedCornerShape(15.dp)
-                                isFirst -> RoundedCornerShape(topStart = 15.dp, topEnd = 15.dp)
-                                isLast -> RoundedCornerShape(bottomStart = 15.dp, bottomEnd = 15.dp)
+                                isFirst && isLast -> RoundedCornerShape(16.dp)
+                                isFirst -> RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+                                isLast -> RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp)
                                 else -> RoundedCornerShape(0.dp)
                             }
                             Surface(
@@ -676,23 +676,20 @@ fun HomeScreen(
                     horizontalAlignment = fabColumnAlignment,
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Surface(
+                    ExtendedFloatingActionButton(
                         onClick = { performHaptic(); showBottomSheet = true },
-                        shape = RoundedCornerShape(15.dp),
-                        color = MaterialTheme.colorScheme.primary,
-                        tonalElevation = 0.dp,
-                        shadowElevation = 0.dp
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        shape = RoundedCornerShape(16.dp),
+                        elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 0.dp, pressedElevation = 0.dp, hoveredElevation = 0.dp, focusedElevation = 0.dp)
                     ) {
-                        Box(
-                            modifier = Modifier.size(56.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Icons.Default.Add, "添加", Modifier.size(32.dp), tint = Color.White)
-                        }
+                        Icon(Icons.Default.Add, "添加", Modifier.size(24.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("添加")
                     }
 
                     Surface(
-                        shape = RoundedCornerShape(15.dp),
+                        shape = RoundedCornerShape(16.dp),
                         color = MaterialTheme.colorScheme.secondaryContainer,
                         tonalElevation = 8.dp,
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
@@ -863,7 +860,7 @@ fun HomeScreen(
                 sheetState = sheetState,
                 containerColor = MaterialTheme.colorScheme.surface,
                 dragHandle = { BottomSheetDefaults.DragHandle() },
-                shape = RoundedCornerShape(topStart = 15.dp, topEnd = 15.dp)
+                shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
             ) {
                 // 内联定义bottomSheetContent内容，避免函数可见性问题
                 var text by remember { mutableStateOf("") }
@@ -983,7 +980,7 @@ fun HomeScreen(
                         }
 
                         Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            OutlinedButton(onClick = { performHaptic(); showBottomSheet = false }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(15.dp)) {
+                            OutlinedButton(onClick = { performHaptic(); showBottomSheet = false }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(16.dp)) {
                                 Text("取消")
                             }
                             Button(onClick = {
@@ -998,7 +995,7 @@ fun HomeScreen(
                                     pickupLocation = pickupLocation
                                 ))
                                 showBottomSheet = false
-                            }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(15.dp)) {
+                            }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(16.dp)) {
                                 Text("添加")
                             }
                         }
