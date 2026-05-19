@@ -14,8 +14,8 @@ android {
         applicationId = "com.Badnng.moe"
         minSdk = 35
         targetSdk = 36
-        versionCode = 20260516_11
-        versionName = "26.5.16.C01-Dev"
+        versionCode = 20260520_11
+        versionName = "26.5.20.C01-Dev"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {
@@ -121,10 +121,10 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    implementation(libs.material)
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.compose.foundation)
     implementation(libs.androidx.compose.animation)
-    implementation(libs.androidx.material3.windowsizeclass)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.window)
     implementation(libs.androidx.room.runtime)

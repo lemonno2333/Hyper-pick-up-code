@@ -50,7 +50,7 @@ import com.Badnng.moe.ui.component.PreferenceSection
 import java.io.File
 
 @Composable
-fun StorageSettingsContent(performHaptic: () -> Unit, prefs: android.content.SharedPreferences) {
+fun StorageSettingsContent(performHaptic: () -> Unit, prefs: android.content.SharedPreferences, topPadding: androidx.compose.ui.unit.Dp = 0.dp, scrollState: androidx.compose.foundation.ScrollState = androidx.compose.foundation.rememberScrollState()) {
     val context = LocalContext.current
     var appSize by remember { mutableLongStateOf(0L) }       // App 本身（APK + 代码）
     var totalSize by remember { mutableLongStateOf(0L) }     // 总占用
@@ -97,11 +97,11 @@ fun StorageSettingsContent(performHaptic: () -> Unit, prefs: android.content.Sha
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 16.dp)
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scrollState)
             .windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.safeDrawing.only(androidx.compose.foundation.layout.WindowInsetsSides.Bottom)),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(topPadding))
 
         // 圆形进度条
         Box(contentAlignment = Alignment.Center, modifier = Modifier.size(220.dp)) {
@@ -247,7 +247,7 @@ fun StorageLegendRow(color: Color, label: String, size: String, description: Str
 @Composable
 fun StorageActionCard(title: String, description: String, size: String, onClear: () -> Unit) {
     Surface(
-        shape = RoundedCornerShape(15.dp),
+        shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
         modifier = Modifier.fillMaxWidth(),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f))

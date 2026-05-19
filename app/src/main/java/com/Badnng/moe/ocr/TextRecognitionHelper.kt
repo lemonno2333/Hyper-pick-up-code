@@ -491,8 +491,9 @@ class TextRecognitionHelper(private val context: Context) {
         }
         if (vc.rejectTimeKeywords.any { context.contains(it) }) return true
         val lowerContext = context.lowercase()
+        val lowerValue = value.lowercase()
         if (vc.distractionWords.any { word ->
-                lowerContext.contains(word) && lowerContext.indexOf(word) in (lowerContext.indexOf(value) - vc.distractionRange)..(lowerContext.indexOf(value) + value.length + vc.distractionRange)
+                lowerContext.contains(word) && lowerContext.indexOf(word) in (lowerContext.indexOf(lowerValue) - vc.distractionRange)..(lowerContext.indexOf(lowerValue) + value.length + vc.distractionRange)
             }) return true
         return false
     }

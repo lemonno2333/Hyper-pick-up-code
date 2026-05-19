@@ -1,7 +1,6 @@
 package com.Badnng.moe.ui.screen.settings
 
 import android.graphics.drawable.Drawable
-import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
@@ -24,8 +23,9 @@ import com.Badnng.moe.service.NotificationListenerRecognitionService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun NotificationAppsSettingsContent(performHaptic: () -> Unit) {
+fun NotificationAppsSettingsContent(performHaptic: () -> Unit, topPadding: androidx.compose.ui.unit.Dp = 0.dp) {
     val context = LocalContext.current
     var appList by remember { mutableStateOf(emptyList<Pair<String, String>>()) }
     var enabledApps by remember { mutableStateOf(emptyMap<String, Boolean>()) }
@@ -64,15 +64,19 @@ fun NotificationAppsSettingsContent(performHaptic: () -> Unit) {
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
-                Md3LoadingIndicator(
-                    modifier = Modifier.size(48.dp)
+                androidx.compose.material3.ContainedLoadingIndicator(
+                    modifier = Modifier.size(48.dp),
+                    indicatorColor = MaterialTheme.colorScheme.primary,
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    containerShape = MaterialTheme.shapes.large,
+                    polygons = androidx.compose.material3.LoadingIndicatorDefaults.IndeterminateIndicatorPolygons
                 )
             }
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = PaddingValues(top = 8.dp, bottom = 16.dp + WindowInsets.safeDrawing.asPaddingValues().calculateBottomPadding())
+                contentPadding = PaddingValues(top = topPadding, bottom = 16.dp + WindowInsets.safeDrawing.asPaddingValues().calculateBottomPadding())
             ) {
                 item {
                     Surface(
@@ -97,7 +101,7 @@ fun NotificationAppsSettingsContent(performHaptic: () -> Unit) {
                         placeholder = { Text("搜索应用名称或包名") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(15.dp)
+                        shape = RoundedCornerShape(16.dp)
                     )
                 }
 
@@ -154,65 +158,6 @@ fun NotificationAppsSettingsContent(performHaptic: () -> Unit) {
 }
 
 @Composable
-private fun Md3LoadingIndicator(
-    modifier: Modifier = Modifier
-) {
-    val color = MaterialTheme.colorScheme.primary
-    val infiniteTransition = rememberInfiniteTransition(label = "loading")
-
-    val rotation by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1200, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "rotation"
-    )
-    val scale by infiniteTransition.animateFloat(
-        initialValue = 0.6f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(600, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "scale"
-    )
-
-    androidx.compose.foundation.Canvas(modifier = modifier) {
-        val strokeWidth = 4.dp.toPx()
-        val radius = (size.minDimension - strokeWidth) / 2
-        val c = center
-
-        drawCircle(
-            color = color.copy(alpha = 0.15f),
-            radius = radius,
-            center = c,
-            style = androidx.compose.ui.graphics.drawscope.Stroke(width = strokeWidth)
-        )
-
-        drawArc(
-            color = color,
-            startAngle = rotation,
-            sweepAngle = 90f,
-            useCenter = false,
-            style = androidx.compose.ui.graphics.drawscope.Stroke(
-                width = strokeWidth,
-                cap = androidx.compose.ui.graphics.StrokeCap.Round
-            ),
-            topLeft = androidx.compose.ui.geometry.Offset(c.x - radius, c.y - radius),
-            size = androidx.compose.ui.geometry.Size(radius * 2, radius * 2)
-        )
-
-        drawCircle(
-            color = color.copy(alpha = scale),
-            radius = radius * 0.25f * scale,
-            center = c
-        )
-    }
-}
-
-@Composable
 private fun AppToggleItem(
     context: android.content.Context,
     packageName: String,
@@ -229,7 +174,7 @@ private fun AppToggleItem(
     }
 
     Surface(
-        shape = RoundedCornerShape(15.dp),
+        shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f))
     ) {

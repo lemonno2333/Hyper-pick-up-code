@@ -5,6 +5,10 @@ import android.graphics.drawable.ColorDrawable
 import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -44,6 +48,11 @@ import androidx.core.view.WindowInsetsControllerCompat
 import coil.compose.AsyncImage
 import com.Badnng.moe.R
 import com.Badnng.moe.data.db.OrderEntity
+import top.yukonga.miuix.kmp.blur.BlurColors
+import top.yukonga.miuix.kmp.blur.isRenderEffectSupported
+import top.yukonga.miuix.kmp.blur.layerBackdrop
+import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
+import top.yukonga.miuix.kmp.blur.textureBlur
 import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -53,38 +62,27 @@ fun OrderDetailScreen(
     onBack: () -> Unit
 ) {
     var showFullScreen by remember { mutableStateOf(false) }
+    val surfaceColor = MaterialTheme.colorScheme.surface
+    val backdrop = rememberLayerBackdrop {
+        drawRect(surfaceColor)
+        drawContent()
+    }
+    val canBlur = isRenderEffectSupported()
 
-    Scaffold(
-        topBar = {
-            Surface(
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
-                tonalElevation = 2.dp
-            ) {
-                TopAppBar(
-                    title = { Text("识别详情", fontSize = 20.sp, fontWeight = FontWeight.Bold) },
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
-                )
-            }
-        },
-        containerColor = MaterialTheme.colorScheme.background,
-        contentWindowInsets = WindowInsets(0, 0, 0, 0)
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
+    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        // 内容层
+        Box(modifier = Modifier.fillMaxSize().layerBackdrop(backdrop)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp)
         ) {
-            Spacer(modifier = Modifier.height(padding.calculateTopPadding()))
+            Spacer(modifier = Modifier.height(WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 64.dp))
             Spacer(modifier = Modifier.height(16.dp))
 
             Surface(
-                shape = RoundedCornerShape(15.dp),
+                shape = RoundedCornerShape(16.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -104,7 +102,7 @@ fun OrderDetailScreen(
             Text("截图副本", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
             Spacer(modifier = Modifier.height(8.dp))
             Surface(
-                shape = RoundedCornerShape(15.dp),
+                shape = RoundedCornerShape(16.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -160,6 +158,48 @@ fun OrderDetailScreen(
             showFullScreen = false
         }
     }
+
+    // 毛玻璃 TopAppBar 覆盖层
+    if (canBlur) {
+        Box(modifier = Modifier.fillMaxWidth()) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .textureBlur(
+                        backdrop = backdrop,
+                        shape = RectangleShape,
+                        blurRadius = 80f,
+                        colors = BlurColors(brightness = -0.2f)
+                    )
+                    .frostedGlassMask()
+            )
+            TopAppBar(
+                title = { Text("识别详情", fontSize = 20.sp, fontWeight = FontWeight.Bold) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
+            )
+        }
+    } else {
+        Surface(
+            color = surfaceColor.copy(alpha = 0.9f),
+            tonalElevation = 2.dp
+        ) {
+            TopAppBar(
+                title = { Text("识别详情", fontSize = 20.sp, fontWeight = FontWeight.Bold) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
+            )
+        }
+    }
+    }
 }
 
 @Composable
@@ -168,7 +208,7 @@ fun FullTextCodeBlock(text: String?) {
     val clipboardManager = LocalClipboardManager.current
     
     Surface(
-        shape = RoundedCornerShape(15.dp),
+        shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
         border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
         modifier = Modifier.fillMaxWidth()
@@ -271,4 +311,18 @@ fun InfoItem(label: String, value: String) {
             modifier = Modifier.weight(1f)
         )
     }
+}
+
+private fun Modifier.frostedGlassMask(): Modifier = this.drawWithContent {
+    drawContent()
+    drawRect(
+        brush = Brush.verticalGradient(
+            colorStops = arrayOf(
+                0f to Color.Black,
+                0.55f to Color.Black,
+                1f to Color.Transparent
+            )
+        ),
+        blendMode = BlendMode.DstIn
+    )
 }

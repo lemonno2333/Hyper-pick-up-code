@@ -13,7 +13,9 @@ import java.io.File
 import androidx.compose.animation.*
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
@@ -45,6 +47,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -61,6 +64,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogProperties
@@ -72,6 +76,7 @@ import com.Badnng.moe.data.db.OrderGroup
 import com.Badnng.moe.helper.BrandIconResolver
 import com.Badnng.moe.helper.NotificationHelper
 import com.Badnng.moe.helper.NotificationScheduler
+
 import com.Badnng.moe.viewmodel.OrderViewModel
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
@@ -186,12 +191,9 @@ fun CaptureScreenContent(
     var showCategoryFilters by remember { mutableStateOf(false) }
     var selectedCategories by remember { mutableStateOf(setOf("餐食", "饮品", "快递")) }
 
-    // 获取所有组（在Crossfade外部定义，以便在编辑模式中使用）
+    // 获取所有组
     val allGroups = remember(
-        showCompletedOnly,
-        selectedCategories,
-        incompleteOrderGroups,
-        completedOrderGroups
+        showCompletedOnly, selectedCategories, incompleteOrderGroups, completedOrderGroups
     ) {
         val baseGroups = if (showCompletedOnly) completedOrderGroups else incompleteOrderGroups
         baseGroups.filter { group -> selectedCategories.contains(group.orderType) }
@@ -204,13 +206,8 @@ fun CaptureScreenContent(
     }
 
     // 直接根据订单的groupId字段来判断是否属于某个组
-    // 核心逻辑：如果订单的groupId不为null，说明它属于某个组，应该只在组内显示
     val standaloneOrders = remember(allOrders, allGroups) {
-        allOrders.filter { order ->
-            // 订单的groupId为null时，才在组外显示
-            // 如果订单有groupId，说明它属于某个组，应该只在组内显示
-            order.groupId == null
-        }
+        allOrders.filter { order -> order.groupId == null }
     }
 
     val context = LocalContext.current
@@ -462,7 +459,7 @@ fun CaptureScreenContent(
                                             isEditMode = false
                                         },
                                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
-                                        shape = RoundedCornerShape(15.dp),
+                                        shape = RoundedCornerShape(16.dp),
                                         modifier = Modifier.weight(1f)
                                     ) {
                                         Text("完成(${selectedIds.size + selectedGroupIds.size})", fontSize = 12.sp)
@@ -472,7 +469,7 @@ fun CaptureScreenContent(
                                 Button(
                                     onClick = { performHaptic(); showMultiDeleteConfirm = true },
                                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                                    shape = RoundedCornerShape(15.dp),
+                                    shape = RoundedCornerShape(16.dp),
                                     modifier = Modifier.weight(1f)
                                 ) {
                                     Text("删除(${selectedIds.size + selectedGroupIds.size})", fontSize = 12.sp)
@@ -489,7 +486,7 @@ fun CaptureScreenContent(
                             OutlinedButton(
                                 onClick = { performHaptic(); showMergeGroupDialog = true },
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(15.dp)
+                                shape = RoundedCornerShape(16.dp)
                             ) {
                                 Text("合并为组(${selectedIds.size})")
                             }
@@ -504,7 +501,7 @@ fun CaptureScreenContent(
                             OutlinedButton(
                                 onClick = { performHaptic(); showClearAllConfirm = true },
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(15.dp)
+                                shape = RoundedCornerShape(16.dp)
                             ) {
                                 Text("清空全部")
                             }
@@ -516,14 +513,15 @@ fun CaptureScreenContent(
             Spacer(modifier = Modifier.height(8.dp))
 
             AnimatedContent(
-                targetState = Triple(showCompletedOnly, standaloneOrders, allGroups),
+                targetState = showCompletedOnly,
                 modifier = Modifier.weight(1f).fillMaxWidth(),
                 label = "listTransition",
                 transitionSpec = {
                     fadeIn(animationSpec = tween(300)) togetherWith fadeOut(animationSpec = tween(300))
                 }
-            ) { (currentShowCompletedOnly, currentStandaloneOrders, currentAllGroups) ->
-                // 使用外部定义的变量
+            ) { currentShowCompletedOnly ->
+                val currentStandaloneOrders = standaloneOrders
+                val currentAllGroups = allGroups
                 val currentState = if (currentShowCompletedOnly) {
                     completedListState
                 } else {
@@ -567,7 +565,9 @@ fun CaptureScreenContent(
                                                 selectedGroupIds = selectedGroupIds - group.id
                                             }
                                         },
-                                        modifier = Modifier.animateItem()
+                                        modifier = Modifier.animateItem(
+                                            placementSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)
+                                        )
                                     )
                                 }
                             }
@@ -575,7 +575,9 @@ fun CaptureScreenContent(
                             // 显示不在组内的单个订单
                             items(items = currentStandaloneOrders, key = { it.id }) { order ->
                                 Row(
-                                    modifier = Modifier.animateItem(),
+                                    modifier = Modifier.animateItem(
+                                        placementSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)
+                                    ),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Box(modifier = Modifier.width(if (isEditMode) 40.dp else 0.dp)) {
@@ -621,9 +623,7 @@ fun CaptureScreenContent(
 
         if (showMultiDeleteConfirm) {
             DeleteConfirmDialog(title = "确认删除所选？", description = "确定要删除选中的 ${selectedIds.size + selectedGroupIds.size} 条记录吗？该操作不可撤销！", onDismiss = { showMultiDeleteConfirm = false }, onConfirm = {
-                // 删除选中的订单
                 onDeleteMultiple(selectedIds)
-                // 删除选中的组
                 selectedGroupIds.forEach { groupId ->
                     val group = allGroups.find { it.id == groupId }
                     group?.let { onDeleteGroup(it) }
@@ -806,7 +806,7 @@ fun MergeGroupDialog(
                         onValueChange = { groupName = it },
                         label = { Text("组名称") },
                         singleLine = true,
-                        shape = RoundedCornerShape(15.dp),
+                        shape = RoundedCornerShape(16.dp),
                         modifier = Modifier.fillMaxWidth()
                     )
 
@@ -949,15 +949,20 @@ fun OrderQuickViewDialog(order: OrderEntity, onDismiss: () -> Unit) {
                     horizontalArrangement = Arrangement.Center,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    val customIconBitmap = remember(order.brandName) {
-                        BrandIconResolver.resolveCustomIconBitmap(context, order.brandName)
+                    var customIconBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+                    LaunchedEffect(order.brandName) {
+                        withContext(Dispatchers.IO) {
+                            var bmp = BrandIconResolver.resolveCustomIconBitmap(context, order.brandName)
+                            if (bmp == null) { kotlinx.coroutines.delay(200); bmp = BrandIconResolver.resolveCustomIconBitmap(context, order.brandName) }
+                            if (bmp != null) customIconBitmap = bmp
+                        }
                     }
                     val brandIconRes = remember(order.brandName, order.orderType) {
                         BrandIconResolver.resolveBuiltinFallbackResId(context, order.brandName, order.orderType)
                     }
                     if (customIconBitmap != null) {
                         Image(
-                            bitmap = customIconBitmap.asImageBitmap(),
+                            bitmap = customIconBitmap!!.asImageBitmap(),
                             contentDescription = null,
                             modifier = Modifier.size(28.dp)
                         )
@@ -1094,6 +1099,7 @@ fun generateQrCode(content: String, size: Int): Bitmap {
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 fun OrderGroupCard(
     group: OrderGroup,
     onClick: () -> Unit,
@@ -1129,12 +1135,17 @@ fun OrderGroupCard(
         }
     }
     val timeStr = remember(group.createdAt) { val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()); sdf.format(Date(group.createdAt)) }
-    val groupIconBitmap = remember(group.brandName, group.iconResName) {
-        if (group.iconResName != null) {
-            val customResId = context.resources.getIdentifier(group.iconResName, "drawable", context.packageName)
-            if (customResId != 0) return@remember null
+    var groupIconBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    LaunchedEffect(group.brandName, group.iconResName) {
+        withContext(Dispatchers.IO) {
+            if (group.iconResName != null) {
+                val customResId = context.resources.getIdentifier(group.iconResName, "drawable", context.packageName)
+                if (customResId != 0) return@withContext
+            }
+            var bmp = BrandIconResolver.resolveCustomIconBitmap(context, group.brandName)
+            if (bmp == null) { kotlinx.coroutines.delay(200); bmp = BrandIconResolver.resolveCustomIconBitmap(context, group.brandName) }
+            if (bmp != null) groupIconBitmap = bmp
         }
-        BrandIconResolver.resolveCustomIconBitmap(context, group.brandName)
     }
     val groupIconRes = remember(group.brandName, group.orderType, group.iconResName) {
         if (group.iconResName != null) {
@@ -1156,6 +1167,8 @@ fun OrderGroupCard(
             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
         }
     }
+
+    val motionScheme = MaterialTheme.motionScheme
 
     // 和取餐码卡片一样的布局结构
     Row(
@@ -1190,7 +1203,7 @@ fun OrderGroupCard(
             },
             colors = CardDefaults.cardColors(containerColor = groupCardColor),
             border = groupCardBorder,
-            shape = RoundedCornerShape(15.dp)
+            shape = RoundedCornerShape(16.dp)
         ) {
             Column(
                 modifier = Modifier
@@ -1200,7 +1213,7 @@ fun OrderGroupCard(
                 // 顶部区域：图标 + 标题
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (groupIconBitmap != null) {
-                        Image(bitmap = groupIconBitmap.asImageBitmap(), contentDescription = null, modifier = Modifier.size(32.dp))
+                        Image(bitmap = groupIconBitmap!!.asImageBitmap(), contentDescription = null, modifier = Modifier.size(32.dp))
                     } else {
                         Icon(painter = painterResource(id = groupIconRes), contentDescription = null, modifier = Modifier.size(32.dp), tint = Color.Unspecified)
                     }
@@ -1224,7 +1237,7 @@ fun OrderGroupCard(
                                     FilledTonalButton(
                                         onClick = { performHaptic(); onMarkAllCompleted() },
                                         modifier = Modifier.weight(1f),
-                                        shape = RoundedCornerShape(15.dp)
+                                        shape = RoundedCornerShape(16.dp)
                                     ) {
                                         Text("全部完成")
                                     }
@@ -1232,7 +1245,7 @@ fun OrderGroupCard(
                                         onClick = { performHaptic(); onDeleteGroup() },
                                         modifier = Modifier.weight(1f),
                                         colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                                        shape = RoundedCornerShape(15.dp)
+                                        shape = RoundedCornerShape(16.dp)
                                     ) {
                                         Text("删除组")
                                     }
@@ -1241,7 +1254,7 @@ fun OrderGroupCard(
                                         onClick = { performHaptic(); onDeleteGroup() },
                                         modifier = Modifier.fillMaxWidth(),
                                         colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                                        shape = RoundedCornerShape(15.dp)
+                                        shape = RoundedCornerShape(16.dp)
                                     ) {
                                         Text("删除组")
                                     }
@@ -1283,7 +1296,7 @@ fun OrderGroupCard(
                                             NotificationHelper(context).showGroupNotification(notificationGroup, groupOrders)
                                         },
                                         modifier = Modifier.weight(1f),
-                                        shape = RoundedCornerShape(15.dp),
+                                        shape = RoundedCornerShape(16.dp),
                                         colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
                                     ) {
                                         Icon(Icons.Default.NotificationAdd, null, Modifier.size(18.dp))
@@ -1303,7 +1316,7 @@ fun OrderGroupCard(
                                             }
                                         },
                                         modifier = Modifier.height(44.dp).width(44.dp),
-                                        shape = RoundedCornerShape(15.dp),
+                                        shape = RoundedCornerShape(16.dp),
                                         contentPadding = PaddingValues(0.dp),
                                         colors = ButtonDefaults.filledTonalButtonColors(
                                             containerColor = if (isGroupScheduled) MaterialTheme.colorScheme.errorContainer
@@ -1362,11 +1375,15 @@ fun OrderGroupCard(
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.primary
                         )
+                        val arrowRotation by animateFloatAsState(
+                            targetValue = if (isExpanded) 180f else 0f,
+                            animationSpec = motionScheme.defaultSpatialSpec<Float>()
+                        )
                         Icon(
-                            if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                            Icons.Default.ExpandMore,
                             null,
                             tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(16.dp).rotate(arrowRotation)
                         )
                     }
                 }
@@ -1374,8 +1391,10 @@ fun OrderGroupCard(
                 // 展开/折叠内容（只在非编辑模式下显示）
                 AnimatedVisibility(
                     visible = isExpanded && !isEditMode,
-                    enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(),
-                    exit = shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut()
+                    enter = fadeIn(animationSpec = motionScheme.defaultEffectsSpec<Float>()) +
+                            expandVertically(animationSpec = motionScheme.defaultSpatialSpec<IntSize>(), expandFrom = Alignment.Top),
+                    exit = fadeOut(animationSpec = motionScheme.defaultEffectsSpec<Float>()) +
+                           shrinkVertically(animationSpec = motionScheme.defaultSpatialSpec<IntSize>(), shrinkTowards = Alignment.Top)
                 ) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
@@ -1434,8 +1453,13 @@ fun OrderCard(
         MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
     }
     val timeStr = remember(order.createdAt) { val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()); sdf.format(Date(order.createdAt)) }
-    val orderIconBitmap = remember(order.brandName) {
-        BrandIconResolver.resolveCustomIconBitmap(context, order.brandName)
+    var orderIconBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    LaunchedEffect(order.brandName) {
+        withContext(Dispatchers.IO) {
+            var bmp = BrandIconResolver.resolveCustomIconBitmap(context, order.brandName)
+            if (bmp == null) { kotlinx.coroutines.delay(200); bmp = BrandIconResolver.resolveCustomIconBitmap(context, order.brandName) }
+            if (bmp != null) orderIconBitmap = bmp
+        }
     }
     val orderIconRes = remember(order.brandName, order.orderType) {
         BrandIconResolver.resolveBuiltinFallbackResId(context, order.brandName, order.orderType)
@@ -1452,13 +1476,13 @@ fun OrderCard(
         } else {
             BorderStroke(2.dp, highlightColor)
         },
-        shape = RoundedCornerShape(15.dp)
+        shape = RoundedCornerShape(16.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (orderIconBitmap != null) {
-                        Image(bitmap = orderIconBitmap.asImageBitmap(), contentDescription = null, modifier = Modifier.size(32.dp))
+                        Image(bitmap = orderIconBitmap!!.asImageBitmap(), contentDescription = null, modifier = Modifier.size(32.dp))
                     } else {
                         Icon(painter = painterResource(id = orderIconRes), contentDescription = null, modifier = Modifier.size(32.dp), tint = Color.Unspecified)
                     }
@@ -1512,8 +1536,8 @@ fun OrderCard(
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Spacer(Modifier.height(0.dp))
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            if (!isCompleted) { FilledTonalButton(onClick = onMarkCompleted, modifier = Modifier.weight(1f), shape = RoundedCornerShape(15.dp)) { Text("完成") } }
-                            OutlinedButton(onClick = onDelete, modifier = Modifier.weight(1f), colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error), shape = RoundedCornerShape(15.dp)) { Text("删除") }
+                            if (!isCompleted) { FilledTonalButton(onClick = onMarkCompleted, modifier = Modifier.weight(1f), shape = RoundedCornerShape(16.dp)) { Text("完成") } }
+                            OutlinedButton(onClick = onDelete, modifier = Modifier.weight(1f), colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error), shape = RoundedCornerShape(16.dp)) { Text("删除") }
                         }
 
                         if (!isCompleted && showRealtimeNotification) {
@@ -1538,7 +1562,7 @@ fun OrderCard(
                                 FilledTonalButton(
                                     onClick = { NotificationHelper(context).showPromotedLiveUpdate(order) },
                                     modifier = Modifier.weight(1f),
-                                    shape = RoundedCornerShape(15.dp),
+                                    shape = RoundedCornerShape(16.dp),
                                     colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
                                 ) {
                                     Icon(Icons.Default.NotificationAdd, null, Modifier.size(18.dp))
@@ -1558,7 +1582,7 @@ fun OrderCard(
                                         }
                                     },
                                     modifier = Modifier.height(42.dp).width(42.dp),
-                                    shape = RoundedCornerShape(15.dp),
+                                    shape = RoundedCornerShape(16.dp),
                                     contentPadding = PaddingValues(0.dp),
                                     colors = ButtonDefaults.filledTonalButtonColors(
                                         containerColor = if (isScheduled) MaterialTheme.colorScheme.errorContainer
@@ -1592,7 +1616,7 @@ fun OrderCard(
 
 @Composable
 fun StatusButton(selected: Boolean, label: String, count: Int, onClick: () -> Unit) {
-    Surface(onClick = onClick, shape = RoundedCornerShape(15.dp), color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant, contentColor = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.height(36.dp).widthIn(min = 80.dp)) {
+    Surface(onClick = onClick, shape = RoundedCornerShape(16.dp), color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant, contentColor = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.height(36.dp).widthIn(min = 80.dp)) {
         Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 12.dp)) { Text(text = "$label $count", fontSize = 14.sp, fontWeight = FontWeight.Bold) }
     }
 }
@@ -1609,10 +1633,10 @@ fun DeleteConfirmDialog(title: String = "确认删除？", description: String =
         text = { Text(text = description, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
         confirmButton = {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                FilledTonalButton(onClick = onDismiss, modifier = Modifier.weight(1f), shape = RoundedCornerShape(15.dp)) {
+                FilledTonalButton(onClick = onDismiss, modifier = Modifier.weight(1f), shape = RoundedCornerShape(16.dp)) {
                     Text("取消", fontWeight = FontWeight.Bold)
                 }
-                OutlinedButton(onClick = onConfirm, modifier = Modifier.weight(1f), border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.error), colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error), shape = RoundedCornerShape(15.dp)) {
+                OutlinedButton(onClick = onConfirm, modifier = Modifier.weight(1f), border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.error), colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error), shape = RoundedCornerShape(16.dp)) {
                     Text("删除", fontWeight = FontWeight.Bold)
                 }
             }
@@ -1730,7 +1754,7 @@ fun ScheduledNotificationSheet(
                                             onSchedule(triggerAt)
                                         },
                                         modifier = Modifier.weight(1f).height(44.dp),
-                                        shape = RoundedCornerShape(15.dp)
+                                        shape = RoundedCornerShape(16.dp)
                                     ) {
                                         Text(label)
                                     }
@@ -1744,7 +1768,7 @@ fun ScheduledNotificationSheet(
                         FilledTonalButton(
                             onClick = { performHaptic(); showCustomTimePicker = true },
                             modifier = Modifier.fillMaxWidth().height(44.dp),
-                            shape = RoundedCornerShape(15.dp)
+                            shape = RoundedCornerShape(16.dp)
                         ) {
                             Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(8.dp))
@@ -1765,7 +1789,7 @@ fun ScheduledNotificationSheet(
                             OutlinedButton(
                                 onClick = { performHaptic(); showCustomTimePicker = false },
                                 modifier = Modifier.weight(1f).height(44.dp),
-                                shape = RoundedCornerShape(15.dp)
+                                shape = RoundedCornerShape(16.dp)
                             ) {
                                 Text("返回")
                             }
@@ -1785,7 +1809,7 @@ fun ScheduledNotificationSheet(
                                     onSchedule(target.timeInMillis)
                                 },
                                 modifier = Modifier.weight(1f).height(44.dp),
-                                shape = RoundedCornerShape(15.dp)
+                                shape = RoundedCornerShape(16.dp)
                             ) {
                                 Text("确认")
                             }

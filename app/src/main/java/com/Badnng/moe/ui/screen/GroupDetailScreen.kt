@@ -3,8 +3,15 @@ package com.Badnng.moe.ui.screen
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.animation.*
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
@@ -18,12 +25,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Done
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -34,6 +43,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
@@ -42,6 +52,12 @@ import com.Badnng.moe.R
 import com.Badnng.moe.activity.MainActivity
 import com.Badnng.moe.data.db.OrderEntity
 import com.Badnng.moe.data.db.OrderGroup
+
+import top.yukonga.miuix.kmp.blur.BlurColors
+import top.yukonga.miuix.kmp.blur.isRenderEffectSupported
+import top.yukonga.miuix.kmp.blur.layerBackdrop
+import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
+import top.yukonga.miuix.kmp.blur.textureBlur
 import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -75,46 +91,27 @@ fun GroupDetailScreen(
         pageCount = { screenshotPaths.size.coerceAtLeast(1) }
     )
 
-    Scaffold(
-        topBar = {
-            Surface(
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
-                tonalElevation = 2.dp
-            ) {
-                TopAppBar(
-                    title = { Text(group.name, fontSize = 20.sp, fontWeight = FontWeight.Bold) },
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
-                        }
-                    },
-                    actions = {
-                        if (completedCount < totalCount) {
-                            TextButton(onClick = onMarkAllCompleted) {
-                                Icon(Icons.Default.Done, null)
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("全部完成")
-                            }
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
-                )
-            }
-        },
-        containerColor = MaterialTheme.colorScheme.background,
-        contentWindowInsets = WindowInsets(0, 0, 0, 0)
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
+    val surfaceColor = MaterialTheme.colorScheme.surface
+    val backdrop = rememberLayerBackdrop {
+        drawRect(surfaceColor)
+        drawContent()
+    }
+    val canBlur = isRenderEffectSupported()
+
+    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        // 内容层
+        Box(modifier = Modifier.fillMaxSize().layerBackdrop(backdrop)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp)
         ) {
-            Spacer(modifier = Modifier.height(padding.calculateTopPadding()))
+            Spacer(modifier = Modifier.height(WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 64.dp))
             Spacer(modifier = Modifier.height(16.dp))
 
             Surface(
-                shape = RoundedCornerShape(15.dp),
+                shape = RoundedCornerShape(16.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -174,7 +171,7 @@ fun GroupDetailScreen(
             Text("截图副本", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
             Spacer(modifier = Modifier.height(8.dp))
             Surface(
-                shape = RoundedCornerShape(15.dp),
+                shape = RoundedCornerShape(16.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -264,6 +261,66 @@ fun GroupDetailScreen(
             showFullScreen = false
         }
     }
+
+    // 毛玻璃 TopAppBar 覆盖层
+    if (canBlur) {
+        Box(modifier = Modifier.fillMaxWidth()) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .textureBlur(
+                        backdrop = backdrop,
+                        shape = RectangleShape,
+                        blurRadius = 80f,
+                        colors = BlurColors(brightness = -0.2f)
+                    )
+                    .frostedGlassMask()
+            )
+            TopAppBar(
+                title = { Text(group.name, fontSize = 20.sp, fontWeight = FontWeight.Bold) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
+                    }
+                },
+                actions = {
+                    if (completedCount < totalCount) {
+                        TextButton(onClick = onMarkAllCompleted) {
+                            Icon(Icons.Default.Done, null)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("全部完成")
+                        }
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
+            )
+        }
+    } else {
+        Surface(
+            color = surfaceColor.copy(alpha = 0.9f),
+            tonalElevation = 2.dp
+        ) {
+            TopAppBar(
+                title = { Text(group.name, fontSize = 20.sp, fontWeight = FontWeight.Bold) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
+                    }
+                },
+                actions = {
+                    if (completedCount < totalCount) {
+                        TextButton(onClick = onMarkAllCompleted) {
+                            Icon(Icons.Default.Done, null)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("全部完成")
+                        }
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
+            )
+        }
+    }
+    }
 }
 
 internal fun openTaobaoIdentityEntry(context: Context) {
@@ -318,12 +375,15 @@ internal fun openPddIdentityEntry(context: Context) {
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun GroupOrderCard(
     order: OrderEntity,
     onMarkCompleted: () -> Unit
 ) {
     val clipboardManager = LocalClipboardManager.current
+    val motionScheme = MaterialTheme.motionScheme
+    var isExpanded by remember { mutableStateOf(false) }
 
     Surface(
         shape = RoundedCornerShape(12.dp),
@@ -340,7 +400,7 @@ private fun GroupOrderCard(
                 MaterialTheme.colorScheme.outlineVariant
             }
         ),
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth().animateContentSize(animationSpec = motionScheme.defaultSpatialSpec<IntSize>())
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(
@@ -410,25 +470,78 @@ private fun GroupOrderCard(
 
             if (order.fullText != null) {
                 Spacer(modifier = Modifier.height(8.dp))
-                SelectionContainer {
+                // 展开/收起按钮
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                            RoundedCornerShape(4.dp)
+                        )
+                        .clickable { isExpanded = !isExpanded }
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Text(
-                        text = order.fullText,
+                        text = if (isExpanded) "收起原文" else "展开查看原文",
                         fontSize = 11.sp,
-                        fontFamily = FontFamily.Monospace,
-                        lineHeight = 16.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                        maxLines = 4,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(
-                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                                RoundedCornerShape(4.dp)
-                            )
-                            .padding(8.dp)
+                        color = MaterialTheme.colorScheme.primary
                     )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    val arrowRotation by animateFloatAsState(
+                        targetValue = if (isExpanded) 180f else 0f,
+                        animationSpec = motionScheme.defaultSpatialSpec<Float>()
+                    )
+                    Icon(
+                        Icons.Default.ExpandMore,
+                        null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(14.dp).rotate(arrowRotation)
+                    )
+                }
+                // 展开内容
+                AnimatedVisibility(
+                    visible = isExpanded,
+                    enter = fadeIn(animationSpec = motionScheme.defaultEffectsSpec<Float>()) +
+                            expandVertically(animationSpec = motionScheme.defaultSpatialSpec<IntSize>()),
+                    exit = fadeOut(animationSpec = motionScheme.defaultEffectsSpec<Float>()) +
+                           shrinkVertically(animationSpec = motionScheme.defaultSpatialSpec<IntSize>())
+                ) {
+                    SelectionContainer {
+                        Text(
+                            text = order.fullText,
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Monospace,
+                            lineHeight = 16.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 1.dp)
+                                .background(
+                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                                    RoundedCornerShape(4.dp)
+                                )
+                                .padding(8.dp)
+                        )
+                    }
                 }
             }
         }
     }
+}
+
+private fun Modifier.frostedGlassMask(): Modifier = this.drawWithContent {
+    drawContent()
+    drawRect(
+        brush = Brush.verticalGradient(
+            colorStops = arrayOf(
+                0f to Color.Black,
+                0.55f to Color.Black,
+                1f to Color.Transparent
+            )
+        ),
+        blendMode = BlendMode.DstIn
+    )
 }
