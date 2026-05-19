@@ -42,6 +42,11 @@ jobs:
       - name: Grant execute permission
         run: chmod +x gradlew
 
+      - name: Download dependencies
+        run: ./gradlew dependencies --no-daemon
+        continue-on-error: true
+
+
       - name: Build Release APK
         env:
           KEY_STORE_PATH: release.jks
