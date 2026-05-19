@@ -10,6 +10,10 @@ android {
     namespace = "com.Badnng.moe"
     compileSdk = 37
 
+    lint {
+        checkReleaseBuilds = false
+    }
+
     defaultConfig {
         applicationId = "com.Badnng.moe"
         minSdk = 35
