@@ -1,7 +1,7 @@
 {
-  "versionCode": 2026051611,
-  "versionName": "26.5.16.C01-Dev",
-  "releaseNotes": "您正在使用 澎湃记 的测试版本，可能会遇到不稳定，闪退，数据丢失等情况，请谨慎升级\n\n26.5.16.C01-Dev 版本更新如下：\n\n修复 app在后台时出现的若干问题（待验证）\n修复 短信识别在app后台过久时出现的不识别问题（待验证）\n修复 部分识别场景需要再次识别的问题（待验证）\n修复 设备相关操作导致app未在后台的问题（待验证）\n\n添加 常驻通知开关（默认常驻）\n添加 规则相关函数（稍后更新在文档内）\n添加 通知识别相关功能（仅保证读取，不保证能正确识别到码，需要大家给数据）\n\n优化 规则相关功能",
-  "downloadUrl": "https://github.com/badnng/Hyper-pick-up-code/releases/download/v26.5.16.C01-Dev/app-release.apk",
-  "md5": "e79e47dfa7b6b8d8e50cc81b61dd3cd9"
+  "versionCode": 2026052011,
+  "versionName": "26.5.20.C01-Dev",
+  "releaseNotes": "您正在使用 澎湃记 的测试版本，可能会遇到不稳定，闪退，数据丢失等情况，请谨慎升级\n\n26.5.20.C01-Dev 版本更新如下：\n\n迁移 UI 从 MD3 到 MD3E*\n\n优化 不选择莫奈取色后的MD3建议色选择相关颜色显示和种类\n优化 相关动效和UI相关排版\n优化 删除卡片的动画\n优化 默认内部规则\n\n添加 顶部渐变模糊\n\n修复 自定义图标有几率出现扬了的问题（待验证）\n修复 卡片删除动画突然间发病一样抽风了的问题（陈年老bug了，老包袱）\n\n*正在逐步向Miuix靠齐中，MD3E 和 Miuix 将为共存状态，敬请期待",
+  "downloadUrl": "https://github.com/badnng/Hyper-pick-up-code/releases/download/v26.5.20.C01-Dev/app-release.apk",
+  "md5": "e6f6c0871389e2ad7defe05437433e6b"
 }
