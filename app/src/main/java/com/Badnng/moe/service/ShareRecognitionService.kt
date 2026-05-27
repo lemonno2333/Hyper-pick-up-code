@@ -26,6 +26,7 @@ import com.Badnng.moe.helper.DailyExpressGroupingHelper
 import com.Badnng.moe.helper.NotificationHelper
 import com.Badnng.moe.ocr.MultiRecognitionResult
 import com.Badnng.moe.ocr.TextRecognitionHelper
+import com.Badnng.moe.rules.RecognitionRuleEngine
 import java.io.File
 import java.io.FileOutputStream
 
@@ -73,12 +74,17 @@ class ShareRecognitionService : Service() {
         }
 
         val croppedBitmap = cropStatusBar(bitmap)
+        if (!RecognitionRuleEngine.isInitialized) {
+            RecognitionRuleEngine.initialize(applicationContext)
+        }
         val helper = TextRecognitionHelper(applicationContext)
 
         try {
             helper.initOcr()
 
-            val singleResult = helper.recognizeAll(croppedBitmap)
+            val recognizeResult = helper.recognizeAll(bitmap)
+            val singleResult = recognizeResult.first
+            val ocrResult = recognizeResult.second
             val hasExpressKeyword = singleResult.fullText.contains("\u53d6\u4ef6") ||
                 singleResult.fullText.contains("\u53d6\u8d27") ||
                 singleResult.fullText.contains("\u5feb\u9012") ||
@@ -86,7 +92,7 @@ class ShareRecognitionService : Service() {
                 singleResult.fullText.contains("\u83dc\u9e1f")
             val bitmapToUse = if (hasExpressKeyword) bitmap else croppedBitmap
             val multiResult = if (hasExpressKeyword || singleResult.type == "\u5feb\u9012") {
-                helper.recognizeMultipleCodes(bitmapToUse)
+                helper.recognizeMultipleCodesFromResult(ocrResult.rawFullText, ocrResult.textBlocks, ocrResult.mergedText)
             } else {
                 MultiRecognitionResult(emptyList(), false)
             }

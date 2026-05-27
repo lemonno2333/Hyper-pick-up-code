@@ -26,8 +26,12 @@ import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationManagerCompat
 import com.Badnng.moe.R
 import com.Badnng.moe.helper.AccessibilityShortcutHelper
+import com.Badnng.moe.service.KeepAliveService
+import com.Badnng.moe.ui.component.GroupPosition
 import com.Badnng.moe.ui.component.PermissionItem
 import com.Badnng.moe.ui.component.PreferenceSection
+import com.Badnng.moe.ui.component.SettingsGroup
+import com.Badnng.moe.ui.component.SettingsGroupSwitchItem
 import com.Badnng.moe.ui.component.PreferenceSwitchItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -35,14 +39,16 @@ import kotlinx.coroutines.withContext
 import rikka.shizuku.Shizuku
 
 @Composable
-fun PermissionSettingsContent(performHaptic: () -> Unit) {
+fun PermissionSettingsContent(performHaptic: () -> Unit, topPadding: androidx.compose.ui.unit.Dp = 0.dp, scrollState: androidx.compose.foundation.ScrollState = androidx.compose.foundation.rememberScrollState()) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
     var hasNotificationPermission by remember { mutableStateOf(NotificationManagerCompat.from(context).areNotificationsEnabled()) }
     var hasUsageStatsPermission by remember { mutableStateOf(checkUsageStatsPermission(context)) }
     var shizukuReady by remember { mutableStateOf(false) }
     var keepAliveEnabled by remember { mutableStateOf(prefs.getBoolean("keep_alive_enabled", false)) }
+    var persistentNotificationEnabled by remember { mutableStateOf(prefs.getBoolean("persistent_notification_enabled", true)) }
     var isIgnoringBattery by remember { mutableStateOf(false) }
+    var hasNotificationListenerPermission by remember { mutableStateOf(com.Badnng.moe.service.NotificationListenerRecognitionService.isNotificationListenerEnabled(context)) }
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -50,6 +56,7 @@ fun PermissionSettingsContent(performHaptic: () -> Unit) {
             hasUsageStatsPermission = checkUsageStatsPermission(context)
             shizukuReady = withContext(Dispatchers.IO) { isShizukuReady() }
             isIgnoringBattery = checkBatteryOptimization(context)
+            hasNotificationListenerPermission = com.Badnng.moe.service.NotificationListenerRecognitionService.isNotificationListenerEnabled(context)
             delay(1500)
         }
     }
@@ -58,11 +65,11 @@ fun PermissionSettingsContent(performHaptic: () -> Unit) {
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 16.dp)
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scrollState)
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom)),
         verticalArrangement = Arrangement.spacedBy(32.dp)
     ) {
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(topPadding))
         // 第一大类：权限设置
         PreferenceSection(title = "权限设置") {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -75,7 +82,7 @@ fun PermissionSettingsContent(performHaptic: () -> Unit) {
                             performHaptic()
                             val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply { putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName) }
                             context.startActivity(intent)
-                        }, shape = RoundedCornerShape(15.dp), modifier = Modifier.fillMaxWidth().height(56.dp)) {
+                        }, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth().height(56.dp)) {
                             Icon(Icons.Default.Build, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("去修复")
                         }
                     } } else null
@@ -92,7 +99,7 @@ fun PermissionSettingsContent(performHaptic: () -> Unit) {
                                 data = Uri.parse("package:${context.packageName}")
                             }
                             try { context.startActivity(intent) } catch (e: Exception) { context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)) }
-                        }, shape = RoundedCornerShape(15.dp), modifier = Modifier.fillMaxWidth().height(56.dp)) {
+                        }, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth().height(56.dp)) {
                             Icon(Icons.Default.Security, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("去授权")
                         }
                     } } else null
@@ -103,8 +110,23 @@ fun PermissionSettingsContent(performHaptic: () -> Unit) {
                     description = "该软件用于免授权截图识别的必须条件，如无则无法使用免授权截图",
                     isGranted = shizukuReady,
                     actionButton = if (!shizukuReady) { {
-                        Button(onClick = { performHaptic(); if (Shizuku.pingBinder()) { try { Shizuku.requestPermission(1001) } catch (e: Exception) {} } }, shape = RoundedCornerShape(15.dp), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary), modifier = Modifier.fillMaxWidth().height(56.dp)) {
+                        Button(onClick = { performHaptic(); if (Shizuku.pingBinder()) { try { Shizuku.requestPermission(1001) } catch (e: Exception) {} } }, shape = RoundedCornerShape(16.dp), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary), modifier = Modifier.fillMaxWidth().height(56.dp)) {
                             Icon(Icons.Default.Refresh, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("如果Shizuku已运行请点我")
+                        }
+                    } } else null
+                )
+
+                PermissionItem(
+                    title = "通知监听权限",
+                    description = "用于自动识别外卖、快递等App通知中的取件码",
+                    isGranted = hasNotificationListenerPermission,
+                    actionButton = if (!hasNotificationListenerPermission) { {
+                        Button(onClick = {
+                            performHaptic()
+                            val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+                            context.startActivity(intent)
+                        }, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth().height(56.dp)) {
+                            Icon(Icons.Default.Build, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("去授权")
                         }
                     } } else null
                 )
@@ -141,19 +163,32 @@ fun PermissionSettingsContent(performHaptic: () -> Unit) {
                 }
 
                 // 基础设置
-                Surface(
-                    shape = RoundedCornerShape(15.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f))
-                ) {
-                    PreferenceSwitchItem(
+                SettingsGroup {
+                    SettingsGroupSwitchItem(
                         title = "启用保活",
                         description = "开启后切到后台时自动隐藏卡片并提示",
+                        position = GroupPosition.First,
                         checked = keepAliveEnabled,
                         onCheckedChange = { enabled ->
                             performHaptic()
                             keepAliveEnabled = enabled
                             prefs.edit().putBoolean("keep_alive_enabled", enabled).apply()
+                        }
+                    )
+                    SettingsGroupSwitchItem(
+                        title = "后台通知",
+                        description = "应用在后台时显示通知，帮助系统识别活跃应用以减少被杀概率",
+                        position = GroupPosition.Last,
+                        checked = persistentNotificationEnabled,
+                        onCheckedChange = { enabled ->
+                            performHaptic()
+                            persistentNotificationEnabled = enabled
+                            prefs.edit().putBoolean("persistent_notification_enabled", enabled).apply()
+                            if (enabled) {
+                                KeepAliveService.showNotification(context)
+                            } else {
+                                KeepAliveService.hideNotification(context)
+                            }
                         }
                     )
                 }
@@ -179,7 +214,7 @@ fun PermissionSettingsContent(performHaptic: () -> Unit) {
                                         context.startActivity(intent)
                                     }
                                 },
-                                shape = RoundedCornerShape(15.dp),
+                                shape = RoundedCornerShape(16.dp),
                                 modifier = Modifier.fillMaxWidth().height(56.dp)
                             ) {
                                 Icon(Icons.Default.BatterySaver, null, Modifier.size(20.dp))
@@ -197,7 +232,7 @@ fun PermissionSettingsContent(performHaptic: () -> Unit) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Surface(
-                    shape = RoundedCornerShape(15.dp),
+                    shape = RoundedCornerShape(16.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
                     modifier = Modifier.fillMaxWidth(),
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f))

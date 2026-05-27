@@ -4,34 +4,51 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.Badnng.moe.helper.BrandIconResolver
 import com.Badnng.moe.rules.*
+
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import top.yukonga.miuix.kmp.blur.isRenderEffectSupported
+import top.yukonga.miuix.kmp.blur.layerBackdrop
+import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
+import top.yukonga.miuix.kmp.blur.textureBlur
 import java.io.BufferedReader
 import java.util.*
 
@@ -225,37 +242,46 @@ fun RulesScreen(
         }
     }
 
-    Scaffold(
-        modifier = modifier,
-        topBar = {
-            Surface(
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
-                tonalElevation = 3.dp
-            ) {
-                TopAppBar(
-                    title = { Text("识别规则") },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
-                    windowInsets = WindowInsets.statusBars
-                )
-            }
-        },
-        containerColor = Color.Transparent,
-        contentWindowInsets = WindowInsets(0, 0, 0, 0)
-    ) { _ ->
-        val bottomInsets =
-            WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-        val topInsets = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val surfaceColor = MaterialTheme.colorScheme.surface
+    val listState = rememberLazyListState()
+    var isScrolled by remember { mutableStateOf(false) }
 
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    contentPadding = PaddingValues(
-                        start = 16.dp,
-                        top = topInsets + 64.dp,
-                        end = 16.dp,
-                        bottom = bottomInsets + 100.dp
-                    )
-                ) {
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+            .collect { (index, offset) ->
+                isScrolled = index > 0 || offset > 30
+            }
+    }
+
+    val animatedBrightness by animateFloatAsState(
+        targetValue = if (isScrolled) -0.1f else 0f,
+        animationSpec = tween(300),
+        label = "brightness"
+    )
+
+    val backdrop = rememberLayerBackdrop {
+        drawRect(surfaceColor)
+        drawContent()
+    }
+    val canBlur = isRenderEffectSupported()
+
+    Box(modifier = modifier.fillMaxSize()) {
+        // 内容层：延伸到顶栏下方
+        Box(modifier = Modifier.fillMaxSize().layerBackdrop(backdrop)) {
+            val bottomInsets =
+                WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(
+                    start = 16.dp,
+                    end = 16.dp,
+                    top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 64.dp,
+                    bottom = bottomInsets + 100.dp
+                )
+            ) {
                     item {
                         SectionCard(
                             title = "本地规则",
@@ -527,7 +553,7 @@ fun RulesScreen(
                             OutlinedButton(
                                 onClick = { performHaptic(); showAddSourceDialog = true },
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(15.dp),
+                                shape = RoundedCornerShape(16.dp),
                                 border = BorderStroke(
                                     1.dp,
                                     MaterialTheme.colorScheme.outlineVariant
@@ -570,7 +596,7 @@ fun RulesScreen(
                                     placeholder = { Text("输入自定义取件地点关键词，用逗号分隔") },
                                     minLines = 2,
                                     maxLines = 5,
-                                    shape = RoundedCornerShape(15.dp),
+                                    shape = RoundedCornerShape(16.dp),
                                     colors = OutlinedTextFieldDefaults.colors(
                                         unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
                                         focusedBorderColor = MaterialTheme.colorScheme.primary
@@ -583,7 +609,7 @@ fun RulesScreen(
                                         Toast.makeText(context, "已保存", Toast.LENGTH_SHORT).show()
                                     },
                                     modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(15.dp)
+                                    shape = RoundedCornerShape(16.dp)
                                 ) {
                                     Text("保存")
                                 }
@@ -744,6 +770,50 @@ fun RulesScreen(
                         )
                     }
                 }
+        }
+
+        // 毛玻璃 TopAppBar 覆盖层
+        if (canBlur) {
+            Box(modifier = Modifier.fillMaxWidth()) {
+                // 背景模糊层（带渐隐 mask）
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .textureBlur(
+                            backdrop = backdrop,
+                            shape = RectangleShape,
+                            blurRadius = 80f,
+                            colors = top.yukonga.miuix.kmp.blur.BlurColors(brightness = animatedBrightness)
+                        )
+                        .frostedGlassMask()
+                )
+                // 内容层（不受 mask 影响）
+                TopAppBar(
+                    title = {
+                        AnimatedVisibility(
+                            visible = !isScrolled,
+                            enter = fadeIn() + slideInVertically(),
+                            exit = fadeOut() + slideOutVertically()
+                        ) {
+                            Text("识别规则", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
+                    windowInsets = WindowInsets.statusBars
+                )
+            }
+        } else {
+            Surface(
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                tonalElevation = 3.dp
+            ) {
+                LargeTopAppBar(
+                    title = { Text("识别规则", style = MaterialTheme.typography.headlineLarge) },
+                    colors = TopAppBarDefaults.largeTopAppBarColors(containerColor = Color.Transparent),
+                    windowInsets = WindowInsets.statusBars
+                )
+            }
+        }
     }
 
     // 添加/编辑在线源对话框
@@ -986,6 +1056,7 @@ fun RulesScreen(
             }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun SectionCard(
     title: String,
@@ -994,12 +1065,13 @@ private fun SectionCard(
     onToggle: () -> Unit,
     content: @Composable ColumnScope.() -> Unit
 ) {
+    val motionScheme = MaterialTheme.motionScheme
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(15.dp))
-            .animateContentSize(),
-        shape = RoundedCornerShape(15.dp),
+            .clip(RoundedCornerShape(16.dp))
+            .animateContentSize(animationSpec = motionScheme.defaultSpatialSpec<IntSize>()),
+        shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f))
     ) {
@@ -1008,7 +1080,7 @@ private fun SectionCard(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(15.dp))
+                    .clip(RoundedCornerShape(16.dp))
                     .clickable { onToggle() }
                     .padding(horizontal = 16.dp, vertical = 12.dp)
             ) {
@@ -1025,17 +1097,24 @@ private fun SectionCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     )
                 }
+                val arrowRotation by animateFloatAsState(
+                    targetValue = if (expanded) 180f else 0f,
+                    animationSpec = motionScheme.defaultSpatialSpec<Float>()
+                )
                 Icon(
-                    imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    imageVector = Icons.Default.ExpandMore,
                     contentDescription = if (expanded) "收起" else "展开",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.rotate(arrowRotation)
                 )
             }
 
             AnimatedVisibility(
                 visible = expanded,
-                enter = expandVertically() + fadeIn(),
-                exit = shrinkVertically() + fadeOut()
+                enter = fadeIn(animationSpec = motionScheme.defaultEffectsSpec<Float>()) +
+                        expandVertically(animationSpec = motionScheme.defaultSpatialSpec<IntSize>()),
+                exit = fadeOut(animationSpec = motionScheme.defaultEffectsSpec<Float>()) +
+                       shrinkVertically(animationSpec = motionScheme.defaultSpatialSpec<IntSize>())
             ) {
                 Column(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
@@ -1046,7 +1125,7 @@ private fun SectionCard(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun RuleSourceRow(
     name: String,
@@ -1062,13 +1141,14 @@ private fun RuleSourceRow(
     extraAction: (@Composable () -> Unit)? = null,
     onLongPress: ((androidx.compose.ui.geometry.Offset) -> Unit)? = null
 ) {
+    val motionScheme = MaterialTheme.motionScheme
     var expanded by remember { mutableStateOf(false) }
     var globalPosition by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .animateContentSize()
+            .animateContentSize(animationSpec = motionScheme.defaultSpatialSpec<IntSize>())
             .onGloballyPositioned { coordinates ->
                 globalPosition = coordinates.positionInWindow()
             }
@@ -1128,19 +1208,25 @@ private fun RuleSourceRow(
                 }
                 extraAction?.invoke()
                 if (expandable) {
+                    val arrowRotation by animateFloatAsState(
+                        targetValue = if (expanded) 180f else 0f,
+                        animationSpec = motionScheme.defaultSpatialSpec<Float>()
+                    )
                     Icon(
-                        imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        imageVector = Icons.Default.ExpandMore,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(20.dp).rotate(arrowRotation)
                     )
                 }
             }
 
             AnimatedVisibility(
                 visible = expanded && expandable,
-                enter = expandVertically() + fadeIn(),
-                exit = shrinkVertically() + fadeOut()
+                enter = fadeIn(animationSpec = motionScheme.defaultEffectsSpec<Float>()) +
+                        expandVertically(animationSpec = motionScheme.defaultSpatialSpec<IntSize>()),
+                exit = fadeOut(animationSpec = motionScheme.defaultEffectsSpec<Float>()) +
+                       shrinkVertically(animationSpec = motionScheme.defaultSpatialSpec<IntSize>())
             ) {
                 Column(
                     modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp)
@@ -1185,7 +1271,7 @@ private fun ActionButton(
     OutlinedButton(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(15.dp),
+        shape = RoundedCornerShape(16.dp),
         border = BorderStroke(
             1.dp,
             if (isDestructive) MaterialTheme.colorScheme.error.copy(alpha = 0.5f)
@@ -1292,5 +1378,19 @@ private fun OnlineSourceDialog(
                 Text("取消")
             }
         }
+    )
+}
+
+private fun Modifier.frostedGlassMask(): Modifier = this.drawWithContent {
+    drawContent()
+    drawRect(
+        brush = Brush.verticalGradient(
+            colorStops = arrayOf(
+                0f to Color.Black,
+                0.55f to Color.Black,
+                1f to Color.Transparent
+            )
+        ),
+        blendMode = BlendMode.DstIn
     )
 }

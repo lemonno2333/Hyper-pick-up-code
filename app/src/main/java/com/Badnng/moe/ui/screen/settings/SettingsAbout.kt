@@ -70,7 +70,7 @@ import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicBoolean
 
 @Composable
-fun AboutSettingsContent(performHaptic: () -> Unit) {
+fun AboutSettingsContent(performHaptic: () -> Unit, topPadding: androidx.compose.ui.unit.Dp = 0.dp, scrollState: androidx.compose.foundation.ScrollState = androidx.compose.foundation.rememberScrollState()) {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
     val prefs = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
@@ -105,11 +105,11 @@ fun AboutSettingsContent(performHaptic: () -> Unit) {
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 16.dp)
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scrollState)
             .windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.safeDrawing.only(androidx.compose.foundation.layout.WindowInsetsSides.Bottom)),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(Modifier.height(32.dp))
+        Spacer(Modifier.height(topPadding))
 
         Surface(
             modifier = Modifier
@@ -191,7 +191,7 @@ fun AboutSettingsContent(performHaptic: () -> Unit) {
                         }
                     }
                 },
-                shape = RoundedCornerShape(15.dp),
+                shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 enabled = !isChecking
             ) {
@@ -310,7 +310,7 @@ fun AboutSettingsContent(performHaptic: () -> Unit) {
 
                 // 备份卡片
                 Surface(
-                    shape = RoundedCornerShape(15.dp),
+                    shape = RoundedCornerShape(16.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
                     modifier = Modifier.fillMaxWidth(),
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f))
@@ -372,7 +372,7 @@ fun AboutSettingsContent(performHaptic: () -> Unit) {
 
                 // 恢复卡片
                 Surface(
-                    shape = RoundedCornerShape(15.dp),
+                    shape = RoundedCornerShape(16.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
                     modifier = Modifier.fillMaxWidth(),
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f))
@@ -480,6 +480,8 @@ fun AboutSettingsContent(performHaptic: () -> Unit) {
                 showProgressDialog = true
                 isPaused = false
                 pausedFlag.set(false)
+                context.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE)
+                    .edit().putBoolean("show_update_download", true).apply()
                 coroutineScope.launch {
                     val file = UpdateHelper.downloadUpdate(
                         context = context,

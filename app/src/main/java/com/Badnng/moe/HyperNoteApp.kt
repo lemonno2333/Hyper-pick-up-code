@@ -4,6 +4,11 @@ import android.app.Activity
 import android.app.Application
 import android.os.Bundle
 import com.Badnng.moe.helper.AppLogger
+import com.Badnng.moe.rules.RecognitionRuleEngine
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 class HyperNoteApp : Application(), Application.ActivityLifecycleCallbacks {
 
@@ -12,6 +17,12 @@ class HyperNoteApp : Application(), Application.ActivityLifecycleCallbacks {
         AppLogger.init(this)
         registerActivityLifecycleCallbacks(this)
         AppLogger.app("Application onCreate, process=${android.os.Process.myPid()}")
+        // 预热规则引擎，确保短信/通知广播到达时引擎已就绪
+        CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
+            if (!RecognitionRuleEngine.isInitialized) {
+                RecognitionRuleEngine.initialize(applicationContext)
+            }
+        }
     }
 
     override fun onTerminate() {

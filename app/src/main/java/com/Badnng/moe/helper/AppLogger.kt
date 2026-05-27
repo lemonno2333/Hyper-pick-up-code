@@ -94,19 +94,39 @@ object AppLogger {
                 logcatProcess = process
 
                 val reader = BufferedReader(InputStreamReader(process.inputStream), 8192)
-                val dir = File(logsDir, currentDate).apply { mkdirs() }
+                var dir = File(logsDir, currentDate).apply { mkdirs() }
 
-                val appFile = File(dir, "app.log")
-                val recogFile = File(dir, "recognition.log")
-                val updateFile = File(dir, "update.log")
-
-                val appWriter = BufferedWriter(FileWriter(appFile, true), 8192)
-                val recogWriter = BufferedWriter(FileWriter(recogFile, true), 8192)
-                val updateWriter = BufferedWriter(FileWriter(updateFile, true), 8192)
+                var appWriter = BufferedWriter(FileWriter(File(dir, "app.log"), true), 8192)
+                var recogWriter = BufferedWriter(FileWriter(File(dir, "recognition.log"), true), 8192)
+                var updateWriter = BufferedWriter(FileWriter(File(dir, "update.log"), true), 8192)
 
                 try {
                     var line: String?
+                    var lastDateCheck = System.currentTimeMillis()
+                    var currentLogDate = currentDate
+
                     while (reader.readLine().also { line = it } != null) {
+                        // 每 30 秒检查一次日期切换
+                        val now = System.currentTimeMillis()
+                        if (now - lastDateCheck > 30_000) {
+                            lastDateCheck = now
+                            val today = dateFormat.format(Date())
+                            if (today != currentLogDate) {
+                                // 日期切换，关闭旧 writer，打开新目录
+                                appWriter.close()
+                                recogWriter.close()
+                                updateWriter.close()
+
+                                currentLogDate = today
+                                currentDate = today
+                                dir = File(logsDir, today).apply { mkdirs() }
+                                appWriter = BufferedWriter(FileWriter(File(dir, "app.log"), true), 8192)
+                                recogWriter = BufferedWriter(FileWriter(File(dir, "recognition.log"), true), 8192)
+                                updateWriter = BufferedWriter(FileWriter(File(dir, "update.log"), true), 8192)
+                                Log.d(TAG, "logcat date switched to $today")
+                            }
+                        }
+
                         line?.let { l ->
                             // 全部写入 app.log
                             appWriter.write(l)
@@ -129,8 +149,8 @@ object AppLogger {
                             }
                         }
 
-                        if (appFile.length() > MAX_APP_LOG_SIZE) {
-                            truncateFile(appFile)
+                        if (File(dir, "app.log").length() > MAX_APP_LOG_SIZE) {
+                            truncateFile(File(dir, "app.log"))
                         }
                     }
                 } finally {

@@ -343,10 +343,12 @@ data class ExpressExtraction(
 }
 
 data class FoodExtraction(
-    val triggerKeywords: List<String> = listOf("取餐", "取茶", "验证码", "券码", "订单", "准备完毕", "领取", "取单", "取货"),
-    val hintKeywords: List<String> = listOf("取单码", "取单号", "取餐号", "取餐码", "取茶号", "取货码", "券码", "订单号", "取性码", "取養号"),
-    val queueKeywords: List<String> = listOf("叫号", "取号", "过号", "排队", "迎宾台", "到店就餐", "还需等待", "桌安排"),
+    val triggerKeywords: List<String> = listOf("取餐", "取茶", "验证码", "券码", "订单", "准备完毕", "领取", "取单", "取货", "取養"),
+    val hintKeywords: List<String> = listOf("取单码", "取单号", "取餐号", "取餐码", "取茶号", "取货码", "券码", "订单号", "取性码", "取養号", "待取餐", "当前订单"),
+    val queueKeywords: List<String> = listOf("叫号", "取号", "过号", "排队", "迎宾台", "到店就餐", "还需等待", "桌安排", "预约号码", "卡座", "排号", "取餐号"),
     val queueThreshold: Int = 2,
+    val genericCodePattern: String = "[A-Z0-9]{3,10}",
+    val standaloneCodePattern: String = "^[A-Z0-9]{3,10}$",
     val patterns: FoodPatterns = FoodPatterns(),
     val starbucksPattern: StarbucksPattern? = null
 ) {
@@ -355,6 +357,8 @@ data class FoodExtraction(
         put("hint_keywords", JSONArray(hintKeywords))
         put("queue_keywords", JSONArray(queueKeywords))
         put("queue_threshold", queueThreshold)
+        put("generic_code_pattern", genericCodePattern)
+        put("standalone_code_pattern", standaloneCodePattern)
         put("patterns", patterns.toJson())
         starbucksPattern?.let { put("starbucks_pattern", it.toJson()) }
     }
@@ -366,10 +370,12 @@ data class FoodExtraction(
 
     companion object {
         fun fromJson(json: JSONObject): FoodExtraction = FoodExtraction(
-            triggerKeywords = json.optJSONArray("trigger_keywords")?.let { arr -> (0 until arr.length()).map { arr.getString(it) } } ?: listOf("取餐", "取茶", "验证码", "券码", "订单", "准备完毕", "领取", "取单", "取货"),
-            hintKeywords = json.optJSONArray("hint_keywords")?.let { arr -> (0 until arr.length()).map { arr.getString(it) } } ?: listOf("取单码", "取单号", "取餐号", "取餐码", "取茶号", "取货码", "券码", "订单号", "取性码", "取養号"),
+            triggerKeywords = json.optJSONArray("trigger_keywords")?.let { arr -> (0 until arr.length()).map { arr.getString(it) } } ?: listOf("取餐", "取茶", "验证码", "券码", "订单", "准备完毕", "领取", "取单", "取货", "取養"),
+            hintKeywords = json.optJSONArray("hint_keywords")?.let { arr -> (0 until arr.length()).map { arr.getString(it) } } ?: listOf("取单码", "取单号", "取餐号", "取餐码", "取茶号", "取货码", "券码", "订单号", "取性码", "取養号", "待取餐", "当前订单"),
             queueKeywords = json.optJSONArray("queue_keywords")?.let { arr -> (0 until arr.length()).map { arr.getString(it) } } ?: listOf("叫号", "取号", "过号", "排队", "迎宾台", "到店就餐", "还需等待", "桌安排"),
             queueThreshold = json.optInt("queue_threshold", 2),
+            genericCodePattern = json.optString("generic_code_pattern", "[A-Z0-9]{3,10}"),
+            standaloneCodePattern = json.optString("standalone_code_pattern", "^[A-Z0-9]{3,10}$"),
             patterns = json.optJSONObject("patterns")?.let { FoodPatterns.fromJson(it) } ?: FoodPatterns(),
             starbucksPattern = json.optJSONObject("starbucks_pattern")?.let { StarbucksPattern.fromJson(it) }
         )
@@ -378,12 +384,14 @@ data class FoodExtraction(
 
 data class FoodPatterns(
     val queuePatterns: List<QueuePattern> = emptyList(),
+    val hashCodePattern: ExtractionPattern? = null,
     val sloganPattern: ExtractionPattern? = null,
     val keywordPattern: KeywordPattern? = null,
     val fallbackPattern: ExtractionPattern? = null
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("queue_patterns", JSONArray(queuePatterns.map { it.toJson() }))
+        hashCodePattern?.let { put("hash_code_pattern", it.toJson()) }
         sloganPattern?.let { put("slogan_pattern", it.toJson()) }
         keywordPattern?.let { put("keyword_pattern", it.toJson()) }
         fallbackPattern?.let { put("fallback_pattern", it.toJson()) }
@@ -391,6 +399,7 @@ data class FoodPatterns(
 
     fun mergeWithBuiltIn(builtIn: FoodPatterns): FoodPatterns = copy(
         queuePatterns = if (queuePatterns.isEmpty()) builtIn.queuePatterns else queuePatterns,
+        hashCodePattern = hashCodePattern ?: builtIn.hashCodePattern,
         sloganPattern = sloganPattern ?: builtIn.sloganPattern,
         keywordPattern = keywordPattern ?: builtIn.keywordPattern,
         fallbackPattern = fallbackPattern ?: builtIn.fallbackPattern
@@ -399,6 +408,7 @@ data class FoodPatterns(
     companion object {
         fun fromJson(json: JSONObject): FoodPatterns = FoodPatterns(
             queuePatterns = json.optJSONArray("queue_patterns")?.let { arr -> (0 until arr.length()).map { QueuePattern.fromJson(arr.getJSONObject(it)) } } ?: emptyList(),
+            hashCodePattern = json.optJSONObject("hash_code_pattern")?.let { ExtractionPattern.fromJson(it) },
             sloganPattern = json.optJSONObject("slogan_pattern")?.let { ExtractionPattern.fromJson(it) },
             keywordPattern = json.optJSONObject("keyword_pattern")?.let { KeywordPattern.fromJson(it) },
             fallbackPattern = json.optJSONObject("fallback_pattern")?.let { ExtractionPattern.fromJson(it) }
@@ -608,13 +618,15 @@ data class TextCleaningConfig(
     val datetimePattern: String = "\\d{2}-\\d{2}\\s+\\d{2}:\\d{2}",
     val corrections: List<TextCorrection> = emptyList(),
     val charRemovals: List<String> = listOf("|"),
-    val spaceCollapse: String = "(?<=[\\u4e00-\\u9fa5A-Z0-9-])\\s+(?=[\\u4e00-\\u9fa5])"
+    val spaceCollapse: String = "(?<=[\\u4e00-\\u9fa5A-Z0-9-])\\s+(?=[\\u4e00-\\u9fa5])",
+    val trailingPunctuation: String = "[,，。！!?;？;|\\s]+$"
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("datetime_pattern", datetimePattern)
         put("corrections", JSONArray(corrections.map { it.toJson() }))
         put("char_removals", JSONArray(charRemovals))
         put("space_collapse", spaceCollapse)
+        put("trailing_punctuation", trailingPunctuation)
     }
 
     companion object {
@@ -622,7 +634,8 @@ data class TextCleaningConfig(
             datetimePattern = json.optString("datetime_pattern", "\\d{2}-\\d{2}\\s+\\d{2}:\\d{2}"),
             corrections = json.optJSONArray("corrections")?.let { arr -> (0 until arr.length()).map { TextCorrection.fromJson(arr.getJSONObject(it)) } } ?: emptyList(),
             charRemovals = json.optJSONArray("char_removals")?.let { arr -> (0 until arr.length()).map { arr.getString(it) } } ?: listOf("|"),
-            spaceCollapse = json.optString("space_collapse", "(?<=[\\u4e00-\\u9fa5A-Z0-9-])\\s+(?=[\\u4e00-\\u9fa5])")
+            spaceCollapse = json.optString("space_collapse", "(?<=[\\u4e00-\\u9fa5A-Z0-9-])\\s+(?=[\\u4e00-\\u9fa5])"),
+            trailingPunctuation = json.optString("trailing_punctuation", "[,，。！!?;？;|\\s]+$")
         )
     }
 }
@@ -665,32 +678,69 @@ data class ValidationConfig(
 
 data class ExpressValidation(
     val maxLength: Int = 12,
+    val maxReverseDistance: Int = 80,
+    val maxCodeKeywordGap: Int = 30,
+    val codeSeparators: List<String> = listOf("、", "，", ",", " "),
     val rejectAllLetters: Boolean = true,
     val rejectPhonePattern: String = "^1\\d{10}$",
     val rejectYearPrefix: String = "202",
     val rejectYearLength: Int = 4,
     val rejectDatePattern: String = "^(0?[1-9]|1[0-2])-(0?[1-9]|[12]\\d|3[01])$",
-    val phoneTail: PhoneTailConfig = PhoneTailConfig()
+    val phoneTail: PhoneTailConfig = PhoneTailConfig(),
+    val threeSegment: ThreeSegmentConfig? = null
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("max_length", maxLength)
+        put("max_reverse_distance", maxReverseDistance)
+        put("max_code_keyword_gap", maxCodeKeywordGap)
+        put("code_separators", org.json.JSONArray(codeSeparators))
         put("reject_all_letters", rejectAllLetters)
         put("reject_phone_pattern", rejectPhonePattern)
         put("reject_year_prefix", rejectYearPrefix)
         put("reject_year_length", rejectYearLength)
         put("reject_date_pattern", rejectDatePattern)
         put("phone_tail", phoneTail.toJson())
+        threeSegment?.let { put("three_segment", it.toJson()) }
     }
 
     companion object {
         fun fromJson(json: JSONObject): ExpressValidation = ExpressValidation(
             maxLength = json.optInt("max_length", 12),
+            maxReverseDistance = json.optInt("max_reverse_distance", 80),
+            maxCodeKeywordGap = json.optInt("max_code_keyword_gap", 30),
+            codeSeparators = json.optJSONArray("code_separators")?.let { arr ->
+                (0 until arr.length()).map { arr.getString(it) }
+            } ?: listOf("、", "，", ",", " "),
             rejectAllLetters = json.optBoolean("reject_all_letters", true),
             rejectPhonePattern = json.optString("reject_phone_pattern", "^1\\d{10}$"),
             rejectYearPrefix = json.optString("reject_year_prefix", "202"),
             rejectYearLength = json.optInt("reject_year_length", 4),
             rejectDatePattern = json.optString("reject_date_pattern", "^(0?[1-9]|1[0-2])-(0?[1-9]|[12]\\d|3[01])$"),
-            phoneTail = json.optJSONObject("phone_tail")?.let { PhoneTailConfig.fromJson(it) } ?: PhoneTailConfig()
+            phoneTail = json.optJSONObject("phone_tail")?.let { PhoneTailConfig.fromJson(it) } ?: PhoneTailConfig(),
+            threeSegment = json.optJSONObject("three_segment")?.let { ThreeSegmentConfig.fromJson(it) }
+        )
+    }
+}
+
+data class ThreeSegmentConfig(
+    val pattern: String = "([A-Z0-9]+-[A-Z0-9]+-[A-Z0-9]+)",
+    val lastSegmentLength: Int = 4,
+    val lastSegmentPattern: String = "[0-9]{4}",
+    val description: String = "三段式取件码第三段必须是4位数字"
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("pattern", pattern)
+        put("last_segment_length", lastSegmentLength)
+        put("last_segment_pattern", lastSegmentPattern)
+        put("description", description)
+    }
+
+    companion object {
+        fun fromJson(json: JSONObject): ThreeSegmentConfig = ThreeSegmentConfig(
+            pattern = json.optString("pattern", "([A-Z0-9]+-[A-Z0-9]+-[A-Z0-9]+)"),
+            lastSegmentLength = json.optInt("last_segment_length", 4),
+            lastSegmentPattern = json.optString("last_segment_pattern", "[0-9]{4}"),
+            description = json.optString("description", "三段式取件码第三段必须是4位数字")
         )
     }
 }

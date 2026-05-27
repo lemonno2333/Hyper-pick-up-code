@@ -14,6 +14,7 @@ import com.Badnng.moe.data.db.OrderEntity
 import com.Badnng.moe.helper.DailyExpressGroupingHelper
 import com.Badnng.moe.helper.NotificationHelper
 import com.Badnng.moe.ocr.TextRecognitionHelper
+import com.Badnng.moe.rules.RecognitionRuleEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -48,13 +49,24 @@ class SmsRecognitionService : Service() {
     }
 
     private suspend fun processSms(smsText: String, sender: String) {
+        if (!RecognitionRuleEngine.isInitialized) {
+            RecognitionRuleEngine.initialize(applicationContext)
+        }
         val helper = TextRecognitionHelper(applicationContext)
-        val result = helper.recognizeFromText(smsText)
+        val results = helper.recognizeFromText(smsText)
         helper.close()
 
-        Log.d("SmsRecognition", "识别结果：code=${result.code}, type=${result.type}, brand=${result.brand}")
+        Log.d("SmsRecognition", "识别结果：${results.size}个, codes=${results.map { it.code }}")
 
-        if (result.code != null) {
+        if (results.isEmpty()) return
+
+        val db = OrderDatabase.getDatabase(applicationContext)
+        val orderDao = db.orderDao()
+        val groupDao = db.orderGroupDao()
+        val insertedOrders = mutableListOf<OrderEntity>()
+
+        for (result in results) {
+            if (result.code == null) continue
             val order = OrderEntity(
                 takeoutCode = result.code,
                 qrCodeData = result.qr,
@@ -67,32 +79,34 @@ class SmsRecognitionService : Service() {
                 sourceApp = "短信识别",
                 sourcePackage = sender
             )
-
-            val db = OrderDatabase.getDatabase(applicationContext)
-            val orderDao = db.orderDao()
-            val groupDao = db.orderGroupDao()
             orderDao.insert(order)
+            insertedOrders.add(order)
+        }
 
-            DailyExpressGroupingHelper.regroupPendingExpressByDay(orderDao, groupDao, this)
+        if (insertedOrders.isEmpty()) return
 
-            val notificationHelper = NotificationHelper(applicationContext)
-            val refreshedOrder = orderDao.getOrderById(order.id)
-            val groupId = refreshedOrder?.groupId
-            if (groupId != null) {
-                val group = groupDao.getGroupById(groupId)
+        DailyExpressGroupingHelper.regroupPendingExpressByDay(orderDao, groupDao, this)
+
+        val notificationHelper = NotificationHelper(applicationContext)
+        val refreshedOrders = insertedOrders.mapNotNull { orderDao.getOrderById(it.id) }
+        val groupedIds = refreshedOrders.mapNotNull { it.groupId }.toSet()
+
+        if (groupedIds.isNotEmpty()) {
+            groupedIds.forEach { groupId ->
+                val group = groupDao.getGroupById(groupId) ?: return@forEach
                 val groupOrders = orderDao.getAllOrdersList()
                     .filter { it.groupId == groupId && !it.isCompleted }
                     .sortedByDescending { it.createdAt }
-                if (group != null && groupOrders.size >= 2) {
+                if (groupOrders.size >= 2) {
                     groupOrders.forEach { notificationHelper.cancelNotification(it.id) }
                     groupDao.updateOrderCount(groupId, groupOrders.size)
                     notificationHelper.showGroupNotification(group.copy(orderCount = groupOrders.size), groupOrders)
-                } else {
-                    notificationHelper.showPromotedLiveUpdate(order, result.brand)
                 }
-            } else {
-                notificationHelper.showPromotedLiveUpdate(order, result.brand)
             }
+        }
+
+        refreshedOrders.filter { it.groupId == null }.forEach { order ->
+            notificationHelper.showPromotedLiveUpdate(order, order.brandName)
         }
     }
 

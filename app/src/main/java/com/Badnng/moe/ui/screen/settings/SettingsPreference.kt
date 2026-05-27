@@ -1,6 +1,13 @@
 package com.Badnng.moe.ui.screen.settings
 
 import android.content.Context
+import com.Badnng.moe.ui.theme.Md3Presets
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import android.content.pm.PackageManager
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -61,12 +68,16 @@ import com.Badnng.moe.R
 import com.Badnng.moe.helper.SuperIslandHelper
 import com.Badnng.moe.ui.component.CaptureModeItem
 import com.Badnng.moe.ui.component.ChoiceChip
+import com.Badnng.moe.ui.component.GroupPosition
 import com.Badnng.moe.ui.component.PreferenceSection
 import com.Badnng.moe.ui.component.PreferenceSwitchItem
+import com.Badnng.moe.ui.component.SettingsGroup
+import com.Badnng.moe.ui.component.SettingsGroupItem
+import com.Badnng.moe.ui.component.SettingsGroupSwitchItem
 import com.Badnng.moe.ui.component.SettingsListItem
 
 @Composable
-fun PreferenceSettingsContent(performHaptic: () -> Unit, onNavigate: (SettingsPage) -> Unit = {}) {
+fun PreferenceSettingsContent(performHaptic: () -> Unit, onNavigate: (SettingsPage) -> Unit = {}, topPadding: androidx.compose.ui.unit.Dp = 0.dp, scrollState: androidx.compose.foundation.ScrollState = androidx.compose.foundation.rememberScrollState()) {
     val context = LocalContext.current; val prefs = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
     val configuration = LocalConfiguration.current
     val isLargeScreen = configuration.screenWidthDp >= 700
@@ -88,6 +99,8 @@ fun PreferenceSettingsContent(performHaptic: () -> Unit, onNavigate: (SettingsPa
     var updateChannel by remember { mutableStateOf(prefs.getString("update_channel", "stable") ?: "stable") }
     var notificationType by remember { mutableStateOf(prefs.getString("notification_type", "native") ?: "native") }
     var smsRecognitionEnabled by remember { mutableStateOf(prefs.getBoolean("sms_recognition_enabled", false)) }
+    var notificationListenerEnabled by remember { mutableStateOf(prefs.getBoolean("notification_listener_recognition_enabled", false)) }
+    var notificationListenerPermissionReady by remember { mutableStateOf(com.Badnng.moe.service.NotificationListenerRecognitionService.isNotificationListenerEnabled(context)) }
 
     val smsPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
@@ -101,20 +114,27 @@ fun PreferenceSettingsContent(performHaptic: () -> Unit, onNavigate: (SettingsPa
         }
     }
 
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        while (true) {
+            notificationListenerPermissionReady = com.Badnng.moe.service.NotificationListenerRecognitionService.isNotificationListenerEnabled(context)
+            kotlinx.coroutines.delay(2000)
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 16.dp)
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scrollState)
             .windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.safeDrawing.only(androidx.compose.foundation.layout.WindowInsetsSides.Bottom)),
         verticalArrangement = Arrangement.spacedBy(32.dp)
     ) {
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(topPadding))
         PreferenceSection(title = "底栏位置") {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (isLargeScreen || isFoldableDevice) {
                     Surface(
-                        shape = RoundedCornerShape(15.dp),
+                        shape = RoundedCornerShape(16.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f))
                     ) {
@@ -154,14 +174,11 @@ fun PreferenceSettingsContent(performHaptic: () -> Unit, onNavigate: (SettingsPa
         }
 
         PreferenceSection(title = "交互反馈") {
-            Surface(
-                shape = RoundedCornerShape(15.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f))
-            ) {
-                PreferenceSwitchItem(
+            SettingsGroup {
+                SettingsGroupSwitchItem(
                     title = "震动反馈",
                     description = "开启后点击按钮、切换分类时会有触感反馈",
+                    position = GroupPosition.Single,
                     checked = hapticEnabled,
                     onCheckedChange = {
                         hapticEnabled = it
@@ -175,14 +192,11 @@ fun PreferenceSettingsContent(performHaptic: () -> Unit, onNavigate: (SettingsPa
         var autoGroupEnabled by remember { mutableStateOf(prefs.getBoolean("auto_group_enabled", true)) }
 
         PreferenceSection(title = "订单管理") {
-            Surface(
-                shape = RoundedCornerShape(15.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f))
-            ) {
-                PreferenceSwitchItem(
+            SettingsGroup {
+                SettingsGroupSwitchItem(
                     title = "快递自动合并",
                     description = "自动将同一天的快递订单合并为一个组",
+                    position = GroupPosition.Single,
                     checked = autoGroupEnabled,
                     onCheckedChange = {
                         performHaptic()
@@ -194,14 +208,11 @@ fun PreferenceSettingsContent(performHaptic: () -> Unit, onNavigate: (SettingsPa
         }
 
         PreferenceSection(title = "外观设置") {
-            Surface(
-                shape = RoundedCornerShape(15.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f))
-            ) {
-                PreferenceSwitchItem(
+            SettingsGroup {
+                SettingsGroupSwitchItem(
                     title = "莫奈取色 (Dynamic Color)",
                     description = "开启后主题色将跟随系统壁纸自动变化",
+                    position = GroupPosition.Single,
                     checked = monetEnabled,
                     onCheckedChange = {
                         performHaptic()
@@ -211,115 +222,139 @@ fun PreferenceSettingsContent(performHaptic: () -> Unit, onNavigate: (SettingsPa
                 )
             }
         }
-        AnimatedVisibility(visible = !monetEnabled, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) { PreferenceSection(title = "自定义主题色") { Column(verticalArrangement = Arrangement.spacedBy(16.dp)) { Text("滑动调节色相", style = MaterialTheme.typography.bodySmall); Slider(value = customHue, onValueChange = { customHue = it }, valueRange = 0f..360f, modifier = Modifier.fillMaxWidth()); val previewColor = remember(customHue) { Color.hsv(customHue, 0.7f, 0.9f) }; Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) { Box(modifier = Modifier.size(56.dp).clip(CircleShape).background(previewColor).border(2.dp, MaterialTheme.colorScheme.outline, CircleShape)); Button(onClick = { performHaptic(); selectedColorInt = previewColor.toArgb(); prefs.edit().putInt("theme_color", selectedColorInt).apply() }, shape = RoundedCornerShape(15.dp), modifier = Modifier.weight(1f).height(56.dp)) { Text("应用颜色") } } ; Text("MD3 建议色", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp)); val md3Colors = listOf(0xFF6750A4, 0xFF006A60, 0xFF984061, 0xFF005AC1, 0xFF605D62, 0xFF3B6939); Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) { md3Colors.forEach { colorLong -> val color = Color(colorLong); Box(modifier = Modifier.size(44.dp).clip(CircleShape).background(color).border(width = if (selectedColorInt == color.toArgb()) 3.dp else 0.dp, color = MaterialTheme.colorScheme.primary, shape = CircleShape).clickable { performHaptic(); selectedColorInt = color.toArgb(); prefs.edit().putInt("theme_color", selectedColorInt).apply() }) } } } } }
+        AnimatedVisibility(visible = !monetEnabled, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) { PreferenceSection(title = "自定义主题色") { Column(verticalArrangement = Arrangement.spacedBy(16.dp)) { Text("滑动调节色相", style = MaterialTheme.typography.bodySmall); Slider(value = customHue, onValueChange = { customHue = it }, valueRange = 0f..360f, modifier = Modifier.fillMaxWidth()); val previewColor = remember(customHue) { Color.hsv(customHue, 0.7f, 0.9f) }; Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) { Box(modifier = Modifier.size(56.dp).clip(CircleShape).background(previewColor).border(2.dp, MaterialTheme.colorScheme.outline, CircleShape)); Button(onClick = { performHaptic(); selectedColorInt = previewColor.toArgb(); prefs.edit().putInt("theme_color", selectedColorInt).apply() }, shape = RoundedCornerShape(16.dp), modifier = Modifier.weight(1f).height(56.dp)) { Text("应用颜色") } } ; Text("MD3 建议色", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp)); val md3Presets = Md3Presets; val gap = 2.5f; val cr = 4f; FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) { md3Presets.forEach { preset -> Box(modifier = Modifier.size(36.dp).clip(CircleShape).drawWithContent { val w = size.width; val h = size.height; val midX = w / 2; val midY = h / 2; drawPath(androidx.compose.ui.graphics.Path().apply { addRoundRect(androidx.compose.ui.geometry.RoundRect(midX + gap, gap, w - gap, h - gap, androidx.compose.ui.geometry.CornerRadius(0f), androidx.compose.ui.geometry.CornerRadius(cr), androidx.compose.ui.geometry.CornerRadius(cr), androidx.compose.ui.geometry.CornerRadius(0f))) }, preset.primary); drawPath(androidx.compose.ui.graphics.Path().apply { addRoundRect(androidx.compose.ui.geometry.RoundRect(gap, gap, midX - gap * 0.5f, midY - gap * 0.5f, androidx.compose.ui.geometry.CornerRadius(0f), androidx.compose.ui.geometry.CornerRadius(0f), androidx.compose.ui.geometry.CornerRadius(0f), androidx.compose.ui.geometry.CornerRadius(cr))) }, preset.secondary); drawPath(androidx.compose.ui.graphics.Path().apply { addRoundRect(androidx.compose.ui.geometry.RoundRect(gap, midY + gap * 0.5f, midX - gap * 0.5f, h - gap, androidx.compose.ui.geometry.CornerRadius(0f), androidx.compose.ui.geometry.CornerRadius(cr), androidx.compose.ui.geometry.CornerRadius(0f), androidx.compose.ui.geometry.CornerRadius(0f))) }, preset.tertiary) }.border(width = if (selectedColorInt == preset.seed.toArgb()) 3.dp else 0.dp, color = if (selectedColorInt == preset.seed.toArgb()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant, shape = CircleShape).clickable { performHaptic(); selectedColorInt = preset.seed.toArgb(); prefs.edit().putInt("theme_color", selectedColorInt).apply() }) } } } } }
         PreferenceSection(title = "显示模式") {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("light" to "浅色", "dark" to "深色", "system" to "跟随系统").forEach { (key, label) ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                performHaptic()
-                                themeMode = key
-                                prefs.edit().putString("theme_mode", key).apply()
-                            }
-                            .padding(vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        RadioButton(
-                            selected = themeMode == key,
-                            onClick = {
-                                performHaptic()
-                                themeMode = key
-                                prefs.edit().putString("theme_mode", key).apply()
-                            }
-                        )
-                        Spacer(Modifier.width(12.dp))
-                        Text(label, fontSize = 16.sp)
+            SettingsGroup {
+                val themeOptions = listOf("light" to "浅色", "dark" to "深色", "system" to "跟随系统")
+                themeOptions.forEachIndexed { index, (key, label) ->
+                    val pos = when (index) {
+                        0 -> GroupPosition.First
+                        themeOptions.lastIndex -> GroupPosition.Middle
+                        else -> GroupPosition.Middle
                     }
-                }
-
-                Surface(
-                    shape = RoundedCornerShape(15.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                    modifier = Modifier.padding(top = 8.dp),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f))
-                ) {
-                    PreferenceSwitchItem(
-                        title = "Amoled 纯黑深色",
-                        description = "仅在深色模式生效，让背景和表面接近纯黑",
-                        checked = amoledPureBlack,
-                        onCheckedChange = {
+                    SettingsGroupItem(
+                        title = label,
+                        position = pos,
+                        onClick = {
                             performHaptic()
-                            amoledPureBlack = it
-                            prefs.edit().putBoolean("amoled_pure_black", it).apply()
+                            themeMode = key
+                            prefs.edit().putString("theme_mode", key).apply()
+                        },
+                        trailing = { RadioButton(selected = themeMode == key, onClick = null) }
+                    )
+                }
+                SettingsGroupSwitchItem(
+                    title = "Amoled 纯黑深色",
+                    description = "仅在深色模式生效，让背景和表面接近纯黑",
+                    position = GroupPosition.Last,
+                    checked = amoledPureBlack,
+                    onCheckedChange = {
+                        performHaptic()
+                        amoledPureBlack = it
+                        prefs.edit().putBoolean("amoled_pure_black", it).apply()
+                    }
+                )
+            }
+        }
+
+        PreferenceSection(title = "短信识别") {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                SettingsGroup {
+                    SettingsGroupSwitchItem(
+                        title = "短信识别取件码",
+                        description = "自动识别收到的短信中的快递取件码和取餐码",
+                        position = GroupPosition.First,
+                        checked = smsRecognitionEnabled,
+                        onCheckedChange = { newValue ->
+                            performHaptic()
+                            if (newValue) {
+                                smsPermissionLauncher.launch(arrayOf(
+                                    android.Manifest.permission.RECEIVE_SMS,
+                                    android.Manifest.permission.READ_SMS
+                                ))
+                            } else {
+                                smsRecognitionEnabled = false
+                                prefs.edit().putBoolean("sms_recognition_enabled", false).apply()
+                            }
+                        }
+                    )
+                    SettingsGroupItem(
+                        title = "测试短信识别",
+                        position = GroupPosition.Last,
+                        onClick = {
+                            performHaptic()
+                            val testSms = "【丰巢】凭取件码88306313至XX丰巢柜取您的包裹，超时将收费"
+                            val intent = android.content.Intent(context, com.Badnng.moe.service.SmsRecognitionService::class.java).apply {
+                                putExtra("smsText", testSms)
+                                putExtra("sender", "测试号码")
+                            }
+                            androidx.core.content.ContextCompat.startForegroundService(context, intent)
+                            Toast.makeText(context, "已发送测试短信", Toast.LENGTH_SHORT).show()
                         }
                     )
                 }
             }
         }
 
-        PreferenceSection(title = "短信识别") {
-            Surface(
-                shape = RoundedCornerShape(15.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f))
-            ) {
-                PreferenceSwitchItem(
-                    title = "短信识别取件码",
-                    description = "自动识别收到的短信中的快递取件码和取餐码",
-                    checked = smsRecognitionEnabled,
-                    onCheckedChange = { newValue ->
-                        performHaptic()
-                        if (newValue) {
-                            smsPermissionLauncher.launch(arrayOf(
-                                android.Manifest.permission.RECEIVE_SMS,
-                                android.Manifest.permission.READ_SMS
-                            ))
-                        } else {
-                            smsRecognitionEnabled = false
-                            prefs.edit().putBoolean("sms_recognition_enabled", false).apply()
+        PreferenceSection(title = "通知识别") {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                SettingsGroup {
+                    SettingsGroupSwitchItem(
+                        title = "通知识别取件码",
+                        description = "自动识别其他应用（如外卖、快递App）通知中的取件码和取餐码",
+                        position = GroupPosition.Single,
+                        checked = notificationListenerEnabled,
+                        onCheckedChange = { newValue ->
+                            performHaptic()
+                            if (newValue && !notificationListenerPermissionReady) {
+                                val intent = android.content.Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+                                context.startActivity(intent)
+                                Toast.makeText(context, "请在系统设置中启用澎湃记的通知监听", Toast.LENGTH_LONG).show()
+                            } else {
+                                notificationListenerEnabled = newValue
+                                prefs.edit().putBoolean("notification_listener_recognition_enabled", newValue).apply()
+                            }
+                        }
+                    )
+                }
+
+                AnimatedVisibility(
+                    visible = notificationListenerEnabled && notificationListenerPermissionReady,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        SettingsGroup {
+                            SettingsGroupItem(
+                                title = "管理应用",
+                                position = GroupPosition.First,
+                                onClick = {
+                                    performHaptic()
+                                    onNavigate(SettingsPage.NotificationApps)
+                                }
+                            )
+                            SettingsGroupItem(
+                                title = "测试通知识别",
+                                position = GroupPosition.Last,
+                                onClick = {
+                                    performHaptic()
+                                    val testText = "【美团外卖】您的餐已准备好，取餐码 A1234，请到店取餐"
+                                    com.Badnng.moe.service.NotificationListenerRecognitionService.testNotificationRecognition(context, testText)
+                                    Toast.makeText(context, "已发送测试通知识别", Toast.LENGTH_SHORT).show()
+                                }
+                            )
                         }
                     }
-                )
-            }
-
-            Spacer(Modifier.height(8.dp))
-
-            Surface(
-                onClick = {
-                    performHaptic()
-                    val testSms = "【丰巢】凭取件码88306313至XX丰巢柜取您的包裹，超时将收费"
-                    val intent = android.content.Intent(context, com.Badnng.moe.service.SmsRecognitionService::class.java).apply {
-                        putExtra("smsText", testSms)
-                        putExtra("sender", "测试号码")
-                    }
-                    androidx.core.content.ContextCompat.startForegroundService(context, intent)
-                    Toast.makeText(context, "已发送测试短信", Toast.LENGTH_SHORT).show()
-                },
-                shape = RoundedCornerShape(15.dp),
-                color = MaterialTheme.colorScheme.primaryContainer,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    text = "测试短信识别",
-                    modifier = Modifier.padding(16.dp),
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                )
+                }
             }
         }
 
         PreferenceSection(title = "引导设置") {
-            Surface(
-                shape = RoundedCornerShape(15.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f))
-            ) {
-                PreferenceSwitchItem(
+            SettingsGroup {
+                SettingsGroupSwitchItem(
                     title = "下次启动时打开引导页面",
                     description = "开启后，彻底停止App再启动会显示引导页面，完成引导后自动关闭",
+                    position = GroupPosition.Single,
                     checked = showOnboardingOnNextLaunch,
                     onCheckedChange = {
                         performHaptic()
@@ -365,7 +400,7 @@ fun PreferenceSettingsContent(performHaptic: () -> Unit, onNavigate: (SettingsPa
                                 performHaptic()
                                 SuperIslandHelper.sendTestNotification(context)
                             },
-                            shape = RoundedCornerShape(15.dp),
+                            shape = RoundedCornerShape(16.dp),
                             color = MaterialTheme.colorScheme.primaryContainer,
                             modifier = Modifier.fillMaxWidth()
                         ) {
@@ -398,14 +433,11 @@ fun PreferenceSettingsContent(performHaptic: () -> Unit, onNavigate: (SettingsPa
 
         PreferenceSection(title = "联网更新") {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Surface(
-                    shape = RoundedCornerShape(15.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f))
-                ) {
-                    PreferenceSwitchItem(
+                SettingsGroup {
+                    SettingsGroupSwitchItem(
                         title = "联网更新",
                         description = "仅用于检测App新版本并下载，不用于其他用途",
+                        position = GroupPosition.Single,
                         checked = networkUpdateEnabled,
                         onCheckedChange = {
                             performHaptic()

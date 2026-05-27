@@ -50,12 +50,7 @@ fun 澎湃记Theme(
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
         else -> {
-            val seedColor = Color(seedColorInt)
-            if (darkTheme) {
-                darkColorScheme(primary = seedColor, secondaryContainer = seedColor.copy(alpha = 0.2f))
-            } else {
-                lightColorScheme(primary = seedColor, secondaryContainer = seedColor.copy(alpha = 0.1f))
-            }
+            ColorGenerator.seedToColorScheme(seedColorInt, isDark = darkTheme)
         }
     }
 
@@ -69,7 +64,7 @@ fun 澎湃记Theme(
         baseColorScheme
     }
 
-    MaterialTheme(
+    MaterialExpressiveTheme(
         colorScheme = colorScheme,
         typography = Typography,
         content = content

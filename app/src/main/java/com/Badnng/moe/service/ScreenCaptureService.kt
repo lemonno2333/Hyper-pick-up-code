@@ -38,6 +38,7 @@ import com.Badnng.moe.helper.NotificationHelper
 import com.Badnng.moe.helper.RootHelper
 import com.Badnng.moe.ocr.MultiRecognitionResult
 import com.Badnng.moe.ocr.TextRecognitionHelper
+import com.Badnng.moe.rules.RecognitionRuleEngine
 import rikka.shizuku.Shizuku
 import java.io.File
 import java.io.FileOutputStream
@@ -336,19 +337,24 @@ class ScreenCaptureService : Service() {
             var helper: TextRecognitionHelper? = null
 
             try {
+                if (!RecognitionRuleEngine.isInitialized) {
+                    RecognitionRuleEngine.initialize(applicationContext)
+                }
                 helper = TextRecognitionHelper(applicationContext)
                 if (!helper.paddleOcr.isInitialized) {
                     helper.initOcr()
                 }
 
-                val singleResult = helper.recognizeAll(bitmap, sourceApp, sourcePkg)
+                val recognizeResult = helper.recognizeAll(bitmap, sourceApp, sourcePkg)
+                val singleResult = recognizeResult.first
+                val ocrResult = recognizeResult.second
                 val hasExpressKeyword = singleResult.fullText.contains("\u53d6\u4ef6") ||
                     singleResult.fullText.contains("\u53d6\u8d27") ||
                     singleResult.fullText.contains("\u5feb\u9012") ||
                     singleResult.fullText.contains("\u9a7f\u7ad9") ||
                     singleResult.fullText.contains("\u83dc\u9e1f")
                 val multiResult = if (hasExpressKeyword || singleResult.type == "\u5feb\u9012") {
-                    helper.recognizeMultipleCodes(bitmap, sourceApp, sourcePkg)
+                    helper.recognizeMultipleCodesFromResult(ocrResult.rawFullText, ocrResult.textBlocks, ocrResult.mergedText, sourceApp, sourcePkg)
                 } else {
                     MultiRecognitionResult(emptyList(), false)
                 }

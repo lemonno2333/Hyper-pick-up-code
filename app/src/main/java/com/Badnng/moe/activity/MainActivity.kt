@@ -97,6 +97,9 @@ class MainActivity : ComponentActivity() {
             PaddleOcrHelper.getInstance(applicationContext).initAsync()
         }
 
+        // 启动保活服务
+        com.Badnng.moe.service.KeepAliveService.start(this)
+
         projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         intentToProcess = intent
 
@@ -142,7 +145,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    override fun onNewIntent(intent: Intent?) {
+    override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
         intentToProcess = intent
@@ -155,6 +158,16 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         AppLogger.app("MainActivity onResume")
         EdgeToEdgeHelper.applyGestureEdgeToEdge(this)
+        if (settingsPrefs.getBoolean("persistent_notification_enabled", true)) {
+            com.Badnng.moe.service.KeepAliveService.hideNotification(this)
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        if (settingsPrefs.getBoolean("persistent_notification_enabled", true)) {
+            com.Badnng.moe.service.KeepAliveService.showNotification(this)
+        }
     }
 
     override fun onDestroy() {
