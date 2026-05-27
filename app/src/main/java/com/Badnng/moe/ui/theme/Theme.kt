@@ -9,6 +9,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import com.Badnng.moe.ui.LocalAppUi
+import com.Badnng.moe.ui.md3eAppUi
 
 @Composable
 fun 澎湃记Theme(
@@ -64,9 +66,11 @@ fun 澎湃记Theme(
         baseColorScheme
     }
 
-    MaterialExpressiveTheme(
-        colorScheme = colorScheme,
-        typography = Typography,
-        content = content
-    )
+    CompositionLocalProvider(LocalAppUi provides md3eAppUi) {
+        MaterialExpressiveTheme(
+            colorScheme = colorScheme,
+            typography = Typography,
+            content = content
+        )
+    }
 }
