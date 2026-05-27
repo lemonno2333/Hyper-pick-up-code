@@ -161,6 +161,7 @@
 
         <service
             android:name=".service.KeepAliveService"
+            android:foregroundServiceType="specialUse"
             android:exported="false" />
 
         <service

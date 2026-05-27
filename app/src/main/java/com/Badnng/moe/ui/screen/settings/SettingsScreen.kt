@@ -65,6 +65,7 @@ fun SettingsScreen(
 ) {
     var pageStack by remember { mutableStateOf(listOf<SettingsPage>()) }
     val currentPage = pageStack.lastOrNull() ?: SettingsPage.Main
+    var previousPage by remember { mutableStateOf(SettingsPage.Main) }
     var isGoingBack by remember { mutableStateOf(false) }
     var backProgress by remember { mutableFloatStateOf(0f) }
     var backSwipeEdge by remember { mutableIntStateOf(BackEventCompat.EDGE_LEFT) }
@@ -96,6 +97,7 @@ fun SettingsScreen(
 
     LaunchedEffect(currentPage) {
         onSubPageStatusChange(currentPage != SettingsPage.Main)
+        if (currentPage != SettingsPage.Main) previousPage = currentPage
     }
 
     PredictiveBackHandler(enabled = pageStack.isNotEmpty()) { backEvent: Flow<BackEventCompat> ->
@@ -126,45 +128,51 @@ fun SettingsScreen(
     Box(modifier = modifier.fillMaxSize()) {
         MainSettingsList(onNavigate = { navigateTo(it) })
 
-        AnimatedContent(
-            targetState = currentPage,
-            transitionSpec = {
-                if (isGoingBack) {
-                    slideInHorizontally { -it } + fadeIn() togetherWith slideOutHorizontally { it } + fadeOut()
-                } else {
-                    slideInHorizontally { it } + fadeIn() togetherWith slideOutHorizontally { -it } + fadeOut()
-                }
-            },
-            label = "settings_content"
-        ) { page ->
-            if (page != SettingsPage.Main) {
-                val title = when (page) {
-                    SettingsPage.Preference -> "偏好设置"
-                    SettingsPage.Permission -> "权限与保活"
-                    SettingsPage.Screenshot -> "截图方式"
-                    SettingsPage.KeepAlive -> "保活设置"
-                    SettingsPage.Storage -> "清理空间"
-                    SettingsPage.About -> "关于"
-                    SettingsPage.Sponsor -> "赞助"
-                    SettingsPage.NotificationApps -> "通知识别应用管理"
-                    else -> ""
-                }
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer {
-                            scaleX = currentScale
-                            scaleY = currentScale
-                            translationX = currentTranslationX
-                            shape = RoundedCornerShape(currentCornerRadius)
-                            clip = true
+        AnimatedVisibility(
+            visible = pageStack.isNotEmpty(),
+            enter = slideInHorizontally { it } + fadeIn(),
+            exit = slideOutHorizontally { it } + fadeOut()
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        scaleX = currentScale
+                        scaleY = currentScale
+                        translationX = currentTranslationX
+                        shape = RoundedCornerShape(currentCornerRadius)
+                        clip = true
+                    }
+                    .border(
+                        width = if (isPredictiveBackInProgress) 1.dp else 0.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = backProgress),
+                        shape = RoundedCornerShape(currentCornerRadius)
+                    )
+                    .background(MaterialTheme.colorScheme.background)
+            ) {
+                // 嵌套页面切换用 AnimatedContent
+                AnimatedContent(
+                    targetState = currentPage,
+                    transitionSpec = {
+                        if (isGoingBack) {
+                            slideInHorizontally { -it } + fadeIn() togetherWith slideOutHorizontally { it } + fadeOut()
+                        } else {
+                            slideInHorizontally { it } + fadeIn() togetherWith slideOutHorizontally { -it } + fadeOut()
                         }
-                        .border(
-                            width = if (isPredictiveBackInProgress) 1.dp else 0.dp,
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = backProgress),
-                            shape = RoundedCornerShape(currentCornerRadius)
-                        )
-                ) {
+                    },
+                    label = "settings_nested"
+                ) { page ->
+                    val title = when (page) {
+                        SettingsPage.Preference -> "偏好设置"
+                        SettingsPage.Permission -> "权限与保活"
+                        SettingsPage.Screenshot -> "截图方式"
+                        SettingsPage.KeepAlive -> "保活设置"
+                        SettingsPage.Storage -> "清理空间"
+                        SettingsPage.About -> "关于"
+                        SettingsPage.Sponsor -> "赞助"
+                        SettingsPage.NotificationApps -> "通知识别应用管理"
+                        else -> ""
+                    }
                     SubPage(
                         title = title,
                         page = page,

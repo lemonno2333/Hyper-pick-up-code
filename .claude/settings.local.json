@@ -88,7 +88,8 @@
       "Bash(.\\\\gradlew.bat assembleDebug)",
       "Bash(\"C:\\\\Users\\\\wsj31\\\\.gradle\\\\wrapper\\\\dists\\\\gradle-9.3.1-bin\\\\23ovyewtku6u96viwx3xl3oks\\\\gradle-9.3.1\\\\bin\\\\gradle.bat\" assembleDebug --info)",
       "Bash(xxd \"D:\\\\Hypernotesuper\\\\build.gradle.kts\")",
-      "Bash(\"C:\\\\Users\\\\wsj31\\\\.gradle\\\\wrapper\\\\dists\\\\gradle-9.4.1-bin\\\\arn2x92ynaizyzdaamcbpbhtj\\\\gradle-9.4.1\\\\bin\\\\gradle.bat\" assembleDebug)"
+      "Bash(\"C:\\\\Users\\\\wsj31\\\\.gradle\\\\wrapper\\\\dists\\\\gradle-9.4.1-bin\\\\arn2x92ynaizyzdaamcbpbhtj\\\\gradle-9.4.1\\\\bin\\\\gradle.bat\" assembleDebug)",
+      "Bash(git fetch *)"
     ]
   }
 }

@@ -4,6 +4,8 @@ import android.content.Context
 import android.util.Log
 import com.Badnng.moe.helper.AppLogger
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.util.UUID
 import kotlin.Result
@@ -26,8 +28,17 @@ object RecognitionRuleEngine {
 
     private val compiledPatterns = mutableMapOf<String, Regex>()
     private var repository: RuleRepository? = null
+    private val initMutex = Mutex()
 
     suspend fun initialize(context: Context) = withContext(Dispatchers.IO) {
+        if (isInitialized) return@withContext
+        initMutex.withLock {
+            if (isInitialized) return@withLock
+            doInitialize(context)
+        }
+    }
+
+    private suspend fun doInitialize(context: Context) = withContext(Dispatchers.IO) {
         AppLogger.update("RuleEngine initialize start, activeSourceId=$activeSourceId")
         repository = RuleRepository(context)
         val config = repository!!.loadSystemConfig()
