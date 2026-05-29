@@ -37,6 +37,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import rikka.shizuku.Shizuku
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+import com.Badnng.moe.ui.miuix.rememberMiuixStyle
 
 @Composable
 fun PermissionSettingsContent(performHaptic: () -> Unit, topPadding: androidx.compose.ui.unit.Dp = 0.dp, scrollState: androidx.compose.foundation.ScrollState = androidx.compose.foundation.rememberScrollState()) {
@@ -65,8 +67,7 @@ fun PermissionSettingsContent(performHaptic: () -> Unit, topPadding: androidx.co
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 16.dp)
-            .verticalScroll(scrollState)
-            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom)),
+            .verticalScroll(scrollState),
         verticalArrangement = Arrangement.spacedBy(32.dp)
     ) {
         Spacer(Modifier.height(topPadding))

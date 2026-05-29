@@ -1,0 +1,994 @@
+package com.Badnng.moe.ui.screen.miuix
+
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.ui.state.ToggleableState
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import top.yukonga.miuix.kmp.basic.HorizontalDivider
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Alarm
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Done
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.NotificationAdd
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.QrCode
+import androidx.compose.material.icons.filled.SettingsSuggest
+import androidx.compose.material.icons.filled.Timer
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.Badnng.moe.data.db.OrderEntity
+import com.Badnng.moe.data.db.OrderGroup
+import com.Badnng.moe.helper.BrandIconResolver
+import com.Badnng.moe.ui.screen.openTaobaoIdentityEntry
+import com.Badnng.moe.ui.screen.openPddIdentityEntry
+import com.Badnng.moe.viewmodel.OrderViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
+import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
+import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.Checkbox
+import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
+import top.yukonga.miuix.kmp.basic.NumberPicker
+import top.yukonga.miuix.kmp.basic.Scaffold
+import top.yukonga.miuix.kmp.basic.SmallTitle
+import top.yukonga.miuix.kmp.basic.Surface
+import top.yukonga.miuix.kmp.basic.TabRow
+import top.yukonga.miuix.kmp.basic.TabRowWithContour
+import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TextButton
+import top.yukonga.miuix.kmp.basic.VerticalScrollBar
+import top.yukonga.miuix.kmp.basic.rememberScrollBarAdapter
+import top.yukonga.miuix.kmp.basic.TopAppBar
+import top.yukonga.miuix.kmp.basic.FloatingToolbar
+import top.yukonga.miuix.kmp.basic.ToolbarPosition
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+@Composable
+fun MiuixCaptureScreen(
+    padding: PaddingValues,
+    onScrollStateChange: (Boolean) -> Unit = {},
+    onEditModeChange: (Boolean) -> Unit = {},
+    onAddClick: () -> Unit = {},
+    navAlignment: String = "center",
+    useFloatingNavBar: Boolean = false
+) {
+    val viewModel: OrderViewModel = viewModel()
+    val incompleteOrders by viewModel.incompleteOrders.collectAsState()
+    val completedOrders by viewModel.completedOrders.collectAsState()
+    val incompleteGroups by viewModel.incompleteGroups.collectAsState()
+    val completedGroups by viewModel.completedGroups.collectAsState()
+
+    val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
+    val prefs = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
+    val hapticEnabled = remember(prefs) { prefs.getBoolean("haptic_enabled", true) }
+
+    val performHaptic = {
+        if (hapticEnabled) {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        }
+    }
+
+    // Tab 状态: 0=待取, 1=已取
+    var selectedTab by remember { mutableIntStateOf(0) }
+
+    // 分类筛选（待取 tab 点击展开子 TabRow）
+    var showCategoryTabs by remember { mutableStateOf(false) }
+    val categoryTabs = listOf("全部", "餐食", "饮品", "快递")
+    var selectedCategoryIndex by remember { mutableIntStateOf(0) }
+    val selectedCategory = categoryTabs[selectedCategoryIndex]
+
+    // 过滤后的数据
+    val filteredIncompleteGroups = remember(incompleteGroups, selectedCategory) {
+        if (selectedCategory == "全部") incompleteGroups
+        else incompleteGroups.filter { it.orderType == selectedCategory }
+    }
+    val filteredIncompleteOrders = remember(incompleteOrders, selectedCategory) {
+        if (selectedCategory == "全部") incompleteOrders
+        else incompleteOrders.filter { it.orderType == selectedCategory }
+    }
+
+    // 多选模式
+    var isEditMode by remember { mutableStateOf(false) }
+    LaunchedEffect(isEditMode) {
+        onEditModeChange(isEditMode)
+    }
+    var selectedIds by remember { mutableStateOf(setOf<String>()) }
+    var selectedGroupIds by remember { mutableStateOf(setOf<Long>()) }
+
+
+    // 监听广播刷新
+    DisposableEffect(Unit) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {}
+        }
+        val filter = IntentFilter("com.Badnng.moe.REFRESH_ORDERS")
+        ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+        onDispose { context.unregisterReceiver(receiver) }
+    }
+
+    val topAppBarScrollBehavior = MiuixScrollBehavior()
+
+    Box(modifier = Modifier.fillMaxSize()) {
+    Scaffold(
+        topBar = {
+            Column(modifier = Modifier.background(MiuixTheme.colorScheme.surface)) {
+                TopAppBar(
+                    title = "澎湃记",
+                    color = MiuixTheme.colorScheme.surface,
+                    scrollBehavior = topAppBarScrollBehavior,
+                    actions = {
+                        // 多选模式切换按钮
+                        IconButton(onClick = {
+                            performHaptic()
+                            isEditMode = !isEditMode
+                            if (!isEditMode) {
+                                selectedIds = emptySet()
+                                selectedGroupIds = emptySet()
+                            }
+                        }) {
+                            Icon(
+                                if (isEditMode) Icons.Default.Close else Icons.Default.SettingsSuggest,
+                                contentDescription = "管理",
+                                tint = if (isEditMode) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                // 主 TabRow
+                TabRow(
+                    tabs = listOf("待取", "已取"),
+                    selectedTabIndex = selectedTab,
+                    onTabSelected = { tabIndex ->
+                        performHaptic()
+                        if (tabIndex == 0 && selectedTab == 0) {
+                            showCategoryTabs = !showCategoryTabs
+                        } else {
+                            selectedTab = tabIndex
+                            if (tabIndex == 1) showCategoryTabs = false
+                        }
+                    },
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+                // 分类子 TabRow（Content of tab，使用 TabRowWithContour 样式）
+                AnimatedVisibility(
+                    visible = showCategoryTabs && selectedTab == 0,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
+                    TabRowWithContour(
+                        tabs = categoryTabs,
+                        selectedTabIndex = selectedCategoryIndex,
+                        onTabSelected = {
+                            performHaptic()
+                            selectedCategoryIndex = it
+                        },
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+        },
+    ) { innerPadding ->
+        val lazyListState = rememberLazyListState()
+
+        Box(modifier = Modifier.fillMaxSize()) {
+        LazyColumn(
+            state = lazyListState,
+            modifier = Modifier
+                .fillMaxSize()
+                .nestedScroll(topAppBarScrollBehavior.nestedScrollConnection),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(
+                top = innerPadding.calculateTopPadding(),
+                bottom = padding.calculateBottomPadding() + 100.dp,
+                start = 16.dp,
+                end = 16.dp
+            )
+        ) {
+            if (selectedTab == 0) {
+                // 待取页面
+                if (filteredIncompleteGroups.isNotEmpty()) {
+                    items(items = filteredIncompleteGroups, key = { "group_${it.id}" }) { group ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // 多选框（左侧，动画显示）
+                            Box(modifier = Modifier.width(if (isEditMode) 40.dp else 0.dp)) {
+                                androidx.compose.animation.AnimatedVisibility(
+                                    visible = isEditMode,
+                                    enter = expandHorizontally() + fadeIn(),
+                                    exit = shrinkHorizontally() + fadeOut()
+                                ) {
+                                    Checkbox(
+                                        state = if (selectedGroupIds.contains(group.id)) ToggleableState.On else ToggleableState.Off,
+                                        onClick = {
+                                            performHaptic()
+                                            selectedGroupIds = if (selectedGroupIds.contains(group.id)) {
+                                                selectedGroupIds - group.id
+                                            } else {
+                                                selectedGroupIds + group.id
+                                            }
+                                        },
+                                        modifier = Modifier.padding(end = 8.dp)
+                                    )
+                                }
+                            }
+                            MiuixOrderGroupCard(
+                                group = group,
+                                viewModel = viewModel,
+                                onClick = { },
+                                onMarkAllCompleted = {
+                                    performHaptic()
+                                    viewModel.markGroupAsCompleted(group.id)
+                                },
+                                isEditMode = isEditMode,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+
+                // 单个订单（不属于任何组的）
+                val standaloneOrders = filteredIncompleteOrders.filter { it.groupId == null }
+                if (standaloneOrders.isNotEmpty()) {
+                    items(items = standaloneOrders, key = { it.id }) { order ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // 多选框（左侧，动画显示）
+                            Box(modifier = Modifier.width(if (isEditMode) 40.dp else 0.dp)) {
+                                androidx.compose.animation.AnimatedVisibility(
+                                    visible = isEditMode,
+                                    enter = expandHorizontally() + fadeIn(),
+                                    exit = shrinkHorizontally() + fadeOut()
+                                ) {
+                                    Checkbox(
+                                        state = if (selectedIds.contains(order.id)) ToggleableState.On else ToggleableState.Off,
+                                        onClick = {
+                                            performHaptic()
+                                            selectedIds = if (selectedIds.contains(order.id)) {
+                                                selectedIds - order.id
+                                            } else {
+                                                selectedIds + order.id
+                                            }
+                                        },
+                                        modifier = Modifier.padding(end = 8.dp)
+                                    )
+                                }
+                            }
+                            MiuixOrderCard(
+                                order = order,
+                                onClick = { },
+                                onMarkCompleted = {
+                                    performHaptic()
+                                    viewModel.markAsCompleted(order.id)
+                                },
+                                onDelete = {
+                                    performHaptic()
+                                    viewModel.deleteOrder(order)
+                                },
+                                isEditMode = isEditMode,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+
+                // 空状态
+                if (standaloneOrders.isEmpty() && filteredIncompleteGroups.isEmpty()) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "暂无待取订单",
+                                style = MiuixTheme.textStyles.body1,
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary
+                            )
+                        }
+                    }
+                }
+            } else {
+                // 已取页面
+                if (completedGroups.isNotEmpty()) {
+                    item {
+                        SmallTitle(text = "已完成订单组")
+                    }
+                    items(items = completedGroups, key = { "completed_group_${it.id}" }) { group ->
+                        MiuixOrderGroupCard(
+                            group = group,
+                            viewModel = viewModel,
+                            onClick = { },
+                            onMarkAllCompleted = { },
+                            isCompleted = true
+                        )
+                    }
+                }
+
+                if (completedOrders.isNotEmpty()) {
+                    item {
+                        SmallTitle(text = "已完成订单")
+                    }
+                    items(items = completedOrders, key = { "completed_${it.id}" }) { order ->
+                        MiuixOrderCard(
+                            order = order,
+                            onClick = { },
+                            onMarkCompleted = { },
+                            onDelete = { },
+                            isCompleted = true
+                        )
+                    }
+                }
+
+                // 空状态
+                if (completedOrders.isEmpty() && completedGroups.isEmpty()) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "暂无已取订单",
+                                style = MiuixTheme.textStyles.body1,
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        VerticalScrollBar(
+            adapter = rememberScrollBarAdapter(lazyListState),
+            modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight(),
+            trackPadding = PaddingValues(top = innerPadding.calculateTopPadding(), bottom = padding.calculateBottomPadding() + 100.dp),
+        )
+        }
+    }
+
+    // FloatingToolbar：移出 Scaffold，自由定位
+    // 编辑模式：完成/删除按钮（底部居中）
+    AnimatedVisibility(
+        visible = isEditMode && (selectedIds.isNotEmpty() || selectedGroupIds.isNotEmpty()),
+        enter = fadeIn(),
+        exit = fadeOut(),
+        modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 72.dp)
+    ) {
+        FloatingToolbar(
+            color = MiuixTheme.colorScheme.primaryContainer,
+            cornerRadius = 16.dp,
+        ) {
+            Row(
+                modifier = Modifier.padding(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                IconButton(onClick = {
+                    performHaptic()
+                    selectedIds.forEach { viewModel.markAsCompleted(it) }
+                    selectedGroupIds.forEach { viewModel.markGroupAsCompleted(it) }
+                    selectedIds = emptySet()
+                    selectedGroupIds = emptySet()
+                }) {
+                    Icon(
+                        imageVector = Icons.Default.Done,
+                        contentDescription = "完成",
+                        tint = Color.White,
+                    )
+                }
+                IconButton(onClick = {
+                    performHaptic()
+                    selectedIds.forEach { id ->
+                        incompleteOrders.find { it.id == id }?.let { viewModel.deleteOrder(it) }
+                    }
+                    selectedGroupIds.forEach { id ->
+                        incompleteGroups.find { it.id == id }?.let { viewModel.deleteGroup(it) }
+                    }
+                    selectedIds = emptySet()
+                    selectedGroupIds = emptySet()
+                }) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "删除",
+                        tint = Color.White,
+                    )
+                }
+            }
+        }
+    }
+
+    // 主页：添加 + 身份码按钮
+    // 悬浮底栏开启时：竖排，跟随底栏位置
+    // 悬浮底栏关闭时：横排，靠右
+    val isVertical = useFloatingNavBar
+    val toolbarAlignment = if (useFloatingNavBar && navAlignment == "left") {
+        Alignment.BottomStart
+    } else {
+        Alignment.BottomEnd
+    }
+    val toolbarPadding = if (useFloatingNavBar && navAlignment == "left") {
+        PaddingValues(start = 24.dp, bottom = 120.dp)
+    } else if (useFloatingNavBar) {
+        PaddingValues(end = 24.dp, bottom = 120.dp)
+    } else {
+        PaddingValues(end = 16.dp, bottom = 120.dp)
+    }
+
+    AnimatedVisibility(
+        visible = !isEditMode && selectedTab == 0,
+        enter = fadeIn(),
+        exit = fadeOut(),
+        modifier = Modifier
+            .align(toolbarAlignment)
+            .padding(toolbarPadding)
+    ) {
+        FloatingToolbar(
+            color = MiuixTheme.colorScheme.primaryContainer,
+            cornerRadius = 16.dp,
+        ) {
+            if (isVertical) {
+                Column(
+                    modifier = Modifier.padding(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                IconButton(onClick = { performHaptic(); onAddClick() }) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "添加",
+                    )
+                }
+                IconButton(onClick = { performHaptic(); openTaobaoIdentityEntry(context) }) {
+                    Box {
+                        Icon(
+                            imageVector = Icons.Default.QrCode,
+                            contentDescription = "淘宝身份码",
+                        )
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .align(Alignment.BottomEnd)
+                                .background(Color(0xFFFF8A00), CircleShape)
+                        )
+                    }
+                }
+                IconButton(onClick = { performHaptic(); openPddIdentityEntry(context) }) {
+                    Box {
+                        Icon(
+                            imageVector = Icons.Default.QrCode,
+                            contentDescription = "拼多多身份码",
+                        )
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .align(Alignment.BottomEnd)
+                                .background(Color(0xFFE53935), CircleShape)
+                        )
+                    }
+                }
+                }
+            } else {
+                Row(
+                    modifier = Modifier.padding(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    IconButton(onClick = { performHaptic(); onAddClick() }) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "添加",
+                        )
+                    }
+                    IconButton(onClick = { performHaptic(); openTaobaoIdentityEntry(context) }) {
+                        Box {
+                            Icon(
+                                imageVector = Icons.Default.QrCode,
+                                contentDescription = "淘宝身份码",
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .size(6.dp)
+                                    .align(Alignment.BottomEnd)
+                                    .background(Color(0xFFFF8A00), CircleShape)
+                            )
+                        }
+                    }
+                    IconButton(onClick = { performHaptic(); openPddIdentityEntry(context) }) {
+                        Box {
+                            Icon(
+                                imageVector = Icons.Default.QrCode,
+                                contentDescription = "拼多多身份码",
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .size(6.dp)
+                                    .align(Alignment.BottomEnd)
+                                    .background(Color(0xFFE53935), CircleShape)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+    } // Box
+}
+
+@Composable
+private fun MiuixOrderGroupCard(
+    group: OrderGroup,
+    viewModel: OrderViewModel,
+    onClick: () -> Unit,
+    onMarkAllCompleted: () -> Unit,
+    onDeleteGroup: () -> Unit = {},
+    isCompleted: Boolean = false,
+    isEditMode: Boolean = false,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
+    val prefs = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
+    val hapticEnabled = remember(prefs) { prefs.getBoolean("haptic_enabled", true) }
+    val performHaptic = {
+        if (hapticEnabled) {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        }
+    }
+    val groupOrders by viewModel.getOrdersByGroupId(group.id).collectAsState()
+
+    val brandIconRes = remember(group.brandName, group.orderType) {
+        BrandIconResolver.resolveBuiltinFallbackResId(context, group.brandName, group.orderType)
+    }
+
+    var groupIconBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    LaunchedEffect(group.brandName, group.iconResName) {
+        withContext(Dispatchers.IO) {
+            if (group.iconResName != null) {
+                val customResId = context.resources.getIdentifier(group.iconResName, "drawable", context.packageName)
+                if (customResId != 0) return@withContext
+            }
+            var bmp = BrandIconResolver.resolveCustomIconBitmap(context, group.brandName)
+            if (bmp == null) { delay(200); bmp = BrandIconResolver.resolveCustomIconBitmap(context, group.brandName) }
+            if (bmp != null) groupIconBitmap = bmp
+        }
+    }
+
+    var isExpanded by rememberSaveable(group.id) { mutableStateOf(false) }
+
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        onClick = onClick
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // 顶部：图标 + 组名
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (groupIconBitmap != null) {
+                    Image(
+                        bitmap = groupIconBitmap!!.asImageBitmap(),
+                        contentDescription = null,
+                        modifier = Modifier.size(32.dp)
+                    )
+                } else {
+                    Icon(
+                        painter = painterResource(id = brandIconRes),
+                        contentDescription = null,
+                        modifier = Modifier.size(32.dp),
+                        tint = Color.Unspecified
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = group.name,
+                    style = MiuixTheme.textStyles.body1,
+                    fontWeight = FontWeight.Bold,
+                    color = MiuixTheme.colorScheme.primary
+                )
+            }
+
+            // 包含订单数
+            Text(
+                text = "包含 ${groupOrders.size} 个取件码",
+                style = MiuixTheme.textStyles.body2,
+                color = MiuixTheme.colorScheme.onSurfaceVariantSummary
+            )
+
+            // 展开/折叠按钮
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
+                    .background(
+                        if (isExpanded) MiuixTheme.colorScheme.primaryContainer.copy(alpha = 0.2f)
+                        else Color.Transparent
+                    )
+                    .clickable {
+                        performHaptic()
+                        if (!isEditMode) isExpanded = !isExpanded
+                    }
+                    .padding(vertical = 8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = if (isExpanded) "收起" else "展开查看详情",
+                        style = MiuixTheme.textStyles.body2,
+                        color = MiuixTheme.colorScheme.primary
+                    )
+                    val arrowRotation by animateFloatAsState(
+                        targetValue = if (isExpanded) 180f else 0f
+                    )
+                    Icon(
+                        Icons.Default.ExpandMore,
+                        contentDescription = null,
+                        tint = MiuixTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .size(16.dp)
+                            .rotate(arrowRotation)
+                    )
+                }
+            }
+
+            // 展开后显示内嵌订单卡片
+            AnimatedVisibility(
+                visible = isExpanded && !isEditMode,
+                enter = fadeIn() + expandVertically(expandFrom = Alignment.Top),
+                exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Top)
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                    groupOrders.forEach { order ->
+                        MiuixOrderCard(
+                            order = order,
+                            onClick = { },
+                            onMarkCompleted = {
+                                performHaptic()
+                                viewModel.markAsCompleted(order.id)
+                            },
+                            onDelete = {
+                                performHaptic()
+                                viewModel.deleteOrder(order)
+                            },
+                            isCompleted = order.isCompleted,
+                            isEditMode = isEditMode
+                        )
+                    }
+                }
+            }
+
+            // 操作按钮（非编辑模式下显示）
+            if (!isEditMode) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    if (!isCompleted) {
+                        Button(
+                            onClick = onMarkAllCompleted,
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColorsPrimary()
+                        ) {
+                            Text(
+                                text = "全部完成",
+                                modifier = Modifier.fillMaxWidth(),
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+                        }
+                    }
+                    if (isCompleted) {
+                        Button(
+                            onClick = onDeleteGroup,
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(
+                                color = MiuixTheme.colorScheme.errorContainer,
+                                contentColor = MiuixTheme.colorScheme.onErrorContainer
+                            )
+                        ) {
+                            Text(
+                                text = "删除组",
+                                modifier = Modifier.fillMaxWidth(),
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+                        }
+                    } else {
+                        TextButton(
+                            text = "删除组",
+                            onClick = onDeleteGroup,
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                // 再次推送实时通知 + 定时按钮
+                val notificationHelper = com.Badnng.moe.helper.NotificationHelper(context)
+                Row(
+                    modifier = Modifier.fillMaxWidth().height(44.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            performHaptic()
+                            notificationHelper.showGroupNotification(group, groupOrders)
+                        },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(
+                            color = MiuixTheme.colorScheme.secondaryContainer,
+                            contentColor = MiuixTheme.colorScheme.onSecondaryContainer
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.NotificationAdd,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "再次推送实时通知",
+                            fontSize = 12.sp,
+                            maxLines = 1
+                        )
+                    }
+                    Button(
+                        onClick = { /* TODO: 定时功能 */ },
+                        modifier = Modifier.height(42.dp).width(42.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            color = MiuixTheme.colorScheme.secondaryContainer,
+                            contentColor = MiuixTheme.colorScheme.onSecondaryContainer
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Alarm,
+                            contentDescription = "定时",
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MiuixOrderCard(
+    order: OrderEntity,
+    onClick: () -> Unit,
+    onMarkCompleted: () -> Unit,
+    onDelete: () -> Unit,
+    isCompleted: Boolean = false,
+    isEditMode: Boolean = false,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val timeStr = remember(order.createdAt) {
+        val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+        sdf.format(Date(order.createdAt))
+    }
+
+    val brandIconRes = remember(order.brandName, order.orderType) {
+        BrandIconResolver.resolveBuiltinFallbackResId(context, order.brandName, order.orderType)
+    }
+
+    var orderIconBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    LaunchedEffect(order.brandName) {
+        withContext(Dispatchers.IO) {
+            var bmp = BrandIconResolver.resolveCustomIconBitmap(context, order.brandName)
+            if (bmp == null) {
+                delay(200)
+                bmp = BrandIconResolver.resolveCustomIconBitmap(context, order.brandName)
+            }
+            if (bmp != null) orderIconBitmap = bmp
+        }
+    }
+
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        onClick = onClick
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            // 顶部：图标 + 取餐码 + 二维码按钮
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (orderIconBitmap != null) {
+                        Image(
+                            bitmap = orderIconBitmap!!.asImageBitmap(),
+                            contentDescription = null,
+                            modifier = Modifier.size(32.dp)
+                        )
+                    } else {
+                        Icon(
+                            painter = painterResource(id = brandIconRes),
+                            contentDescription = null,
+                            modifier = Modifier.size(32.dp),
+                            tint = Color.Unspecified
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = if (order.orderType == "快递") "取件码" else (order.brandName ?: "取餐码"),
+                            style = MiuixTheme.textStyles.body2,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary
+                        )
+                        Text(
+                            text = order.takeoutCode,
+                            style = MiuixTheme.textStyles.title1,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = MiuixTheme.colorScheme.primary
+                        )
+                    }
+                }
+                // QR码按钮
+                if (!order.qrCodeData.isNullOrEmpty()) {
+                    IconButton(onClick = { /* TODO: 显示QR码 */ }) {
+                        Icon(
+                            imageVector = Icons.Default.QrCode,
+                            contentDescription = "二维码",
+                            modifier = Modifier.size(24.dp),
+                            tint = MiuixTheme.colorScheme.primary.copy(alpha = 0.8f)
+                        )
+                    }
+                }
+            }
+
+            // 时间
+            Text(
+                text = "时间: $timeStr",
+                style = MiuixTheme.textStyles.body2,
+                color = MiuixTheme.colorScheme.onSurfaceVariantSummary
+            )
+
+            // 操作按钮（非编辑模式且未完成时显示）
+            if (!isEditMode && !isCompleted) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Button(
+                        onClick = onMarkCompleted,
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColorsPrimary()
+                    ) {
+                        Text(
+                            text = "完成",
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
+                    Button(
+                        onClick = onDelete,
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(
+                            color = MiuixTheme.colorScheme.errorContainer,
+                            contentColor = MiuixTheme.colorScheme.onErrorContainer
+                        )
+                    ) {
+                        Text(
+                            text = "删除",
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                // 再次推送实时通知 + 定时按钮
+                val notificationHelper = com.Badnng.moe.helper.NotificationHelper(context)
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth().height(44.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = { notificationHelper.showPromotedLiveUpdate(order) },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(
+                            color = MiuixTheme.colorScheme.secondaryContainer,
+                            contentColor = MiuixTheme.colorScheme.onSecondaryContainer
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.NotificationAdd,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "再次推送实时通知",
+                            fontSize = 12.sp,
+                            maxLines = 1
+                        )
+                    }
+                    Button(
+                        onClick = { /* TODO: 定时功能 */ },
+                        modifier = Modifier.height(42.dp).width(42.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            color = MiuixTheme.colorScheme.secondaryContainer,
+                            contentColor = MiuixTheme.colorScheme.onSecondaryContainer
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Alarm,
+                            contentDescription = "定时",
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}

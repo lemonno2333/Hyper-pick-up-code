@@ -18,8 +18,8 @@ android {
         applicationId = "com.Badnng.moe"
         minSdk = 35
         targetSdk = 36
-        versionCode = 20260520_13
-        versionName = "26.5.20.C03-Dev"
+        versionCode = 20260528_21
+        versionName = "26.5.28.C01-DevUI"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {
@@ -137,7 +137,19 @@ dependencies {
     // PaddleOCR (替换 ML Kit 文字识别)
     implementation("com.github.equationl.paddleocr4android:ncnnandroidppocr:v1.3.0")
     // Miuix Blur (毛玻璃模糊效果)
-    implementation("top.yukonga.miuix.kmp:miuix-blur-android:0.9.0")
+    implementation("top.yukonga.miuix.kmp:miuix-blur-android:0.9.1")
+    // Miuix UI 组件库 (Card, Button, Switch, SmallTitle 等)
+    implementation("top.yukonga.miuix.kmp:miuix-ui-android:0.9.1")
+    // Miuix Preference 组件 (ArrowPreference, SwitchPreference 等)
+    implementation("top.yukonga.miuix.kmp:miuix-preference-android:0.9.1")
+    // Miuix Navigation3 UI (NavDisplay, NavDisplayTransitionEffects)
+    implementation("top.yukonga.miuix.kmp:miuix-navigation3-ui-android:0.9.1")
+    // AndroidX Navigation3 Runtime (NavKey)
+    implementation("androidx.navigation3:navigation3-runtime:1.1.2")
+    // JetBrains NavigationEvent (NavigationBackHandler)
+    implementation("org.jetbrains.androidx.navigationevent:navigationevent-compose:1.1.0")
+    // Miuix Extended Icons (MiuixIcons.Regular.Edit / Settings)
+    implementation("top.yukonga.miuix.kmp:miuix-icons-android:0.9.1")
     // 保留 ML Kit 条码扫描
     implementation(libs.mlkit.barcode.scanning)
     implementation(libs.zxing.core)

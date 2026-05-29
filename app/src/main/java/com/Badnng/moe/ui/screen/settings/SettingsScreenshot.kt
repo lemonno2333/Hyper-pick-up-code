@@ -21,6 +21,8 @@ import com.Badnng.moe.R
 import com.Badnng.moe.helper.AccessibilityShortcutHelper
 import com.Badnng.moe.helper.RootHelper
 import com.Badnng.moe.ui.component.CaptureModeItem
+import com.Badnng.moe.ui.miuix.rememberMiuixStyle
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -90,8 +92,7 @@ fun ScreenshotSettingsContent(performHaptic: () -> Unit, topPadding: androidx.co
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 16.dp)
-            .verticalScroll(scrollState)
-            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom)),
+            .verticalScroll(scrollState),
         verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
         Spacer(Modifier.height(topPadding))

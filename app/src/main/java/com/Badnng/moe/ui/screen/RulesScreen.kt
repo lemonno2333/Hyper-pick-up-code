@@ -264,7 +264,35 @@ fun RulesScreen(
         drawContent()
     }
     val canBlur = isRenderEffectSupported()
+    val isMiuix = com.Badnng.moe.ui.miuix.rememberMiuixStyle()
 
+    if (isMiuix) {
+        // Miuix 模式：Scaffold + TopAppBar
+        val miuixScrollBehavior = top.yukonga.miuix.kmp.basic.MiuixScrollBehavior()
+        top.yukonga.miuix.kmp.basic.Scaffold(
+            topBar = {
+                top.yukonga.miuix.kmp.basic.TopAppBar(
+                    title = "识别规则",
+                    scrollBehavior = miuixScrollBehavior,
+                    color = top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.surface
+                )
+            }
+        ) { innerPadding ->
+            val bottomInsets = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(
+                    start = 16.dp,
+                    end = 16.dp,
+                    top = innerPadding.calculateTopPadding(),
+                    bottom = bottomInsets + 100.dp
+                )
+            ) {
+            }
+        }
+    } else {
     Box(modifier = modifier.fillMaxSize()) {
         // 内容层：延伸到顶栏下方
         Box(modifier = Modifier.fillMaxSize().layerBackdrop(backdrop)) {
@@ -772,7 +800,7 @@ fun RulesScreen(
                 }
         }
 
-        // 毛玻璃 TopAppBar 覆盖层
+        // 毛玻璃 TopAppBar 覆盖层（仅 MD3E 模式）
         if (canBlur) {
             Box(modifier = Modifier.fillMaxWidth()) {
                 // 背景模糊层（带渐隐 mask）
@@ -814,6 +842,7 @@ fun RulesScreen(
                 )
             }
         }
+    }
     }
 
     // 添加/编辑在线源对话框

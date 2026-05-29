@@ -3,11 +3,6 @@ package com.Badnng.moe.ui.screen.settings
 import android.annotation.SuppressLint
 import android.content.Context
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.WindowInsetsSides
-import androidx.compose.foundation.layout.only
-import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -47,7 +42,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.Badnng.moe.R
 import com.Badnng.moe.ui.component.PreferenceSection
+import com.Badnng.moe.ui.miuix.rememberMiuixStyle
 import java.io.File
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
 fun StorageSettingsContent(performHaptic: () -> Unit, prefs: android.content.SharedPreferences, topPadding: androidx.compose.ui.unit.Dp = 0.dp, scrollState: androidx.compose.foundation.ScrollState = androidx.compose.foundation.rememberScrollState()) {
@@ -97,8 +94,7 @@ fun StorageSettingsContent(performHaptic: () -> Unit, prefs: android.content.Sha
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 16.dp)
-            .verticalScroll(scrollState)
-            .windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.safeDrawing.only(androidx.compose.foundation.layout.WindowInsetsSides.Bottom)),
+            .verticalScroll(scrollState),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(Modifier.height(topPadding))

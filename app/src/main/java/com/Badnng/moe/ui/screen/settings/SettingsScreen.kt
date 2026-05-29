@@ -3,6 +3,7 @@ package com.Badnng.moe.ui.screen.settings
 import android.app.StatusBarManager
 import android.content.ComponentName
 import android.content.Context
+import android.content.SharedPreferences
 import android.graphics.drawable.Icon
 import android.os.Build
 import androidx.activity.BackEventCompat
@@ -48,6 +49,10 @@ import top.yukonga.miuix.kmp.blur.isRenderEffectSupported
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import top.yukonga.miuix.kmp.blur.textureBlur
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.basic.TopAppBar as MiuixTopAppBar
+import top.yukonga.miuix.kmp.basic.SmallTitle
+import top.yukonga.miuix.kmp.basic.Text as MiuixText
 import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
@@ -74,6 +79,8 @@ fun SettingsScreen(
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     val prefs = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
+    var uiStyle by remember { mutableStateOf(prefs.getString("ui_style", "md3e") ?: "md3e") }
+    val isMiuix = uiStyle == "miuix"
 
     val performHaptic = {
         if (prefs.getBoolean("haptic_enabled", true)) {
@@ -98,6 +105,14 @@ fun SettingsScreen(
     LaunchedEffect(currentPage) {
         onSubPageStatusChange(currentPage != SettingsPage.Main)
         if (currentPage != SettingsPage.Main) previousPage = currentPage
+    }
+
+    DisposableEffect(prefs) {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { p, key ->
+            if (key == "ui_style") uiStyle = p.getString(key, "md3e") ?: "md3e"
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }
 
     PredictiveBackHandler(enabled = pageStack.isNotEmpty()) { backEvent: Flow<BackEventCompat> ->
@@ -126,7 +141,7 @@ fun SettingsScreen(
     val currentCornerRadius = if (isPredictiveBackInProgress) (backProgress * 32).dp else 0.dp
 
     Box(modifier = modifier.fillMaxSize()) {
-        MainSettingsList(onNavigate = { navigateTo(it) })
+        MainSettingsList(onNavigate = { navigateTo(it) }, isMiuix = isMiuix)
 
         AnimatedVisibility(
             visible = pageStack.isNotEmpty(),
@@ -145,10 +160,10 @@ fun SettingsScreen(
                     }
                     .border(
                         width = if (isPredictiveBackInProgress) 1.dp else 0.dp,
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = backProgress),
+                        color = if (isMiuix) MiuixTheme.colorScheme.outline else MaterialTheme.colorScheme.outlineVariant.copy(alpha = backProgress),
                         shape = RoundedCornerShape(currentCornerRadius)
                     )
-                    .background(MaterialTheme.colorScheme.background)
+                    .background(if (isMiuix) MiuixTheme.colorScheme.surface else MaterialTheme.colorScheme.background)
             ) {
                 // 嵌套页面切换用 AnimatedContent
                 AnimatedContent(
@@ -178,7 +193,8 @@ fun SettingsScreen(
                         page = page,
                         performHaptic = performHaptic,
                         onNavigate = { navigateTo(it) },
-                        onBack = { navigateBack() }
+                        onBack = { navigateBack() },
+                        isMiuix = isMiuix
                     )
                 }
             }
@@ -187,7 +203,7 @@ fun SettingsScreen(
 }
 
 @Composable
-fun MainSettingsList(onNavigate: (SettingsPage) -> Unit) {
+fun MainSettingsList(onNavigate: (SettingsPage) -> Unit, isMiuix: Boolean = false) {
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     val prefs = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
@@ -197,36 +213,67 @@ fun MainSettingsList(onNavigate: (SettingsPage) -> Unit) {
         }
     }
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize()
-            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
-            .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(24.dp),
-        contentPadding = PaddingValues(top = 16.dp, bottom = 100.dp + WindowInsets.safeDrawing.asPaddingValues().calculateBottomPadding())
-    ) {
-        item {
-            Text(text = "设置", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold)
-        }
-
-        item {
-            SettingsGroup {
-                SettingsGroupItem(title = "偏好设置", description = "管理自行习惯的设置", position = GroupPosition.First, onClick = { onNavigate(SettingsPage.Preference) })
-                SettingsGroupItem(title = "权限与保活", description = "管理权限和防止系统清理后台", position = GroupPosition.Middle, onClick = { onNavigate(SettingsPage.Permission) })
-                SettingsGroupItem(title = "截图方式", description = "管理App截图的方式", position = GroupPosition.Middle, onClick = { onNavigate(SettingsPage.Screenshot) })
-                SettingsGroupItem(title = "添加到控制中心", description = "将「截图识别」磁贴添加到控制中心快捷栏", position = GroupPosition.Last, onClick = { performHaptic(); requestAddTile(context) })
+    if (isMiuix) {
+        // Miuix 模式：参考 Miuix 示例应用的布局
+        LazyColumn(
+            modifier = Modifier.fillMaxSize()
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top)),
+            contentPadding = PaddingValues(bottom = 100.dp + WindowInsets.safeDrawing.asPaddingValues().calculateBottomPadding())
+        ) {
+            item {
+                SmallTitle(text = "设置")
+            }
+            item {
+                SettingsGroup {
+                    SettingsGroupItem(title = "偏好设置", description = "管理自行习惯的设置", position = GroupPosition.First, onClick = { onNavigate(SettingsPage.Preference) })
+                    SettingsGroupItem(title = "权限与保活", description = "管理权限和防止系统清理后台", position = GroupPosition.Middle, onClick = { onNavigate(SettingsPage.Permission) })
+                    SettingsGroupItem(title = "截图方式", description = "管理App截图的方式", position = GroupPosition.Middle, onClick = { onNavigate(SettingsPage.Screenshot) })
+                    SettingsGroupItem(title = "添加到控制中心", description = "将「截图识别」磁贴添加到控制中心快捷栏", position = GroupPosition.Last, onClick = { performHaptic(); requestAddTile(context) })
+                }
+            }
+            item {
+                SmallTitle(text = "其他")
+                SettingsGroup {
+                    SettingsGroupItem(title = "清理空间", description = "管理App占用的缓存与截图空间", position = GroupPosition.Single, onClick = { onNavigate(SettingsPage.Storage) })
+                }
+            }
+            item {
+                SettingsGroup {
+                    SettingsGroupItem(title = "关于", description = "应用信息与开源许可", position = GroupPosition.First, onClick = { onNavigate(SettingsPage.About) })
+                    SettingsGroupItem(title = "赞助", description = "支持项目持续更新", position = GroupPosition.Last, onClick = { onNavigate(SettingsPage.Sponsor) })
+                }
             }
         }
-
-        item {
-            SettingsGroup {
-                SettingsGroupItem(title = "清理空间", description = "管理App占用的缓存与截图空间", position = GroupPosition.Single, onClick = { onNavigate(SettingsPage.Storage) })
+    } else {
+        // MD3E 模式
+        LazyColumn(
+            modifier = Modifier.fillMaxSize()
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(24.dp),
+            contentPadding = PaddingValues(top = 16.dp, bottom = 100.dp + WindowInsets.safeDrawing.asPaddingValues().calculateBottomPadding())
+        ) {
+            item {
+                Text(text = "设置", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold)
             }
-        }
-
-        item {
-            SettingsGroup {
-                SettingsGroupItem(title = "关于", description = "应用信息与开源许可", position = GroupPosition.First, onClick = { onNavigate(SettingsPage.About) })
-                SettingsGroupItem(title = "赞助", description = "支持项目持续更新", position = GroupPosition.Last, onClick = { onNavigate(SettingsPage.Sponsor) })
+            item {
+                SettingsGroup {
+                    SettingsGroupItem(title = "偏好设置", description = "管理自行习惯的设置", position = GroupPosition.First, onClick = { onNavigate(SettingsPage.Preference) })
+                    SettingsGroupItem(title = "权限与保活", description = "管理权限和防止系统清理后台", position = GroupPosition.Middle, onClick = { onNavigate(SettingsPage.Permission) })
+                    SettingsGroupItem(title = "截图方式", description = "管理App截图的方式", position = GroupPosition.Middle, onClick = { onNavigate(SettingsPage.Screenshot) })
+                    SettingsGroupItem(title = "添加到控制中心", description = "将「截图识别」磁贴添加到控制中心快捷栏", position = GroupPosition.Last, onClick = { performHaptic(); requestAddTile(context) })
+                }
+            }
+            item {
+                SettingsGroup {
+                    SettingsGroupItem(title = "清理空间", description = "管理App占用的缓存与截图空间", position = GroupPosition.Single, onClick = { onNavigate(SettingsPage.Storage) })
+                }
+            }
+            item {
+                SettingsGroup {
+                    SettingsGroupItem(title = "关于", description = "应用信息与开源许可", position = GroupPosition.First, onClick = { onNavigate(SettingsPage.About) })
+                    SettingsGroupItem(title = "赞助", description = "支持项目持续更新", position = GroupPosition.Last, onClick = { onNavigate(SettingsPage.Sponsor) })
+                }
             }
         }
     }
@@ -251,10 +298,50 @@ fun SubPage(
     page: SettingsPage,
     performHaptic: () -> Unit,
     onNavigate: (SettingsPage) -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    isMiuix: Boolean = false
 ) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
+
+    if (isMiuix) {
+        // Miuix 模式：使用 Miuix Scaffold + TopAppBar（自动处理大标题滚动动画）
+        val miuixScrollBehavior = top.yukonga.miuix.kmp.basic.MiuixScrollBehavior()
+        top.yukonga.miuix.kmp.basic.Scaffold(
+            topBar = {
+                top.yukonga.miuix.kmp.basic.TopAppBar(
+                    title = title,
+                    scrollBehavior = miuixScrollBehavior,
+                    color = MiuixTheme.colorScheme.surface,
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
+                        }
+                    }
+                )
+            }
+        ) { innerPadding ->
+            val scrollState = rememberScrollState()
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MiuixTheme.colorScheme.surface)
+                    .padding(innerPadding)
+            ) {
+                when (page) {
+                    SettingsPage.Screenshot -> ScreenshotSettingsContent(performHaptic, 0.dp, scrollState)
+                    SettingsPage.Permission -> PermissionSettingsContent(performHaptic, 0.dp, scrollState)
+                    SettingsPage.Preference -> PreferenceSettingsContent(performHaptic, onNavigate, 0.dp, scrollState)
+                    SettingsPage.KeepAlive -> KeepAliveSettingsContent(performHaptic, 0.dp, scrollState)
+                    SettingsPage.Storage -> StorageSettingsContent(performHaptic, prefs, 0.dp, scrollState)
+                    SettingsPage.About -> AboutSettingsContent(performHaptic, 0.dp, scrollState)
+                    SettingsPage.Sponsor -> SponsorSettingsContent(0.dp, scrollState)
+                    SettingsPage.NotificationApps -> NotificationAppsSettingsContent(performHaptic, 0.dp)
+                    SettingsPage.Main -> {}
+                }
+            }
+        }
+    } else {
     val surfaceColor = MaterialTheme.colorScheme.surface
     val scrollState = rememberScrollState()
     var isScrolled by remember { mutableStateOf(false) }
@@ -352,6 +439,7 @@ fun SubPage(
                 )
             }
         }
+    }
     }
 }
 
