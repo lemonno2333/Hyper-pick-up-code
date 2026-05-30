@@ -81,6 +81,11 @@ fun MiuixSettingsScreen(
                         onClick = { onNavigateToSubPage(SettingsPage.Screenshot) }
                     )
                     ArrowPreference(
+                        title = "清理空间",
+                        summary = "管理App占用的缓存与截图空间",
+                        onClick = { onNavigateToSubPage(SettingsPage.Storage) }
+                    )
+                    ArrowPreference(
                         title = "添加到控制中心",
                         summary = "将「截图识别」磁贴添加到控制中心快捷栏",
                         onClick = { requestAddTile(context) }
@@ -90,16 +95,6 @@ fun MiuixSettingsScreen(
 
             item {
                 SmallTitle(text = "其他")
-                Card(modifier = Modifier.padding(horizontal = 12.dp)) {
-                    ArrowPreference(
-                        title = "清理空间",
-                        summary = "管理App占用的缓存与截图空间",
-                        onClick = { onNavigateToSubPage(SettingsPage.Storage) }
-                    )
-                }
-            }
-
-            item {
                 Card(modifier = Modifier.padding(horizontal = 12.dp)) {
                     ArrowPreference(
                         title = "关于",

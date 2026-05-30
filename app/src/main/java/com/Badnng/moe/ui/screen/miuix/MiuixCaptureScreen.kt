@@ -43,6 +43,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.NotificationAdd
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.QrCode
@@ -63,6 +64,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
@@ -102,6 +104,12 @@ import top.yukonga.miuix.kmp.basic.rememberScrollBarAdapter
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.basic.FloatingToolbar
 import top.yukonga.miuix.kmp.basic.ToolbarPosition
+import top.yukonga.miuix.kmp.blur.BlendColorEntry
+import top.yukonga.miuix.kmp.blur.BlurDefaults
+import top.yukonga.miuix.kmp.blur.isRuntimeShaderSupported
+import top.yukonga.miuix.kmp.blur.layerBackdrop
+import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
+import top.yukonga.miuix.kmp.blur.textureBlur
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -173,34 +181,49 @@ fun MiuixCaptureScreen(
 
     val topAppBarScrollBehavior = MiuixScrollBehavior()
 
+    // 模糊效果 - 和示例项目 NavigateTestPage 一致的实现
+    val blurSupported = top.yukonga.miuix.kmp.blur.isRuntimeShaderSupported()
+    val surfaceColor = MiuixTheme.colorScheme.surface
+    val backdrop = if (blurSupported) {
+        top.yukonga.miuix.kmp.blur.rememberLayerBackdrop {
+            drawRect(surfaceColor)
+            drawContent()
+        }
+    } else {
+        null
+    }
+    val blurEnabled = backdrop != null
+
     Box(modifier = Modifier.fillMaxSize()) {
     Scaffold(
         topBar = {
-            Column(modifier = Modifier.background(MiuixTheme.colorScheme.surface)) {
-                TopAppBar(
-                    title = "澎湃记",
-                    color = MiuixTheme.colorScheme.surface,
-                    scrollBehavior = topAppBarScrollBehavior,
-                    actions = {
-                        // 多选模式切换按钮
-                        IconButton(onClick = {
-                            performHaptic()
-                            isEditMode = !isEditMode
-                            if (!isEditMode) {
-                                selectedIds = emptySet()
-                                selectedGroupIds = emptySet()
+            val topBarColor = if (blurEnabled) Color.Transparent else MiuixTheme.colorScheme.surface
+            com.Badnng.moe.ui.miuix.MiuixBlurredBar(backdrop = backdrop, blurEnabled = blurEnabled) {
+                Column {
+                    TopAppBar(
+                        title = "澎湃记",
+                        color = topBarColor,
+                        scrollBehavior = topAppBarScrollBehavior,
+                        actions = {
+                            // 多选模式切换按钮
+                            IconButton(onClick = {
+                                performHaptic()
+                                isEditMode = !isEditMode
+                                if (!isEditMode) {
+                                    selectedIds = emptySet()
+                                    selectedGroupIds = emptySet()
+                                }
+                            }) {
+                                Icon(
+                                    if (isEditMode) Icons.Default.Close else Icons.Default.SettingsSuggest,
+                                    contentDescription = "管理",
+                                    tint = if (isEditMode) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.primary
+                                )
                             }
-                        }) {
-                            Icon(
-                                if (isEditMode) Icons.Default.Close else Icons.Default.SettingsSuggest,
-                                contentDescription = "管理",
-                                tint = if (isEditMode) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.primary
-                            )
                         }
-                    }
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                // 主 TabRow
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    // 主 TabRow
                 TabRow(
                     tabs = listOf("待取", "已取"),
                     selectedTabIndex = selectedTab,
@@ -231,13 +254,35 @@ fun MiuixCaptureScreen(
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                     )
                 }
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(4.dp))
+                // 底部渐变遮罩，让 tab 区域和内容过渡更自然
+                androidx.compose.foundation.layout.Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp)
+                        .background(
+                            brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                                colors = listOf(
+                                    MiuixTheme.colorScheme.surface,
+                                    MiuixTheme.colorScheme.surface.copy(alpha = 0f)
+                                )
+                            )
+                        )
+                )
+            }
             }
         },
     ) { innerPadding ->
         val lazyListState = rememberLazyListState()
 
-        Box(modifier = Modifier.fillMaxSize()) {
+        // 将 backdrop 应用到内容区域，这样顶栏才能采样到背后的内容
+        val contentModifier = if (backdrop != null) {
+            Modifier.fillMaxSize().layerBackdrop(backdrop)
+        } else {
+            Modifier.fillMaxSize()
+        }
+
+        Box(modifier = contentModifier) {
         LazyColumn(
             state = lazyListState,
             modifier = Modifier
@@ -245,7 +290,7 @@ fun MiuixCaptureScreen(
                 .nestedScroll(topAppBarScrollBehavior.nestedScrollConnection),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(
-                top = innerPadding.calculateTopPadding(),
+                top = innerPadding.calculateTopPadding() + 8.dp,
                 bottom = padding.calculateBottomPadding() + 100.dp,
                 start = 16.dp,
                 end = 16.dp
@@ -364,13 +409,40 @@ fun MiuixCaptureScreen(
                         SmallTitle(text = "已完成订单组")
                     }
                     items(items = completedGroups, key = { "completed_group_${it.id}" }) { group ->
-                        MiuixOrderGroupCard(
-                            group = group,
-                            viewModel = viewModel,
-                            onClick = { },
-                            onMarkAllCompleted = { },
-                            isCompleted = true
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(modifier = Modifier.width(if (isEditMode) 40.dp else 0.dp)) {
+                                androidx.compose.animation.AnimatedVisibility(
+                                    visible = isEditMode,
+                                    enter = androidx.compose.animation.expandHorizontally() + androidx.compose.animation.fadeIn(),
+                                    exit = androidx.compose.animation.shrinkHorizontally() + androidx.compose.animation.fadeOut()
+                                ) {
+                                    Checkbox(
+                                        state = if (selectedGroupIds.contains(group.id)) ToggleableState.On else ToggleableState.Off,
+                                        onClick = {
+                                            performHaptic()
+                                            selectedGroupIds = if (selectedGroupIds.contains(group.id)) {
+                                                selectedGroupIds - group.id
+                                            } else {
+                                                selectedGroupIds + group.id
+                                            }
+                                        },
+                                        modifier = Modifier.padding(end = 8.dp)
+                                    )
+                                }
+                            }
+                            MiuixOrderGroupCard(
+                                group = group,
+                                viewModel = viewModel,
+                                onClick = { },
+                                onMarkAllCompleted = { },
+                                onDeleteGroup = {
+                                    performHaptic()
+                                    viewModel.deleteGroup(group)
+                                },
+                                isCompleted = true,
+                                isEditMode = isEditMode
+                            )
+                        }
                     }
                 }
 
@@ -379,13 +451,39 @@ fun MiuixCaptureScreen(
                         SmallTitle(text = "已完成订单")
                     }
                     items(items = completedOrders, key = { "completed_${it.id}" }) { order ->
-                        MiuixOrderCard(
-                            order = order,
-                            onClick = { },
-                            onMarkCompleted = { },
-                            onDelete = { },
-                            isCompleted = true
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(modifier = Modifier.width(if (isEditMode) 40.dp else 0.dp)) {
+                                androidx.compose.animation.AnimatedVisibility(
+                                    visible = isEditMode,
+                                    enter = androidx.compose.animation.expandHorizontally() + androidx.compose.animation.fadeIn(),
+                                    exit = androidx.compose.animation.shrinkHorizontally() + androidx.compose.animation.fadeOut()
+                                ) {
+                                    Checkbox(
+                                        state = if (selectedIds.contains(order.id)) ToggleableState.On else ToggleableState.Off,
+                                        onClick = {
+                                            performHaptic()
+                                            selectedIds = if (selectedIds.contains(order.id)) {
+                                                selectedIds - order.id
+                                            } else {
+                                                selectedIds + order.id
+                                            }
+                                        },
+                                        modifier = Modifier.padding(end = 8.dp)
+                                    )
+                                }
+                            }
+                            MiuixOrderCard(
+                                order = order,
+                                onClick = { },
+                                onMarkCompleted = { },
+                                onDelete = {
+                                    performHaptic()
+                                    viewModel.deleteOrder(order)
+                                },
+                                isCompleted = true,
+                                isEditMode = isEditMode
+                            )
+                        }
                     }
                 }
 
@@ -603,6 +701,11 @@ private fun MiuixOrderGroupCard(
     }
     val groupOrders by viewModel.getOrdersByGroupId(group.id).collectAsState()
 
+    // 定时状态
+    val groupRequestCode = remember(group.id) { com.Badnng.moe.helper.NotificationScheduler.getGroupRequestCode(group.id) }
+    var isScheduled by remember { mutableStateOf(com.Badnng.moe.helper.NotificationScheduler.isScheduled(context, groupRequestCode)) }
+    var showTimePicker by remember { mutableStateOf(false) }
+
     val brandIconRes = remember(group.brandName, group.orderType) {
         BrandIconResolver.resolveBuiltinFallbackResId(context, group.brandName, group.orderType)
     }
@@ -661,6 +764,26 @@ private fun MiuixOrderGroupCard(
                 style = MiuixTheme.textStyles.body2,
                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary
             )
+
+            // 取件位置（从组内订单中获取第一个非空位置）
+            val location = groupOrders.firstOrNull { !it.pickupLocation.isNullOrBlank() }?.pickupLocation
+            if (!location.isNullOrBlank()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.LocationOn,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                        tint = MiuixTheme.colorScheme.primary.copy(alpha = 0.7f)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = location,
+                        style = MiuixTheme.textStyles.body2,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        maxLines = 1
+                    )
+                }
+            }
 
             // 展开/折叠按钮
             Box(
@@ -790,32 +913,61 @@ private fun MiuixOrderGroupCard(
                         Icon(
                             imageVector = Icons.Default.NotificationAdd,
                             contentDescription = null,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = "再次推送实时通知",
-                            fontSize = 12.sp,
+                            fontSize = 14.sp,
                             maxLines = 1
                         )
                     }
-                    Button(
-                        onClick = { /* TODO: 定时功能 */ },
-                        modifier = Modifier.height(42.dp).width(42.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            color = MiuixTheme.colorScheme.secondaryContainer,
-                            contentColor = MiuixTheme.colorScheme.onSecondaryContainer
-                        )
+                    Box(
+                        modifier = Modifier
+                            .height(44.dp)
+                            .width(44.dp)
+                            .background(
+                                if (isScheduled) MiuixTheme.colorScheme.errorContainer else MiuixTheme.colorScheme.secondaryContainer,
+                                androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
+                            )
+                            .clickable {
+                                performHaptic()
+                                if (isScheduled) {
+                                    com.Badnng.moe.helper.NotificationScheduler.cancel(context, groupRequestCode)
+                                    isScheduled = false
+                                    android.widget.Toast.makeText(context, "已取消定时", android.widget.Toast.LENGTH_SHORT).show()
+                                } else {
+                                    showTimePicker = true
+                                }
+                            },
+                        contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.Alarm,
                             contentDescription = "定时",
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(20.dp),
+                            tint = if (isScheduled) MiuixTheme.colorScheme.onErrorContainer else MiuixTheme.colorScheme.onSecondaryContainer
                         )
                     }
                 }
             }
         }
+    }
+
+    // 定时选择弹窗
+    if (showTimePicker) {
+        com.Badnng.moe.ui.component.MiuixScheduledNotificationSheet(
+            show = showTimePicker,
+            onDismiss = { showTimePicker = false },
+            onSchedule = { triggerAtMillis ->
+                com.Badnng.moe.helper.NotificationScheduler.scheduleGroup(context, group, triggerAtMillis)
+                isScheduled = true
+                val cal = java.util.Calendar.getInstance().apply { timeInMillis = triggerAtMillis }
+                val timeStr2 = String.format("%02d:%02d", cal.get(java.util.Calendar.HOUR_OF_DAY), cal.get(java.util.Calendar.MINUTE))
+                android.widget.Toast.makeText(context, "已设置 $timeStr2 推送", android.widget.Toast.LENGTH_SHORT).show()
+                showTimePicker = false
+            }
+        )
     }
 }
 
@@ -837,6 +989,20 @@ private fun MiuixOrderCard(
 
     val brandIconRes = remember(order.brandName, order.orderType) {
         BrandIconResolver.resolveBuiltinFallbackResId(context, order.brandName, order.orderType)
+    }
+
+    // 定时状态
+    val orderRequestCode = remember(order.id) { com.Badnng.moe.helper.NotificationScheduler.getOrderRequestCode(order.id) }
+    var isScheduled by remember { mutableStateOf(com.Badnng.moe.helper.NotificationScheduler.isScheduled(context, orderRequestCode)) }
+    var showTimePicker by remember { mutableStateOf(false) }
+
+    val haptic = LocalHapticFeedback.current
+    val prefs = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
+    val hapticEnabled = remember(prefs) { prefs.getBoolean("haptic_enabled", true) }
+    val performHaptic = {
+        if (hapticEnabled) {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        }
     }
 
     var orderIconBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
@@ -890,6 +1056,26 @@ private fun MiuixOrderCard(
                             fontWeight = FontWeight.ExtraBold,
                             color = MiuixTheme.colorScheme.primary
                         )
+                        // 取件位置
+                        if (!order.pickupLocation.isNullOrBlank()) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.LocationOn,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MiuixTheme.colorScheme.primary.copy(alpha = 0.7f)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = order.pickupLocation,
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                    maxLines = 1
+                                )
+                            }
+                        }
                     }
                 }
                 // QR码按钮
@@ -906,6 +1092,7 @@ private fun MiuixOrderCard(
             }
 
             // 时间
+            Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = "时间: $timeStr",
                 style = MiuixTheme.textStyles.body2,
@@ -921,18 +1108,19 @@ private fun MiuixOrderCard(
                 ) {
                     Button(
                         onClick = onMarkCompleted,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).height(44.dp),
                         colors = ButtonDefaults.buttonColorsPrimary()
                     ) {
                         Text(
                             text = "完成",
+                            fontSize = 14.sp,
                             modifier = Modifier.fillMaxWidth(),
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
                     }
                     Button(
                         onClick = onDelete,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).height(44.dp),
                         colors = ButtonDefaults.buttonColors(
                             color = MiuixTheme.colorScheme.errorContainer,
                             contentColor = MiuixTheme.colorScheme.onErrorContainer
@@ -940,15 +1128,15 @@ private fun MiuixOrderCard(
                     ) {
                         Text(
                             text = "删除",
+                            fontSize = 14.sp,
                             modifier = Modifier.fillMaxWidth(),
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 // 再次推送实时通知 + 定时按钮
                 val notificationHelper = com.Badnng.moe.helper.NotificationHelper(context)
-                Spacer(modifier = Modifier.height(12.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth().height(44.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -964,31 +1152,60 @@ private fun MiuixOrderCard(
                         Icon(
                             imageVector = Icons.Default.NotificationAdd,
                             contentDescription = null,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = "再次推送实时通知",
-                            fontSize = 12.sp,
+                            fontSize = 14.sp,
                             maxLines = 1
                         )
                     }
-                    Button(
-                        onClick = { /* TODO: 定时功能 */ },
-                        modifier = Modifier.height(42.dp).width(42.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            color = MiuixTheme.colorScheme.secondaryContainer,
-                            contentColor = MiuixTheme.colorScheme.onSecondaryContainer
-                        )
+                    Box(
+                        modifier = Modifier
+                            .height(44.dp)
+                            .width(44.dp)
+                            .background(
+                                if (isScheduled) MiuixTheme.colorScheme.errorContainer else MiuixTheme.colorScheme.secondaryContainer,
+                                androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
+                            )
+                            .clickable {
+                                performHaptic()
+                                if (isScheduled) {
+                                    com.Badnng.moe.helper.NotificationScheduler.cancel(context, orderRequestCode)
+                                    isScheduled = false
+                                    android.widget.Toast.makeText(context, "已取消定时", android.widget.Toast.LENGTH_SHORT).show()
+                                } else {
+                                    showTimePicker = true
+                                }
+                            },
+                        contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.Alarm,
                             contentDescription = "定时",
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(20.dp),
+                            tint = if (isScheduled) MiuixTheme.colorScheme.onErrorContainer else MiuixTheme.colorScheme.onSecondaryContainer
                         )
                     }
                 }
             }
         }
+    }
+
+    // 定时选择弹窗
+    if (showTimePicker) {
+        com.Badnng.moe.ui.component.MiuixScheduledNotificationSheet(
+            show = showTimePicker,
+            onDismiss = { showTimePicker = false },
+            onSchedule = { triggerAtMillis ->
+                com.Badnng.moe.helper.NotificationScheduler.schedule(context, order, triggerAtMillis)
+                isScheduled = true
+                val cal = java.util.Calendar.getInstance().apply { timeInMillis = triggerAtMillis }
+                val timeStr2 = String.format("%02d:%02d", cal.get(java.util.Calendar.HOUR_OF_DAY), cal.get(java.util.Calendar.MINUTE))
+                android.widget.Toast.makeText(context, "已设置 $timeStr2 推送", android.widget.Toast.LENGTH_SHORT).show()
+                showTimePicker = false
+            }
+        )
     }
 }

@@ -1,27 +1,26 @@
 package com.Badnng.moe.ui.screen.settings
 
 import android.content.Context
-import android.content.pm.PackageManager
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.Badnng.moe.R
 import com.Badnng.moe.helper.AccessibilityShortcutHelper
 import com.Badnng.moe.helper.RootHelper
 import com.Badnng.moe.ui.component.CaptureModeItem
 import com.Badnng.moe.ui.miuix.rememberMiuixStyle
+import top.yukonga.miuix.kmp.basic.Card as MiuixCard
+import top.yukonga.miuix.kmp.basic.SmallTitle
+import top.yukonga.miuix.kmp.basic.Switch
+import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -88,43 +87,73 @@ fun ScreenshotSettingsContent(performHaptic: () -> Unit, topPadding: androidx.co
             delay(1500)
         }
     }
+    val isMiuix = rememberMiuixStyle()
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp)
+            .padding(horizontal = if (isMiuix) 0.dp else 16.dp)
             .verticalScroll(scrollState),
-        verticalArrangement = Arrangement.spacedBy(20.dp)
+        verticalArrangement = Arrangement.spacedBy(if (isMiuix) 0.dp else 20.dp)
     ) {
         Spacer(Modifier.height(topPadding))
-        Text("截图技术方案", fontSize = 14.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-        CaptureModeItem(
-            title = "共享屏幕",
-            description = "默认方案，设备兼容性高，但每次使用磁贴需要屏幕共享授权确认",
-            selected = captureMode == "media_projection",
-            onClick = {
-                performHaptic()
-                captureMode = "media_projection"
-                prefs.edit().putString("capture_mode", "media_projection").apply()
-                if (volumeKeyShortcutEnabled) {
-                    Thread {
-                        if (rootReady) {
-                            AccessibilityShortcutHelper.disableServiceWithRoot(context)
-                        } else if (shizukuReady) {
-                            AccessibilityShortcutHelper.disableServiceWithShizuku(context)
-                        }
-                    }.start()
-                    volumeKeyShortcutEnabled = false
-                    prefs.edit().putBoolean("volume_key_shortcut_enabled", false).apply()
-                }
-            }
-        )
-        CaptureModeItem(title = "纯 Shizuku 模式", description = if (shizukuReady) "通过 Shizuku 直接截图识别，无需共享屏幕授权弹窗" else "Shizuku 未就绪，此选项当前不可用。", selected = captureMode == "shizuku", enabled = shizukuReady, onClick = { if (shizukuReady) { performHaptic(); captureMode = "shizuku"; prefs.edit().putString("capture_mode", "shizuku").apply() } })
-        CaptureModeItem(title = "Root 免授权", description = if (rootReady) "通过 Root 可实现免授权后台截图识别" else "Root 不可用，此选项当前不可用。", selected = captureMode == "root", enabled = rootReady, onClick = { if (rootReady) { performHaptic(); captureMode = "root"; prefs.edit().putString("capture_mode", "root").apply() } })
+        SmallTitle(text = "截图技术方案")
+        MiuixCard(modifier = Modifier.padding(horizontal = if (isMiuix) 12.dp else 0.dp)) {
+            OverlayDropdownPreference(
+                title = "截图技术方案",
+                entries = listOf(
+                    top.yukonga.miuix.kmp.basic.DropdownEntry(
+                        items = listOf(
+                            top.yukonga.miuix.kmp.basic.DropdownItem(
+                                text = "共享屏幕",
+                                selected = captureMode == "media_projection",
+                                onClick = {
+                                    performHaptic()
+                                    captureMode = "media_projection"
+                                    prefs.edit().putString("capture_mode", "media_projection").apply()
+                                    if (volumeKeyShortcutEnabled) {
+                                        Thread {
+                                            if (rootReady) {
+                                                AccessibilityShortcutHelper.disableServiceWithRoot(context)
+                                            } else if (shizukuReady) {
+                                                AccessibilityShortcutHelper.disableServiceWithShizuku(context)
+                                            }
+                                        }.start()
+                                        volumeKeyShortcutEnabled = false
+                                        prefs.edit().putBoolean("volume_key_shortcut_enabled", false).apply()
+                                    }
+                                }
+                            ),
+                            top.yukonga.miuix.kmp.basic.DropdownItem(
+                                text = "纯 Shizuku 模式",
+                                selected = captureMode == "shizuku",
+                                enabled = shizukuReady,
+                                onClick = {
+                                    performHaptic()
+                                    captureMode = "shizuku"
+                                    prefs.edit().putString("capture_mode", "shizuku").apply()
+                                }
+                            ),
+                            top.yukonga.miuix.kmp.basic.DropdownItem(
+                                text = "Root 免授权",
+                                selected = captureMode == "root",
+                                enabled = rootReady,
+                                onClick = {
+                                    performHaptic()
+                                    captureMode = "root"
+                                    prefs.edit().putString("capture_mode", "root").apply()
+                                }
+                            )
+                        )
+                    )
+                )
+            )
+        }
 
-        Text("Shizuku 相关设置", fontSize = 14.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-        Surface(
+        SmallTitle(text = "Shizuku 相关设置")
+        val noPromptEnabled = captureMode == "media_projection" && shizukuReady
+        MiuixCard(
             onClick = {
-                if (captureMode == "media_projection" && shizukuReady) {
+                if (noPromptEnabled) {
                     performHaptic()
                     val targetEnabled = !mediaProjectionNoPromptEnabled
                     val success = AccessibilityShortcutHelper.setProjectMediaAppOpsWithShizuku(context, targetEnabled)
@@ -145,11 +174,7 @@ fun ScreenshotSettingsContent(performHaptic: () -> Unit, topPadding: androidx.co
                     }
                 }
             },
-            shape = RoundedCornerShape(16.dp),
-            color = if (captureMode == "media_projection" && shizukuReady) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f),
-            modifier = Modifier.fillMaxWidth(),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (captureMode == "media_projection" && shizukuReady) 0.65f else 0.35f)),
-            enabled = captureMode == "media_projection" && shizukuReady
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp).alpha(if (noPromptEnabled) 1f else 0.5f)
         ) {
             Row(
                 modifier = Modifier.padding(16.dp),
@@ -159,9 +184,9 @@ fun ScreenshotSettingsContent(performHaptic: () -> Unit, topPadding: androidx.co
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "共享屏幕免授权弹窗",
-                        fontSize = 16.sp,
+                        style = MiuixTheme.textStyles.body1,
                         fontWeight = FontWeight.Bold,
-                        color = if (captureMode == "media_projection" && shizukuReady) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        color = MiuixTheme.colorScheme.onSurface
                     )
                     Text(
                         text = when {
@@ -169,21 +194,24 @@ fun ScreenshotSettingsContent(performHaptic: () -> Unit, topPadding: androidx.co
                             !shizukuReady -> "需要 Shizuku 运行并授权后才可开启"
                             else -> "开启后将跳过共享屏幕授权弹窗（与音量键快捷触发互斥）"
                         },
-                        fontSize = 12.sp,
-                        color = if (captureMode == "media_projection" && shizukuReady) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                        style = MiuixTheme.textStyles.body2,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary
                     )
                 }
                 Switch(
                     checked = mediaProjectionNoPromptEnabled,
                     onCheckedChange = null,
-                    enabled = captureMode == "media_projection" && shizukuReady
+                    enabled = noPromptEnabled
                 )
             }
         }
 
-        Surface(
+        Spacer(modifier = Modifier.height(12.dp))
+
+        val shortcutEnabled = currentShortcutBackend != null
+        MiuixCard(
             onClick = {
-                if (currentShortcutBackend != null) {
+                if (shortcutEnabled) {
                     performHaptic()
                     val targetEnabled = !volumeKeyShortcutEnabled
                     if (targetEnabled) {
@@ -212,11 +240,7 @@ fun ScreenshotSettingsContent(performHaptic: () -> Unit, topPadding: androidx.co
                     }
                 }
             },
-            shape = RoundedCornerShape(16.dp),
-            color = if (currentShortcutBackend != null) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f),
-            modifier = Modifier.fillMaxWidth(),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (currentShortcutBackend != null) 0.65f else 0.35f)),
-            enabled = currentShortcutBackend != null
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp).alpha(if (shortcutEnabled) 1f else 0.5f)
         ) {
             Row(
                 modifier = Modifier.padding(16.dp),
@@ -226,9 +250,9 @@ fun ScreenshotSettingsContent(performHaptic: () -> Unit, topPadding: androidx.co
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "音量键快捷触发",
-                        fontSize = 16.sp,
+                        style = MiuixTheme.textStyles.body1,
                         fontWeight = FontWeight.Bold,
-                        color = if (currentShortcutBackend != null) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        color = MiuixTheme.colorScheme.onSurface
                     )
                     Text(
                         text = when {
@@ -238,14 +262,14 @@ fun ScreenshotSettingsContent(performHaptic: () -> Unit, topPadding: androidx.co
                             captureMode == "media_projection" -> "请先选择 Root 或 Shizuku 截图方案后再启用"
                             else -> "当前方案不可用，请检查 Root/Shizuku 状态"
                         },
-                        fontSize = 12.sp,
-                        color = if (currentShortcutBackend != null) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                        style = MiuixTheme.textStyles.body2,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary
                     )
                 }
                 Switch(
                     checked = volumeKeyShortcutEnabled,
                     onCheckedChange = null,
-                    enabled = currentShortcutBackend != null
+                    enabled = shortcutEnabled
                 )
             }
         }

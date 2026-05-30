@@ -599,18 +599,36 @@ fun PreferenceSettingsContent(performHaptic: () -> Unit, onNavigate: (SettingsPa
         }
 
         if (isMiuix) {
+            val isIslandSupported = com.Badnng.moe.helper.SuperIslandHelper.isDeviceSupported(context)
             SmallTitle(text = "通知类型")
             MiuixCard(modifier = Modifier.padding(horizontal = 12.dp)) {
                 OverlayDropdownPreference(
                     title = "通知类型",
-                    items = listOf("安卓原生通知", "小米超级岛"),
-                    selectedIndex = if (notificationType == "island") 1 else 0,
-                    onSelectedIndexChange = { index ->
-                        performHaptic()
-                        val newType = if (index == 1) "island" else "native"
-                        notificationType = newType
-                        prefs.edit().putString("notification_type", newType).apply()
-                    }
+                    entries = listOf(
+                        top.yukonga.miuix.kmp.basic.DropdownEntry(
+                            items = listOf(
+                                top.yukonga.miuix.kmp.basic.DropdownItem(
+                                    text = "安卓原生通知",
+                                    selected = notificationType == "native",
+                                    onClick = {
+                                        performHaptic()
+                                        notificationType = "native"
+                                        prefs.edit().putString("notification_type", "native").apply()
+                                    }
+                                ),
+                                top.yukonga.miuix.kmp.basic.DropdownItem(
+                                    text = "小米超级岛",
+                                    selected = notificationType == "island",
+                                    enabled = isIslandSupported,
+                                    onClick = {
+                                        performHaptic()
+                                        notificationType = "island"
+                                        prefs.edit().putString("notification_type", "island").apply()
+                                    }
+                                )
+                            )
+                        )
+                    )
                 )
             }
             Spacer(modifier = Modifier.height(12.dp))
@@ -619,32 +637,48 @@ fun PreferenceSettingsContent(performHaptic: () -> Unit, onNavigate: (SettingsPa
                 enter = expandVertically() + fadeIn(),
                 exit = shrinkVertically() + fadeOut()
             ) {
-                Surface(
-                    onClick = {
-                        performHaptic()
-                        SuperIslandHelper.sendTestNotification(context)
-                    },
-                    shape = RoundedCornerShape(16.dp),
-                    color = MiuixTheme.colorScheme.primary,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                Column {
+                    top.yukonga.miuix.kmp.basic.Button(
+                        onClick = {
+                            performHaptic()
+                            SuperIslandHelper.sendTestNotification(context)
+                        },
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                        colors = top.yukonga.miuix.kmp.basic.ButtonDefaults.buttonColorsPrimary(),
                     ) {
                         Icon(
                             imageVector = MiuixIcons.Regular.Promotions,
                             contentDescription = null,
                             modifier = Modifier.size(18.dp),
-                            tint = MiuixTheme.colorScheme.onPrimary
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = "测试超级岛通知",
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
-                            color = MiuixTheme.colorScheme.onPrimary
                         )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    MiuixCard(modifier = Modifier.padding(horizontal = 12.dp)) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(MiuixTheme.colorScheme.errorContainer.copy(alpha = 0.3f))
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "⚠",
+                                fontSize = 20.sp
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = "小米超级岛功能仅接入，无白名单。如被非法滥用，与此应用无关，开发者不承担任何责任，也不会提供绕过方法。",
+                                fontSize = 13.sp,
+                                color = MiuixTheme.colorScheme.error,
+                                lineHeight = 18.sp
+                            )
+                        }
                     }
                 }
             }
@@ -700,19 +734,27 @@ fun PreferenceSettingsContent(performHaptic: () -> Unit, onNavigate: (SettingsPa
                         )
                     }
 
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.4f))
-                    ) {
-                        Text(
-                            text = "⚠ 小米超级岛功能仅接入，无白名单。如被非法滥用，与此应用无关，开发者不承担任何责任，也不会提供绕过方法。",
-                            modifier = Modifier.padding(12.dp),
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.error,
-                                lineHeight = 16.sp
+                    MiuixCard(modifier = Modifier.padding(horizontal = 12.dp)) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(MiuixTheme.colorScheme.errorContainer.copy(alpha = 0.3f))
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "⚠",
+                                fontSize = 20.sp
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = "小米超级岛功能仅接入，无白名单。如被非法滥用，与此应用无关，开发者不承担任何责任，也不会提供绕过方法。",
+                                fontSize = 13.sp,
+                                color = MiuixTheme.colorScheme.error,
+                                lineHeight = 18.sp
                             )
                         }
+                    }
                     }
                 }
             }

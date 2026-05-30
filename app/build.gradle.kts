@@ -17,9 +17,9 @@ android {
     defaultConfig {
         applicationId = "com.Badnng.moe"
         minSdk = 35
-        targetSdk = 36
-        versionCode = 20260528_21
-        versionName = "26.5.28.C01-DevUI"
+        targetSdk = 37
+        versionCode = 20260531_21
+        versionName = "26.5.31.C01-DevUI"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {

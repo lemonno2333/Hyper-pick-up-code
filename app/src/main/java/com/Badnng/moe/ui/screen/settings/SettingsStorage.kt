@@ -1,8 +1,6 @@
 package com.Badnng.moe.ui.screen.settings
 
 import android.annotation.SuppressLint
-import android.content.Context
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -19,11 +17,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
+import top.yukonga.miuix.kmp.basic.Card as MiuixCard
+import top.yukonga.miuix.kmp.basic.HorizontalDivider
+import top.yukonga.miuix.kmp.basic.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -40,9 +38,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.Badnng.moe.R
 import com.Badnng.moe.ui.component.PreferenceSection
-import com.Badnng.moe.ui.miuix.rememberMiuixStyle
 import java.io.File
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -136,12 +132,12 @@ fun StorageSettingsContent(performHaptic: () -> Unit, prefs: android.content.Sha
                     text = formatFileSize(totalSize),
                     fontSize = 32.sp,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = MiuixTheme.colorScheme.onSurface
                 )
                 Text(
                     text = "总占用",
                     fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary
                 )
             }
         }
@@ -149,11 +145,8 @@ fun StorageSettingsContent(performHaptic: () -> Unit, prefs: android.content.Sha
         Spacer(Modifier.height(28.dp))
 
         // 卡片式图例
-        Surface(
-            shape = RoundedCornerShape(20.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-            modifier = Modifier.fillMaxWidth(),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f))
+        MiuixCard(
+            modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 StorageLegendRow(
@@ -162,28 +155,28 @@ fun StorageSettingsContent(performHaptic: () -> Unit, prefs: android.content.Sha
                     size = formatFileSize(appSize),
                     description = "APK 安装包"
                 )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                HorizontalDivider(color = MiuixTheme.colorScheme.outline.copy(alpha = 0.3f))
                 StorageLegendRow(
                     color = screenshotColor,
                     label = "截图",
                     size = formatFileSize(screenshotSize),
                     description = "识别截图"
                 )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                HorizontalDivider(color = MiuixTheme.colorScheme.outline.copy(alpha = 0.3f))
                 StorageLegendRow(
                     color = downloadColor,
                     label = "下载",
                     size = formatFileSize(downloadSize),
                     description = "更新包等"
                 )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                HorizontalDivider(color = MiuixTheme.colorScheme.outline.copy(alpha = 0.3f))
                 StorageLegendRow(
                     color = cacheColor,
                     label = "缓存",
                     size = formatFileSize(cacheSize),
                     description = "临时文件"
                 )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                HorizontalDivider(color = MiuixTheme.colorScheme.outline.copy(alpha = 0.3f))
                 StorageLegendRow(
                     color = otherColor,
                     label = "其他",
@@ -195,12 +188,10 @@ fun StorageSettingsContent(performHaptic: () -> Unit, prefs: android.content.Sha
 
         Spacer(Modifier.height(32.dp))
 
-        PreferenceSection(title = "清理操作") {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                StorageActionCard(title = "清理系统缓存", description = "删除 App 运行产生的临时文件", size = formatFileSize(cacheSize), onClear = { performHaptic(); deleteFolderContents(context.cacheDir); refreshSizes() })
-                StorageActionCard(title = "清理识别截图", description = "删除保存在本地的识别原始截图 (不影响已生成的记录)", size = formatFileSize(screenshotSize), onClear = { performHaptic(); deleteFolderContents(File(context.filesDir, "screenshots")); refreshSizes() })
-                StorageActionCard(title = "清理下载文件", description = "删除下载的更新包等文件", size = formatFileSize(downloadSize), onClear = { performHaptic(); deleteFolderContents(File(context.filesDir, "downloads")); refreshSizes() })
-            }
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            StorageActionCard(title = "清理系统缓存", description = "删除 App 运行产生的临时文件", size = formatFileSize(cacheSize), onClear = { performHaptic(); deleteFolderContents(context.cacheDir); refreshSizes() })
+            StorageActionCard(title = "清理识别截图", description = "删除保存在本地的识别原始截图\n(不影响已生成的记录)", size = formatFileSize(screenshotSize), onClear = { performHaptic(); deleteFolderContents(File(context.filesDir, "screenshots")); refreshSizes() })
+            StorageActionCard(title = "清理下载文件", description = "删除下载的更新包等文件", size = formatFileSize(downloadSize), onClear = { performHaptic(); deleteFolderContents(File(context.filesDir, "downloads")); refreshSizes() })
         }
 
         Spacer(Modifier.height(24.dp))
@@ -227,7 +218,7 @@ fun StorageLegendRow(color: Color, label: String, size: String, description: Str
                 Text(
                     text = description,
                     fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary.copy(alpha = 0.7f)
                 )
             }
         }
@@ -235,26 +226,23 @@ fun StorageLegendRow(color: Color, label: String, size: String, description: Str
             text = size,
             fontSize = 15.sp,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface
+            color = MiuixTheme.colorScheme.onSurface
         )
     }
 }
 
 @Composable
 fun StorageActionCard(title: String, description: String, size: String, onClear: () -> Unit) {
-    Surface(
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-        modifier = Modifier.fillMaxWidth(),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f))
+    MiuixCard(
+        modifier = Modifier.fillMaxWidth()
     ) {
         Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(text = title, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                Text(text = description, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(text = "占用: $size", fontSize = 13.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 4.dp))
+                Text(text = description, fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                Text(text = "占用: $size", fontSize = 13.sp, color = MiuixTheme.colorScheme.primary, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 4.dp))
             }
-            Button(onClick = onClear, shape = RoundedCornerShape(12.dp)) { Text("立即清理") }
+            Button(onClick = onClear, cornerRadius = 12.dp, colors = ButtonDefaults.buttonColorsPrimary()) { Text("立即清理") }
         }
     }
 }

@@ -10,6 +10,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,15 +21,20 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.material.icons.Icons
 import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Edit
 import top.yukonga.miuix.kmp.icon.extended.Settings
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -67,7 +75,15 @@ import top.yukonga.miuix.kmp.basic.NavigationBar
 import top.yukonga.miuix.kmp.basic.NavigationBarItem
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.TopAppBar
+import top.yukonga.miuix.kmp.blur.BlendColorEntry
+import top.yukonga.miuix.kmp.blur.BlurDefaults
+import top.yukonga.miuix.kmp.blur.isRuntimeShaderSupported
+import top.yukonga.miuix.kmp.blur.layerBackdrop
+import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
+import top.yukonga.miuix.kmp.blur.textureBlur
+import top.yukonga.miuix.kmp.blur.highlight.Highlight
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.basic.FloatingToolbarDefaults
 
 // 顶层路由
 sealed interface HomeRoute : NavKey {
@@ -141,6 +157,7 @@ fun MiuixHomeScreen(
     )
 }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 private fun MiuixMainContent(
     modifier: Modifier,
@@ -163,6 +180,13 @@ private fun MiuixMainContent(
     var isEditMode by remember { mutableStateOf(false) }
     var showBottomSheet by remember { mutableStateOf(false) }
 
+    val activity = context as? android.app.Activity
+
+    // 主页面按返回键时，从最近任务移除卡片
+    androidx.activity.compose.BackHandler(enabled = !isEditMode && !isManaging) {
+        activity?.finishAndRemoveTask()
+    }
+
     val performHaptic = {
         if (hapticEnabled) {
             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -180,9 +204,20 @@ private fun MiuixMainContent(
         label = "bottomBarBias"
     )
 
+    // 模糊效果
+    val backdrop = com.Badnng.moe.ui.miuix.rememberMiuixBackdrop()
+    val blurEnabled = backdrop != null
+
     Box(modifier = modifier.fillMaxSize()) {
+    // 将 backdrop 应用到 Scaffold，这样底栏才能采样到背后的内容
+    val scaffoldModifier = if (backdrop != null) {
+        Modifier.fillMaxSize().layerBackdrop(backdrop)
+    } else {
+        Modifier.fillMaxSize()
+    }
+
     Scaffold(
-        modifier = Modifier.fillMaxSize(),
+        modifier = scaffoldModifier,
     ) { innerPadding ->
         HorizontalPager(
             state = pagerState,
@@ -206,6 +241,14 @@ private fun MiuixMainContent(
         }
     }
 
+    // 添加记录底部弹窗
+    val addOrderViewModel: OrderViewModel = viewModel()
+    com.Badnng.moe.ui.component.AddOrderBottomSheet(
+        show = showBottomSheet,
+        viewModel = addOrderViewModel,
+        onDismiss = { showBottomSheet = false }
+    )
+
     // 底栏：覆盖在 Scaffold 上方，支持 Start/Center/End 位置
     // 标准底栏（非悬浮）
     AnimatedVisibility(
@@ -214,41 +257,86 @@ private fun MiuixMainContent(
         exit = fadeOut(),
         modifier = Modifier.align(Alignment.BottomCenter)
     ) {
-        NavigationBar(modifier = Modifier.fillMaxWidth()) {
-            NavigationBarItem(
-                selected = pagerState.currentPage == 0,
-                onClick = { performHaptic(); coroutineScope.launch { pagerState.animateScrollToPage(0) } },
-                icon = Icons.Default.Home,
-                label = "主页"
-            )
-            NavigationBarItem(
-                selected = pagerState.currentPage == 1,
-                onClick = { performHaptic(); coroutineScope.launch { pagerState.animateScrollToPage(1) } },
-                icon = MiuixIcons.Regular.Edit,
-                label = "规则"
-            )
-            NavigationBarItem(
-                selected = pagerState.currentPage == 2,
-                onClick = { performHaptic(); coroutineScope.launch { pagerState.animateScrollToPage(2) } },
-                icon = MiuixIcons.Regular.Settings,
-                label = "设置"
-            )
+        val barColor = if (blurEnabled) Color.Transparent else MiuixTheme.colorScheme.surface
+        Box(
+            modifier = if (blurEnabled && backdrop != null) {
+                Modifier.fillMaxWidth().textureBlur(
+                    backdrop = backdrop,
+                    shape = RectangleShape,
+                    blurRadius = 25f,
+                    colors = BlurDefaults.blurColors(
+                        blendColors = listOf(
+                            BlendColorEntry(color = MiuixTheme.colorScheme.surface.copy(0.8f)),
+                        ),
+                    ),
+                )
+            } else {
+                Modifier.fillMaxWidth()
+            }
+        ) {
+            NavigationBar(modifier = Modifier.fillMaxWidth(), color = barColor) {
+                NavigationBarItem(
+                    selected = pagerState.currentPage == 0,
+                    onClick = { performHaptic(); coroutineScope.launch { pagerState.animateScrollToPage(0) } },
+                    icon = Icons.Default.Home,
+                    label = "主页"
+                )
+                NavigationBarItem(
+                    selected = pagerState.currentPage == 1,
+                    onClick = { performHaptic(); coroutineScope.launch { pagerState.animateScrollToPage(1) } },
+                    icon = MiuixIcons.Regular.Edit,
+                    label = "规则"
+                )
+                NavigationBarItem(
+                    selected = pagerState.currentPage == 2,
+                    onClick = { performHaptic(); coroutineScope.launch { pagerState.animateScrollToPage(2) } },
+                    icon = MiuixIcons.Regular.Settings,
+                    label = "设置"
+                )
+            }
         }
     }
 
     // 悬浮底栏
-    if (!isEditMode && !isManaging && useFloatingNavBar) {
+    AnimatedVisibility(
+        visible = !isEditMode && !isManaging && useFloatingNavBar,
+        enter = fadeIn(),
+        exit = fadeOut()
+    ) {
         val barOffsetX = when (navAlignment) {
             "left" -> (-80).dp
             "right" -> 80.dp
             else -> 0.dp
+        }
+        val floatingBarColor = if (blurEnabled) Color.Transparent else MiuixTheme.colorScheme.surfaceContainer
+        val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+        val floatingHighlight = remember(isDark) {
+            if (isDark) Highlight.GlassStrokeMiddleDark else Highlight.GlassStrokeMiddleLight
+        }
+        val floatingBarModifier = if (blurEnabled && backdrop != null) {
+            Modifier.textureBlur(
+                backdrop = backdrop,
+                shape = RoundedCornerShape(FloatingToolbarDefaults.CornerRadius),
+                blurRadius = 25f,
+                colors = BlurDefaults.blurColors(
+                    blendColors = listOf(
+                        BlendColorEntry(color = MiuixTheme.colorScheme.surfaceContainer.copy(0.6f)),
+                    ),
+                ),
+                highlight = floatingHighlight,
+            )
+        } else {
+            Modifier
         }
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.BottomCenter
         ) {
             Box(modifier = Modifier.offset(x = barOffsetX)) {
-                FloatingNavigationBar {
+                FloatingNavigationBar(
+                    modifier = floatingBarModifier,
+                    color = floatingBarColor
+                ) {
                     FloatingNavigationBarItem(
                         selected = pagerState.currentPage == 0,
                         onClick = { performHaptic(); coroutineScope.launch { pagerState.animateScrollToPage(0) } },
@@ -302,41 +390,58 @@ private fun MiuixSettingsSubPageDirect(
         }
     }
 
+    // 模糊效果 - 和示例项目 NavigateTestPage 一致的实现
+    val blurSupported = top.yukonga.miuix.kmp.blur.isRuntimeShaderSupported()
+    val surfaceColor = MiuixTheme.colorScheme.surface
+    val backdrop = if (blurSupported) {
+        top.yukonga.miuix.kmp.blur.rememberLayerBackdrop {
+            drawRect(surfaceColor)
+            drawContent()
+        }
+    } else {
+        null
+    }
+    val blurEnabled = backdrop != null
+
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = title,
-                color = MiuixTheme.colorScheme.surface,
-                scrollBehavior = topAppBarScrollBehavior,
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "返回"
-                        )
+            val topBarColor = if (blurEnabled) Color.Transparent else MiuixTheme.colorScheme.surface
+            com.Badnng.moe.ui.miuix.MiuixBlurredBar(backdrop = backdrop, blurEnabled = blurEnabled) {
+                TopAppBar(
+                    title = title,
+                    color = topBarColor,
+                    scrollBehavior = topAppBarScrollBehavior,
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                MiuixIcons.Regular.Back,
+                                contentDescription = "返回"
+                            )
+                        }
                     }
-                }
-            )
+                )
+            }
         }
     ) { innerPadding ->
         val scrollState = androidx.compose.foundation.rememberScrollState()
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MiuixTheme.colorScheme.surface)
-                .nestedScroll(topAppBarScrollBehavior.nestedScrollConnection)
-                .padding(innerPadding)
-        ) {
-            when (page) {
-                SettingsPage.Screenshot -> com.Badnng.moe.ui.screen.settings.ScreenshotSettingsContent(performHaptic, 0.dp, scrollState)
-                SettingsPage.Permission -> com.Badnng.moe.ui.screen.settings.PermissionSettingsContent(performHaptic, 0.dp, scrollState)
-                SettingsPage.Preference -> com.Badnng.moe.ui.screen.settings.PreferenceSettingsContent(performHaptic, onNavigate, 0.dp, scrollState)
-                SettingsPage.KeepAlive -> com.Badnng.moe.ui.screen.settings.KeepAliveSettingsContent(performHaptic, 0.dp, scrollState)
-                SettingsPage.Storage -> com.Badnng.moe.ui.screen.settings.StorageSettingsContent(performHaptic, prefs, 0.dp, scrollState)
-                SettingsPage.About -> com.Badnng.moe.ui.screen.settings.AboutSettingsContent(performHaptic, 0.dp, scrollState)
-                SettingsPage.Sponsor -> com.Badnng.moe.ui.screen.settings.SponsorSettingsContent(0.dp, scrollState)
-                SettingsPage.NotificationApps -> com.Badnng.moe.ui.screen.settings.NotificationAppsSettingsContent(performHaptic, 0.dp)
-                SettingsPage.Main -> {}
+        val topBarHeight = innerPadding.calculateTopPadding()
+        Box(modifier = if (backdrop != null) Modifier.layerBackdrop(backdrop) else Modifier) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .nestedScroll(topAppBarScrollBehavior.nestedScrollConnection)
+            ) {
+                when (page) {
+                    SettingsPage.Screenshot -> com.Badnng.moe.ui.screen.settings.ScreenshotSettingsContent(performHaptic, topBarHeight, scrollState)
+                    SettingsPage.Permission -> com.Badnng.moe.ui.screen.settings.PermissionSettingsContent(performHaptic, topBarHeight, scrollState)
+                    SettingsPage.Preference -> com.Badnng.moe.ui.screen.settings.PreferenceSettingsContent(performHaptic, onNavigate, topBarHeight, scrollState)
+                    SettingsPage.KeepAlive -> com.Badnng.moe.ui.screen.settings.KeepAliveSettingsContent(performHaptic, topBarHeight, scrollState)
+                    SettingsPage.Storage -> com.Badnng.moe.ui.screen.settings.StorageSettingsContent(performHaptic, prefs, topBarHeight + 26.dp, scrollState)
+                    SettingsPage.About -> com.Badnng.moe.ui.screen.settings.AboutSettingsContent(performHaptic, topBarHeight, scrollState)
+                    SettingsPage.Sponsor -> com.Badnng.moe.ui.screen.settings.SponsorSettingsContent(topBarHeight, scrollState)
+                    SettingsPage.NotificationApps -> com.Badnng.moe.ui.screen.settings.NotificationAppsSettingsContent(performHaptic, topBarHeight + 8.dp)
+                    SettingsPage.Main -> {}
+                }
             }
         }
     }

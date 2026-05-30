@@ -8,17 +8,17 @@ import android.os.Build
 import android.os.Process
 import android.provider.Settings
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -37,6 +37,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import rikka.shizuku.Shizuku
+import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
+import top.yukonga.miuix.kmp.basic.Card as MiuixCard
+import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.SmallTitle
+import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import com.Badnng.moe.ui.miuix.rememberMiuixStyle
 
@@ -63,12 +69,13 @@ fun PermissionSettingsContent(performHaptic: () -> Unit, topPadding: androidx.co
         }
     }
 
+    val isMiuix = rememberMiuixStyle()
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp)
+            .padding(horizontal = if (isMiuix) 0.dp else 16.dp)
             .verticalScroll(scrollState),
-        verticalArrangement = Arrangement.spacedBy(32.dp)
+        verticalArrangement = Arrangement.spacedBy(if (isMiuix) 0.dp else 32.dp)
     ) {
         Spacer(Modifier.height(topPadding))
         // 第一大类：权限设置
@@ -83,7 +90,7 @@ fun PermissionSettingsContent(performHaptic: () -> Unit, topPadding: androidx.co
                             performHaptic()
                             val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply { putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName) }
                             context.startActivity(intent)
-                        }, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth().height(56.dp)) {
+                        }, modifier = Modifier.fillMaxWidth().height(56.dp), colors = ButtonDefaults.buttonColorsPrimary()) {
                             Icon(Icons.Default.Build, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("去修复")
                         }
                     } } else null
@@ -100,7 +107,7 @@ fun PermissionSettingsContent(performHaptic: () -> Unit, topPadding: androidx.co
                                 data = Uri.parse("package:${context.packageName}")
                             }
                             try { context.startActivity(intent) } catch (e: Exception) { context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)) }
-                        }, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth().height(56.dp)) {
+                        }, modifier = Modifier.fillMaxWidth().height(56.dp), colors = ButtonDefaults.buttonColorsPrimary()) {
                             Icon(Icons.Default.Security, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("去授权")
                         }
                     } } else null
@@ -111,7 +118,7 @@ fun PermissionSettingsContent(performHaptic: () -> Unit, topPadding: androidx.co
                     description = "该软件用于免授权截图识别的必须条件，如无则无法使用免授权截图",
                     isGranted = shizukuReady,
                     actionButton = if (!shizukuReady) { {
-                        Button(onClick = { performHaptic(); if (Shizuku.pingBinder()) { try { Shizuku.requestPermission(1001) } catch (e: Exception) {} } }, shape = RoundedCornerShape(16.dp), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary), modifier = Modifier.fillMaxWidth().height(56.dp)) {
+                        Button(onClick = { performHaptic(); if (Shizuku.pingBinder()) { try { Shizuku.requestPermission(1001) } catch (e: Exception) {} } }, colors = ButtonDefaults.buttonColorsPrimary(), modifier = Modifier.fillMaxWidth().height(56.dp)) {
                             Icon(Icons.Default.Refresh, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("如果Shizuku已运行请点我")
                         }
                     } } else null
@@ -126,7 +133,7 @@ fun PermissionSettingsContent(performHaptic: () -> Unit, topPadding: androidx.co
                             performHaptic()
                             val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
                             context.startActivity(intent)
-                        }, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth().height(56.dp)) {
+                        }, modifier = Modifier.fillMaxWidth().height(56.dp), colors = ButtonDefaults.buttonColorsPrimary()) {
                             Icon(Icons.Default.Build, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("去授权")
                         }
                     } } else null
@@ -138,26 +145,25 @@ fun PermissionSettingsContent(performHaptic: () -> Unit, topPadding: androidx.co
         PreferenceSection(title = "保活设置") {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 // 说明卡片
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f))
-                ) {
+                MiuixCard(modifier = Modifier.padding(horizontal = 12.dp)) {
                     Row(
-                        modifier = Modifier.padding(16.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MiuixTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))
+                            .padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
                             imageVector = Icons.Default.Info,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
+                            tint = MiuixTheme.colorScheme.primary,
                             modifier = Modifier.size(24.dp)
                         )
                         Spacer(Modifier.width(12.dp))
                         Text(
                             text = "开启后，应用在主页返回时会退出在后台并自动隐藏后台任务卡片。",
                             fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            color = MiuixTheme.colorScheme.onPrimaryContainer,
                             lineHeight = 18.sp
                         )
                     }
@@ -215,8 +221,8 @@ fun PermissionSettingsContent(performHaptic: () -> Unit, topPadding: androidx.co
                                         context.startActivity(intent)
                                     }
                                 },
-                                shape = RoundedCornerShape(16.dp),
-                                modifier = Modifier.fillMaxWidth().height(56.dp)
+                                modifier = Modifier.fillMaxWidth().height(56.dp),
+                                colors = ButtonDefaults.buttonColorsPrimary()
                             ) {
                                 Icon(Icons.Default.BatterySaver, null, Modifier.size(20.dp))
                                 Spacer(Modifier.width(8.dp))
@@ -227,28 +233,24 @@ fun PermissionSettingsContent(performHaptic: () -> Unit, topPadding: androidx.co
                 )
 
                 // 锁定后台
-                Text(
-                    text = "在最近任务界面锁定应用，防止被系统一键清理：",
-                    fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                    modifier = Modifier.fillMaxWidth(),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f))
-                ) {
-                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                MiuixCard(modifier = Modifier.padding(horizontal = 12.dp)) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MiuixTheme.colorScheme.surfaceContainer.copy(alpha = 0.3f))
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
                         Text(
                             text = "锁定方法",
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
+                            color = MiuixTheme.colorScheme.primary
                         )
                         Text(
                             text = "1. 打开最近任务界面（多任务键或手势上滑悬停）\n2. 找到澎湃记卡片\n3. 长按卡片后点击卡片上的锁图标/下滑卡片使其变为锁定状态",
                             fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                             lineHeight = 20.sp
                         )
                         Spacer(Modifier.height(8.dp))
@@ -256,25 +258,21 @@ fun PermissionSettingsContent(performHaptic: () -> Unit, topPadding: androidx.co
                             Icon(
                                 imageVector = Icons.Default.Lock,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
+                                tint = MiuixTheme.colorScheme.primary,
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(Modifier.width(8.dp))
                             Text(
                                 text = "锁定后卡片会显示锁图标，不会被一键清理",
                                 fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary.copy(alpha = 0.8f)
                             )
                         }
                     }
                 }
 
                 // 厂商后台管理
-                Text(
-                    text = "不同厂商有不同的后台管理策略，请根据你的设备品牌进行设置：",
-                    fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                SmallTitle(text = "各系统设置方法")
 
                 VendorKeepAliveItem(
                     vendor = "HyperOS",

@@ -3,6 +3,7 @@ package com.Badnng.moe.ui.theme
 import android.content.Context
 import android.content.SharedPreferences
 import android.os.Build
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -15,6 +16,7 @@ import com.Badnng.moe.ui.miuixAppUi
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 import top.yukonga.miuix.kmp.theme.ThemeController
+import top.yukonga.miuix.kmp.utils.MiuixIndication
 
 @Composable
 fun 澎湃记Theme(
@@ -126,8 +128,14 @@ fun 澎湃记Theme(
                 MaterialExpressiveTheme(
                     colorScheme = colorScheme,
                     typography = Typography,
-                    content = content
-                )
+                ) {
+                    // MaterialExpressiveTheme 会覆盖 LocalIndication，需要重新提供 MiuixIndication
+                    val indicationColor = MiuixTheme.colorScheme.onBackground
+                    val miuixIndication = remember(indicationColor) { MiuixIndication(color = indicationColor) }
+                    CompositionLocalProvider(LocalIndication provides miuixIndication) {
+                        content()
+                    }
+                }
             }
         } else {
             MaterialExpressiveTheme(

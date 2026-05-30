@@ -24,6 +24,10 @@ import com.Badnng.moe.ui.component.PermissionItem
 import com.Badnng.moe.ui.component.PreferenceSection
 import com.Badnng.moe.ui.component.PreferenceSwitchItem
 import kotlinx.coroutines.delay
+import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
 fun KeepAliveSettingsContent(performHaptic: () -> Unit, topPadding: androidx.compose.ui.unit.Dp = 0.dp, scrollState: androidx.compose.foundation.ScrollState = androidx.compose.foundation.rememberScrollState()) {
@@ -218,12 +222,9 @@ fun KeepAliveSettingsContent(performHaptic: () -> Unit, topPadding: androidx.com
 fun VendorKeepAliveItem(vendor: String, steps: List<String>, performHaptic: () -> Unit) {
     var expanded by remember { mutableStateOf(false) }
 
-    Surface(
+    Card(
         onClick = { performHaptic(); expanded = !expanded },
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-        modifier = Modifier.fillMaxWidth(),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f))
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -235,12 +236,12 @@ fun VendorKeepAliveItem(vendor: String, steps: List<String>, performHaptic: () -
                     text = vendor,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
+                    color = MiuixTheme.colorScheme.primary
                 )
                 Icon(
                     imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    tint = MiuixTheme.colorScheme.onSurfaceVariantSummary
                 )
             }
 
@@ -254,14 +255,14 @@ fun VendorKeepAliveItem(vendor: String, steps: List<String>, performHaptic: () -
                             Text(
                                 text = "${index + 1}.",
                                 fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.primary,
+                                color = MiuixTheme.colorScheme.primary,
                                 fontWeight = FontWeight.Bold
                             )
                             Spacer(Modifier.width(8.dp))
                             Text(
                                 text = step,
                                 fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                                 lineHeight = 18.sp
                             )
                         }
