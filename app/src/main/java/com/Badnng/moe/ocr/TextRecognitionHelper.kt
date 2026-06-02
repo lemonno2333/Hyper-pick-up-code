@@ -11,8 +11,13 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 
 class TextRecognitionHelper(private val context: Context) {
-    // 保留 ML Kit 条码扫描
-    private val barcodeScanner = BarcodeScanning.getClient()
+    // 保留 ML Kit 条码扫描（Google Play Services 不可用时为 null）
+    private val barcodeScanner = try {
+        BarcodeScanning.getClient()
+    } catch (e: Exception) {
+        Log.w("TextRecognitionHelper", "BarcodeScanning not available", e)
+        null
+    }
 
     // PaddleOCR 文字识别
     val paddleOcr = PaddleOcrHelper.getInstance(context)
@@ -74,12 +79,14 @@ class TextRecognitionHelper(private val context: Context) {
             ocrResult = OcrResult(rawFullText, textBlocks, mergedText, correctedBlocks)
 
             // 保留 ML Kit 条码扫描
-            val image = InputImage.fromBitmap(bitmap, 0)
-            barcodeResult = try {
-                withContext(Dispatchers.Main) {
-                    barcodeScanner.process(image).await()
-                }
-            } catch (e: Exception) { null }
+            barcodeResult = barcodeScanner?.let { scanner ->
+                val image = InputImage.fromBitmap(bitmap, 0)
+                try {
+                    withContext(Dispatchers.Main) {
+                        scanner.process(image).await()
+                    }
+                } catch (e: Exception) { null }
+            }
         }
 
         val rawFullText = ocrResult.rawFullText
@@ -893,12 +900,14 @@ class TextRecognitionHelper(private val context: Context) {
         val textBlocks = ocrResult?.textBlocks ?: emptyList()
 
         // 保留 ML Kit 条码扫描
-        val image = InputImage.fromBitmap(bitmap, 0)
-        val barcodeResult = try {
-            withContext(Dispatchers.Main) {
-                barcodeScanner.process(image).await()
-            }
-        } catch (e: Exception) { null }
+        val barcodeResult = barcodeScanner?.let { scanner ->
+            val image = InputImage.fromBitmap(bitmap, 0)
+            try {
+                withContext(Dispatchers.Main) {
+                    scanner.process(image).await()
+                }
+            } catch (e: Exception) { null }
+        }
 
         val mergedText = cleanChineseText(rawFullText)
 
@@ -1085,7 +1094,7 @@ class TextRecognitionHelper(private val context: Context) {
     }
     
     fun close() {
-        barcodeScanner.close()
+        barcodeScanner?.close()
         // 不要关闭 paddleOcr，因为它是单例，应该保持初始化状态
     }
 }
