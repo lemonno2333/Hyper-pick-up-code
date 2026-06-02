@@ -38,7 +38,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -60,8 +59,8 @@ import com.Badnng.moe.helper.BackupHelper
 import com.Badnng.moe.helper.NotificationHelper
 import com.Badnng.moe.helper.UpdateHelper
 import com.Badnng.moe.helper.UpdateInfo
-import com.Badnng.moe.ui.component.UpdateDialog
-import com.Badnng.moe.ui.component.UpdateProgressDialog
+import com.Badnng.moe.ui.component.UpdateSheet
+import com.Badnng.moe.ui.component.UpdateProgressSheet
 import com.Badnng.moe.ui.component.PreferenceSection
 import com.Badnng.moe.ui.component.SettingsListItem
 import kotlinx.coroutines.delay
@@ -80,7 +79,7 @@ fun AboutSettingsContent(performHaptic: () -> Unit, topPadding: androidx.compose
     var showUpdateDialog by remember { mutableStateOf(false) }
     var showProgressDialog by remember { mutableStateOf(false) }
     var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
-    var downloadProgress by remember { mutableFloatStateOf(0f) }
+    var downloadProgress by remember { mutableStateOf<Float?>(null) }
     var isPaused by remember { mutableStateOf(false) }
     val pausedFlag = remember { AtomicBoolean(false) }
     var isChecking by remember { mutableStateOf(false) }
@@ -472,12 +471,14 @@ fun AboutSettingsContent(performHaptic: () -> Unit, topPadding: androidx.compose
 
     // 更新弹窗
     if (showUpdateDialog && updateInfo != null) {
-        UpdateDialog(
+        UpdateSheet(
+            show = showUpdateDialog,
             updateInfo = updateInfo!!,
             onDismiss = { showUpdateDialog = false },
             onInstall = {
                 showUpdateDialog = false
                 showProgressDialog = true
+                downloadProgress = null  // 开始下载前显示不确定状态
                 isPaused = false
                 pausedFlag.set(false)
                 context.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE)
@@ -515,27 +516,15 @@ fun AboutSettingsContent(performHaptic: () -> Unit, topPadding: androidx.compose
                 delay(200)
             }
         }
-        UpdateProgressDialog(
+        UpdateProgressSheet(
+            show = showProgressDialog,
+            updateInfo = updateInfo!!,
             progress = downloadProgress,
-            isPaused = isPaused,
-            onPause = {
-                isPaused = true
-                pausedFlag.set(true)
-                updateInfo?.let {
-                    notificationHelper.showUpdateDownloadNotification(it.versionName, downloadProgress, true)
-                }
-            },
-            onResume = {
-                isPaused = false
-                pausedFlag.set(false)
-                updateInfo?.let {
-                    notificationHelper.showUpdateDownloadNotification(it.versionName, downloadProgress, false)
-                }
-            },
-            onCancel = {
+            onDismiss = {
                 showProgressDialog = false
+                // 后台继续下载，显示通知
                 updateInfo?.let {
-                    notificationHelper.showUpdateDownloadNotification(it.versionName, downloadProgress, isPaused)
+                    notificationHelper.showUpdateDownloadNotification(it.versionName, downloadProgress ?: 0f, isPaused)
                 }
             }
         )

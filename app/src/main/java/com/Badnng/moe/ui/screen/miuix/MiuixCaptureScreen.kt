@@ -256,16 +256,15 @@ fun MiuixCaptureScreen(
                 }
                 Spacer(modifier = Modifier.height(4.dp))
                 // 底部渐变遮罩，让 tab 区域和内容过渡更自然
+                val gradientStartColor = if (blurEnabled) Color.Transparent else MiuixTheme.colorScheme.surface
+                val gradientEndColor = Color.Transparent
                 androidx.compose.foundation.layout.Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(8.dp)
                         .background(
                             brush = androidx.compose.ui.graphics.Brush.verticalGradient(
-                                colors = listOf(
-                                    MiuixTheme.colorScheme.surface,
-                                    MiuixTheme.colorScheme.surface.copy(alpha = 0f)
-                                )
+                                colors = listOf(gradientStartColor, gradientEndColor)
                             )
                         )
                 )

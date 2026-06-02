@@ -46,7 +46,6 @@ jobs:
         run: ./gradlew dependencies --no-daemon
         continue-on-error: true
 
-
       - name: Build Release APK
         env:
           KEY_STORE_PATH: release.jks
@@ -75,10 +74,15 @@ jobs:
         run: |
           BRANCH=$(git branch -r --contains ${{ github.sha }} | head -1 | sed 's/.*origin\///' | xargs)
           echo "Branch: $BRANCH"
-          if [[ "$BRANCH" == "dev" ]] || [[ "$BRANCH" == "Dev" ]]; then
+          if [[ "$BRANCH" == "Dev-UI-MiuiX" ]]; then
             echo "is_prerelease=true" >> $GITHUB_OUTPUT
+            echo "branch_type=devui" >> $GITHUB_OUTPUT
+          elif [[ "$BRANCH" == "dev" ]] || [[ "$BRANCH" == "Dev" ]]; then
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+            echo "branch_type=dev" >> $GITHUB_OUTPUT
           else
             echo "is_prerelease=false" >> $GITHUB_OUTPUT
+            echo "branch_type=stable" >> $GITHUB_OUTPUT
           fi
 
       - name: Read changelog
@@ -97,6 +101,7 @@ jobs:
         env:
           TAG_NAME: ${{ github.ref_name }}
           IS_PRERELEASE: ${{ steps.check_prerelease.outputs.is_prerelease }}
+          BRANCH_TYPE: ${{ steps.check_prerelease.outputs.branch_type }}
         run: |
           python3 -c "
           import re, json, os, hashlib
@@ -123,6 +128,7 @@ jobs:
 
           tag_name = os.environ['TAG_NAME']
           is_prerelease = os.environ['IS_PRERELEASE']
+          branch_type = os.environ['BRANCH_TYPE']
 
           data = {
               'versionCode': version_code,
@@ -132,7 +138,9 @@ jobs:
               'md5': md5_hash
           }
 
-          if is_prerelease == 'true':
+          if branch_type == 'devui':
+              files = ['DevUI.json']
+          elif branch_type == 'dev':
               files = ['Dev.json']
           else:
               files = ['Stable.json', 'Dev.json']
@@ -147,9 +155,11 @@ jobs:
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          IS_PRERELEASE=${{ steps.check_prerelease.outputs.is_prerelease }}
+          BRANCH_TYPE=${{ steps.check_prerelease.outputs.branch_type }}
 
-          if [ "$IS_PRERELEASE" = "true" ]; then
+          if [ "$BRANCH_TYPE" = "devui" ]; then
+            FILES="DevUI.json"
+          elif [ "$BRANCH_TYPE" = "dev" ]; then
             FILES="Dev.json"
           else
             FILES="Stable.json Dev.json"
@@ -176,7 +186,6 @@ jobs:
 
           git diff --cached --quiet || git commit -m "Update JSON for ${{ github.ref_name }}"
           git push origin master
-      
 
       - name: Create Release and Upload APK
         uses: softprops/action-gh-release@v2

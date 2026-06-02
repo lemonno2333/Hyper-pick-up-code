@@ -33,7 +33,6 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 fun KeepAliveSettingsContent(performHaptic: () -> Unit, topPadding: androidx.compose.ui.unit.Dp = 0.dp, scrollState: androidx.compose.foundation.ScrollState = androidx.compose.foundation.rememberScrollState()) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
-    var keepAliveEnabled by remember { mutableStateOf(prefs.getBoolean("keep_alive_enabled", false)) }
     var isIgnoringBattery by remember { mutableStateOf(false) }
 
     // 检测电池优化白名单状态
@@ -80,25 +79,6 @@ fun KeepAliveSettingsContent(performHaptic: () -> Unit, topPadding: androidx.com
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                     lineHeight = 18.sp
-                )
-            }
-        }
-
-        PreferenceSection(title = "基础设置") {
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f))
-            ) {
-                PreferenceSwitchItem(
-                    title = "启用保活",
-                    description = "开启后切到后台时自动隐藏卡片并提示",
-                    checked = keepAliveEnabled,
-                    onCheckedChange = { enabled ->
-                        performHaptic()
-                        keepAliveEnabled = enabled
-                        prefs.edit().putBoolean("keep_alive_enabled", enabled).apply()
-                    }
                 )
             }
         }
