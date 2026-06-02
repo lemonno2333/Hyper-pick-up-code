@@ -335,7 +335,89 @@ private fun MiuixAboutPage(
                 bgModifier = if (textBackdrop != null) Modifier.layerBackdrop(textBackdrop) else Modifier,
             ) {
                 Box(modifier = Modifier.fillMaxSize()) {
-                    // Logo + 应用名 + 版本号 + 检查更新（固定在顶部，一起淡出缩小）
+                    // 可滚动内容（先声明，Z 轴较低）
+                    LazyColumn(
+                        state = lazyListState,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .nestedScroll(topAppBarScrollBehavior.nestedScrollConnection),
+                        contentPadding = PaddingValues(
+                            top = innerPadding.calculateTopPadding(),
+                            bottom = innerPadding.calculateBottomPadding() + 32.dp,
+                        ),
+                    ) {
+                        item(key = "logoSpacer") {
+                            Spacer(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(logoHeightDp + 80.dp)
+                            )
+                        }
+
+                        item(key = "about") {
+                            Column(
+                                modifier = Modifier.fillParentMaxHeight().padding(bottom = innerPadding.calculateBottomPadding()),
+                            ) {
+                                Card(
+                                    modifier = Modifier.padding(horizontal = 12.dp),
+                                    colors = CardDefaults.defaultColors(MiuixTheme.colorScheme.surfaceContainer)
+                                ) {
+                                    ArrowPreference(
+                                        title = "项目地址",
+                                        endActions = {
+                                            MiuixText(
+                                                text = "GitHub",
+                                                fontSize = MiuixTheme.textStyles.body2.fontSize,
+                                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary
+                                            )
+                                        },
+                                        onClick = {
+                                            performHaptic()
+                                            uriHandler.openUri("https://github.com/badnng/Hyper-pick-up-code")
+                                        }
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                Card(
+                                    modifier = Modifier.padding(horizontal = 12.dp),
+                                    colors = CardDefaults.defaultColors(MiuixTheme.colorScheme.surfaceContainer)
+                                ) {
+                                    MiuixAboutBackupSection(performHaptic = performHaptic)
+                                }
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                Card(
+                                    modifier = Modifier.padding(horizontal = 12.dp),
+                                    colors = CardDefaults.defaultColors(MiuixTheme.colorScheme.surfaceContainer)
+                                ) {
+                                    MiuixAboutLogSection(performHaptic = performHaptic)
+                                }
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                Card(
+                                    modifier = Modifier.padding(horizontal = 12.dp),
+                                    colors = CardDefaults.defaultColors(MiuixTheme.colorScheme.surfaceContainer)
+                                ) {
+                                    ArrowPreference(
+                                        title = "致谢",
+                                        summary = "开源项目与贡献者",
+                                        onClick = {
+                                            performHaptic()
+                                            onNavigateToCredits()
+                                        }
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(12.dp))
+                            }
+                        }
+                    }
+
+                    // Logo + 应用名 + 版本号 + 检查更新（后声明，Z 轴更高，可接收点击）
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -449,88 +531,6 @@ private fun MiuixAboutPage(
                                     Spacer(Modifier.width(8.dp))
                                 }
                                 MiuixText(if (isChecking) "检查中..." else "检查更新")
-                            }
-                        }
-                    }
-
-                    // 可滚动内容
-                    LazyColumn(
-                        state = lazyListState,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .nestedScroll(topAppBarScrollBehavior.nestedScrollConnection),
-                        contentPadding = PaddingValues(
-                            top = innerPadding.calculateTopPadding(),
-                            bottom = innerPadding.calculateBottomPadding() + 32.dp,
-                        ),
-                    ) {
-                        item(key = "logoSpacer") {
-                            Spacer(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(logoHeightDp + 80.dp)
-                            )
-                        }
-
-                        item(key = "about") {
-                            Column(
-                                modifier = Modifier.fillParentMaxHeight().padding(bottom = innerPadding.calculateBottomPadding()),
-                            ) {
-                                Card(
-                                    modifier = Modifier.padding(horizontal = 12.dp),
-                                    colors = CardDefaults.defaultColors(MiuixTheme.colorScheme.surfaceContainer)
-                                ) {
-                                    ArrowPreference(
-                                        title = "项目地址",
-                                        endActions = {
-                                            MiuixText(
-                                                text = "GitHub",
-                                                fontSize = MiuixTheme.textStyles.body2.fontSize,
-                                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary
-                                            )
-                                        },
-                                        onClick = {
-                                            performHaptic()
-                                            uriHandler.openUri("https://github.com/badnng/Hyper-pick-up-code")
-                                        }
-                                    )
-                                }
-
-                                Spacer(modifier = Modifier.height(12.dp))
-
-                                Card(
-                                    modifier = Modifier.padding(horizontal = 12.dp),
-                                    colors = CardDefaults.defaultColors(MiuixTheme.colorScheme.surfaceContainer)
-                                ) {
-                                    MiuixAboutBackupSection(performHaptic = performHaptic)
-                                }
-
-                                Spacer(modifier = Modifier.height(12.dp))
-
-                                Card(
-                                    modifier = Modifier.padding(horizontal = 12.dp),
-                                    colors = CardDefaults.defaultColors(MiuixTheme.colorScheme.surfaceContainer)
-                                ) {
-                                    MiuixAboutLogSection(performHaptic = performHaptic)
-                                }
-
-                                Spacer(modifier = Modifier.height(12.dp))
-
-                                Card(
-                                    modifier = Modifier.padding(horizontal = 12.dp),
-                                    colors = CardDefaults.defaultColors(MiuixTheme.colorScheme.surfaceContainer)
-                                ) {
-                                    ArrowPreference(
-                                        title = "致谢",
-                                        summary = "开源项目与贡献者",
-                                        onClick = {
-                                            performHaptic()
-                                            onNavigateToCredits()
-                                        }
-                                    )
-                                }
-
-                                Spacer(modifier = Modifier.height(12.dp))
                             }
                         }
                     }
