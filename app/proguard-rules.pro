@@ -5,28 +5,16 @@
 # For more details, see
 #   http://developer.android.com/guide/developing/tools/proguard.html
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# 保留行号信息（发布版崩溃堆栈可追溯源文件行号）
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# PaddleOCR ncnn 库 - 仅保留 JNI 入口类
+-keep class com.equationl.ncnnandroidppocr.NcnnOcr { *; }
+-keep class com.equationl.ncnnandroidppocr.NcnnOcr$Companion { *; }
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
--keep class com.google.mlkit.** { *; }
--keep interface com.google.mlkit.** { *; }
-
-# PaddleOCR ncnn 库
--keep class com.equationl.ncnnandroidppocr.** { *; }
--keep interface com.equationl.ncnnandroidppocr.** { *; }
-
-# ncnn 库（OCR 依赖）
--keep class org.ncnn.** { *; }
--keep interface org.ncnn.** { *; }
-
+# ncnn 库 - 仅保留 JNI native 方法
+-keep class org.ncnn.Ncnn { *; }
+-keepclasseswithmembers class org.ncnn.** {
+    native <methods>;
+}

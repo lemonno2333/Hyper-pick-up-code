@@ -19,7 +19,7 @@ android {
         minSdk = 35
         targetSdk = 37
         versionCode = 20260603_21
-        versionName = "26.6.3.C01-DevUI"
+        versionName = "26.6.3.C02-DevUI"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {
@@ -73,6 +73,7 @@ android {
     buildTypes {
         getByName("release") {
             isMinifyEnabled = true
+            isShrinkResources = true
             signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
