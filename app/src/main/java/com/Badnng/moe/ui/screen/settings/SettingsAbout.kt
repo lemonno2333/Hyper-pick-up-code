@@ -1,48 +1,31 @@
 package com.Badnng.moe.ui.screen.settings
 
 import android.content.Context
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.WindowInsetsSides
-import androidx.compose.foundation.layout.only
-import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.SystemUpdate
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -63,13 +46,26 @@ import com.Badnng.moe.ui.component.UpdateSheet
 import com.Badnng.moe.ui.component.UpdateProgressSheet
 import com.Badnng.moe.ui.component.PreferenceSection
 import com.Badnng.moe.ui.component.SettingsListItem
-import kotlinx.coroutines.delay
+import com.Badnng.moe.ui.miuix.rememberMiuixStyle
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicBoolean
+import top.yukonga.miuix.kmp.basic.Button as MiuixButton
+import top.yukonga.miuix.kmp.basic.ButtonDefaults as MiuixButtonDefaults
+import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.CardDefaults
+import top.yukonga.miuix.kmp.blur.layerBackdrop
+import top.yukonga.miuix.kmp.blur.textureBlur
+import top.yukonga.miuix.kmp.basic.Icon as MiuixIcon
+import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
+import top.yukonga.miuix.kmp.basic.Text as MiuixText
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Back
+import top.yukonga.miuix.kmp.preference.ArrowPreference
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
-fun AboutSettingsContent(performHaptic: () -> Unit, topPadding: androidx.compose.ui.unit.Dp = 0.dp, scrollState: androidx.compose.foundation.ScrollState = androidx.compose.foundation.rememberScrollState()) {
+fun AboutSettingsContent(performHaptic: () -> Unit, topPadding: androidx.compose.ui.unit.Dp = 0.dp, scrollState: androidx.compose.foundation.ScrollState = androidx.compose.foundation.rememberScrollState(), onNavigateToCredits: () -> Unit = {}, scrollBehavior: top.yukonga.miuix.kmp.basic.ScrollBehavior? = null, onBack: () -> Unit = {}) {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
     val prefs = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
@@ -87,6 +83,7 @@ fun AboutSettingsContent(performHaptic: () -> Unit, topPadding: androidx.compose
 
     val coroutineScope = rememberCoroutineScope()
     val notificationHelper = remember { NotificationHelper(context) }
+    val isMiuix = rememberMiuixStyle()
 
     // 从更新下载通知进入时，自动弹出更新进度弹窗
     LaunchedEffect(Unit) {
@@ -100,16 +97,481 @@ fun AboutSettingsContent(performHaptic: () -> Unit, topPadding: androidx.compose
         }
     }
 
+    val networkUpdateEnabled = prefs.getBoolean("network_update_enabled", false)
+    val updateChannel = prefs.getString("update_channel", "stable") ?: "stable"
+
+    val checkUpdateAction: () -> Unit = {
+        performHaptic()
+        isChecking = true
+        coroutineScope.launch {
+            val info = UpdateHelper.checkUpdate(updateChannel == "dev")
+            isChecking = false
+            if (info != null) {
+                val localVersion = UpdateHelper.getCurrentVersionCode(context)
+                if (info.versionCode > localVersion) {
+                    if (UpdateHelper.isDownloading) {
+                        updateInfo = info
+                        showProgressDialog = true
+                    } else if (UpdateHelper.downloadedFile != null && UpdateHelper.downloadedFile!!.exists()) {
+                        UpdateHelper.installUpdate(context, UpdateHelper.downloadedFile!!)
+                    } else {
+                        updateInfo = info
+                        showUpdateDialog = true
+                    }
+                } else {
+                    UpdateHelper.showNoUpdateToast(context)
+                }
+            }
+        }
+    }
+
+    if (isMiuix) {
+        MiuixAboutPage(
+            versionName = versionName,
+            versionCode = versionCode,
+            networkUpdateEnabled = networkUpdateEnabled,
+            isChecking = isChecking,
+            onCheckUpdate = checkUpdateAction,
+            performHaptic = performHaptic,
+            topPadding = topPadding,
+            scrollState = scrollState,
+            iconTapCount = iconTapCount,
+            onIconTap = { iconTapCount = it },
+            onNavigateToCredits = onNavigateToCredits,
+            onBack = onBack
+        )
+    } else {
+        Md3eAboutPage(
+            versionName = versionName,
+            versionCode = versionCode,
+            networkUpdateEnabled = networkUpdateEnabled,
+            isChecking = isChecking,
+            onCheckUpdate = checkUpdateAction,
+            performHaptic = performHaptic,
+            topPadding = topPadding,
+            scrollState = scrollState,
+            iconTapCount = iconTapCount,
+            onIconTap = { iconTapCount = it }
+        )
+    }
+
+    // 更新弹窗
+    updateInfo?.let { info ->
+        UpdateSheet(
+            show = showUpdateDialog,
+            updateInfo = info,
+            onDismiss = { showUpdateDialog = false },
+            onInstall = {
+                showUpdateDialog = false
+                showProgressDialog = true
+                downloadProgress = null
+                isPaused = false
+                pausedFlag.set(false)
+                prefs.edit().putBoolean("show_update_download", true).apply()
+                coroutineScope.launch {
+                    val file = UpdateHelper.downloadUpdate(
+                        context = context,
+                        updateInfo = info,
+                        onProgress = {
+                            downloadProgress = it
+                            notificationHelper.showUpdateDownloadNotification(info.versionName, it, pausedFlag.get())
+                        },
+                        isPaused = { pausedFlag.get() }
+                    )
+                    showProgressDialog = false
+                    notificationHelper.cancelUpdateDownloadNotification()
+                    if (file != null) {
+                        UpdateHelper.installUpdate(context, file)
+                    }
+                }
+            }
+        )
+    }
+
+    // 下载进度弹窗
+    if (showProgressDialog) {
+        LaunchedEffect(Unit) {
+            while (showProgressDialog && UpdateHelper.isDownloading) {
+                downloadProgress = UpdateHelper.currentProgress
+                kotlinx.coroutines.delay(200)
+            }
+        }
+    }
+    updateInfo?.let { info ->
+        UpdateProgressSheet(
+            show = showProgressDialog,
+            updateInfo = info,
+            progress = downloadProgress,
+            isPaused = isPaused,
+            onPause = {
+                isPaused = true
+                pausedFlag.set(true)
+                notificationHelper.showUpdateDownloadNotification(info.versionName, downloadProgress ?: 0f, true)
+            },
+            onResume = {
+                isPaused = false
+                pausedFlag.set(false)
+                notificationHelper.showUpdateDownloadNotification(info.versionName, downloadProgress ?: 0f, false)
+            },
+            onDismiss = {
+                showProgressDialog = false
+                notificationHelper.showUpdateDownloadNotification(info.versionName, downloadProgress ?: 0f, isPaused)
+            }
+        )
+    }
+}
+
+// ═══════════════════════════════════════════
+//  Miuix 关于页面（参考示例项目 AboutPage）
+// ═══════════════════════════════════════════
+
+// ═══════════════════════════════════════════
+//  Miuix 关于页面（自包含 Scaffold，照搬示例项目 AboutPage）
+// ═══════════════════════════════════════════
+
+@Composable
+private fun MiuixAboutPage(
+    versionName: String,
+    versionCode: Long,
+    networkUpdateEnabled: Boolean,
+    isChecking: Boolean,
+    onCheckUpdate: () -> Unit,
+    performHaptic: () -> Unit,
+    topPadding: androidx.compose.ui.unit.Dp,
+    scrollState: androidx.compose.foundation.ScrollState,
+    iconTapCount: Int,
+    onIconTap: (Int) -> Unit,
+    onNavigateToCredits: () -> Unit,
+    onBack: () -> Unit = {}
+) {
+    val context = LocalContext.current
+    val uriHandler = LocalUriHandler.current
+    val topAppBarScrollBehavior = top.yukonga.miuix.kmp.basic.MiuixScrollBehavior()
+    val lazyListState = rememberLazyListState()
+    val density = LocalDensity.current
+
+    var logoHeightDp by remember { mutableStateOf(300.dp) }
+
+    val scrollProgress by remember {
+        derivedStateOf {
+            when {
+                lazyListState.firstVisibleItemIndex > 0 -> 1f
+                else -> {
+                    val spacer = lazyListState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == "logoSpacer" }
+                    if (spacer != null && spacer.size > 0) {
+                        (lazyListState.firstVisibleItemScrollOffset.toFloat() / spacer.size).coerceIn(0f, 1f)
+                    } else {
+                        0f
+                    }
+                }
+            }
+        }
+    }
+
+    val backdrop = com.Badnng.moe.ui.miuix.rememberMiuixBackdrop()
+    val collapsed by remember { derivedStateOf { scrollProgress == 1f } }
+    val blurActive by remember(backdrop) { derivedStateOf { backdrop != null && scrollProgress == 1f } }
+
+    top.yukonga.miuix.kmp.basic.Scaffold(
+        topBar = {
+            val barColor = if (blurActive) {
+                Color.Transparent
+            } else {
+                if (collapsed) MiuixTheme.colorScheme.surface else Color.Transparent
+            }
+            val titleColor = MiuixTheme.colorScheme.onSurface.copy(
+                alpha = ((scrollProgress - 0.35f) / 0.65f).coerceIn(0f, 1f),
+            )
+            com.Badnng.moe.ui.miuix.MiuixBlurredBar(backdrop = backdrop, blurEnabled = blurActive) {
+                top.yukonga.miuix.kmp.basic.SmallTopAppBar(
+                    title = "关于",
+                    scrollBehavior = topAppBarScrollBehavior,
+                    color = barColor,
+                    titleColor = titleColor,
+                    defaultWindowInsetsPadding = false,
+                    navigationIcon = {
+                        top.yukonga.miuix.kmp.basic.IconButton(onClick = {
+                            performHaptic()
+                            onBack()
+                        }) {
+                            top.yukonga.miuix.kmp.basic.Icon(
+                                MiuixIcons.Regular.Back,
+                                contentDescription = "返回",
+                            )
+                        }
+                    },
+                )
+            }
+        },
+    ) { innerPadding ->
+        Box(modifier = if (backdrop != null) Modifier.layerBackdrop(backdrop) else Modifier) {
+            val surfaceForBackdrop = MiuixTheme.colorScheme.surface
+            val textBackdrop = top.yukonga.miuix.kmp.blur.rememberLayerBackdrop {
+                drawRect(surfaceForBackdrop)
+                drawContent()
+            }
+            val isInDark = isSystemInDarkTheme()
+            val logoBlend = remember(isInDark) {
+                if (isInDark) {
+                    listOf(
+                        top.yukonga.miuix.kmp.blur.BlendColorEntry(Color(0xe6a1a1a1), top.yukonga.miuix.kmp.blur.BlurBlendMode.ColorDodge),
+                        top.yukonga.miuix.kmp.blur.BlendColorEntry(Color(0x4de6e6e6), top.yukonga.miuix.kmp.blur.BlurBlendMode.LinearLight),
+                        top.yukonga.miuix.kmp.blur.BlendColorEntry(Color(0xff1af500), top.yukonga.miuix.kmp.blur.BlurBlendMode.Lab),
+                    )
+                } else {
+                    listOf(
+                        top.yukonga.miuix.kmp.blur.BlendColorEntry(Color(0xcc4a4a4a), top.yukonga.miuix.kmp.blur.BlurBlendMode.ColorBurn),
+                        top.yukonga.miuix.kmp.blur.BlendColorEntry(Color(0xff4f4f4f), top.yukonga.miuix.kmp.blur.BlurBlendMode.LinearLight),
+                        top.yukonga.miuix.kmp.blur.BlendColorEntry(Color(0xff1af200), top.yukonga.miuix.kmp.blur.BlurBlendMode.Lab),
+                    )
+                }
+            }
+
+            com.Badnng.moe.ui.miuix.effect.BgEffectBackground(
+                dynamicBackground = true,
+                modifier = Modifier.fillMaxSize(),
+                isFullSize = true,
+                alpha = { 1f - scrollProgress },
+                bgModifier = if (textBackdrop != null) Modifier.layerBackdrop(textBackdrop) else Modifier,
+            ) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    // Logo + 应用名 + 版本号 + 检查更新（固定在顶部，一起淡出缩小）
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(
+                                top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 120.dp,
+                                start = 16.dp,
+                                end = 16.dp,
+                            )
+                            .align(Alignment.TopCenter)
+                            .onSizeChanged { size ->
+                                with(density) { logoHeightDp = size.height.toDp() }
+                            },
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .size(88.dp)
+                                .graphicsLayer {
+                                    val iconProgress = ((scrollProgress - 0.35f) / 0.15f).coerceIn(0f, 1f)
+                                    clip = true
+                                    shape = RoundedCornerShape(24.dp)
+                                    alpha = 1f - iconProgress
+                                    scaleX = 1f - (iconProgress * 0.05f)
+                                    scaleY = 1f - (iconProgress * 0.05f)
+                                }
+                                .background(MiuixTheme.colorScheme.primary, RoundedCornerShape(24.dp))
+                                .clickable(
+                                    indication = null,
+                                    interactionSource = remember { MutableInteractionSource() }
+                                ) {
+                                    onIconTap(iconTapCount + 1)
+                                    if (iconTapCount + 1 >= 10) {
+                                        onIconTap(0)
+                                        throw RuntimeException("Test crash triggered from About icon")
+                                    }
+                                }
+                        ) {
+                            MiuixIcon(
+                                painter = painterResource(id = R.drawable.abouttopicon),
+                                contentDescription = "Logo",
+                                modifier = Modifier.size(74.dp),
+                                tint = Color.Unspecified
+                            )
+                        }
+                        // 应用名（带 textureBlur 渲染，contentBlendMode = DstIn 让模糊只作用于文字像素）
+                        MiuixText(
+                            modifier = Modifier
+                                .padding(top = 12.dp, bottom = 5.dp)
+                                .graphicsLayer {
+                                    val nameProgress = ((scrollProgress - 0.20f) / 0.15f).coerceIn(0f, 1f)
+                                    alpha = 1f - nameProgress
+                                    scaleX = 1f - (nameProgress * 0.05f)
+                                    scaleY = 1f - (nameProgress * 0.05f)
+                                }
+                                .then(
+                                    if (textBackdrop != null) {
+                                        Modifier.textureBlur(
+                                            backdrop = textBackdrop,
+                                            shape = RoundedCornerShape(16.dp),
+                                            blurRadius = 150f,
+                                            colors = top.yukonga.miuix.kmp.blur.BlurDefaults.blurColors(
+                                                blendColors = logoBlend,
+                                            ),
+                                            contentBlendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
+                                        )
+                                    } else {
+                                        Modifier
+                                    }
+                                ),
+                            text = "澎湃记",
+                            color = MiuixTheme.colorScheme.onBackground,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 35.sp
+                        )
+                        MiuixText(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .graphicsLayer {
+                                    val versionProgress = ((scrollProgress - 0.05f) / 0.15f).coerceIn(0f, 1f)
+                                    alpha = 1f - versionProgress
+                                    scaleX = 1f - (versionProgress * 0.05f)
+                                    scaleY = 1f - (versionProgress * 0.05f)
+                                },
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            text = "v$versionName ($versionCode)",
+                            fontSize = 14.sp,
+                            textAlign = TextAlign.Center
+                        )
+                        // 检查更新按钮（和 logo 一起淡出缩小）
+                        if (networkUpdateEnabled) {
+                            Spacer(modifier = Modifier.height(24.dp))
+                            MiuixButton(
+                                onClick = onCheckUpdate,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .graphicsLayer {
+                                        val btnProgress = ((scrollProgress - 0.0f) / 0.15f).coerceIn(0f, 1f)
+                                        alpha = 1f - btnProgress
+                                        scaleX = 1f - (btnProgress * 0.05f)
+                                        scaleY = 1f - (btnProgress * 0.05f)
+                                    },
+                                enabled = !isChecking,
+                                colors = MiuixButtonDefaults.buttonColorsPrimary()
+                            ) {
+                                if (isChecking) {
+                                    InfiniteProgressIndicator(modifier = Modifier.size(18.dp), color = MiuixTheme.colorScheme.onPrimary)
+                                    Spacer(Modifier.width(8.dp))
+                                } else {
+                                    MiuixIcon(Icons.Default.SystemUpdate, null, modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.width(8.dp))
+                                }
+                                MiuixText(if (isChecking) "检查中..." else "检查更新")
+                            }
+                        }
+                    }
+
+                    // 可滚动内容
+                    LazyColumn(
+                        state = lazyListState,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .nestedScroll(topAppBarScrollBehavior.nestedScrollConnection),
+                        contentPadding = PaddingValues(
+                            top = innerPadding.calculateTopPadding(),
+                            bottom = innerPadding.calculateBottomPadding() + 32.dp,
+                        ),
+                    ) {
+                        item(key = "logoSpacer") {
+                            Spacer(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(logoHeightDp + 80.dp)
+                            )
+                        }
+
+                        item(key = "about") {
+                            Column(
+                                modifier = Modifier.fillParentMaxHeight().padding(bottom = innerPadding.calculateBottomPadding()),
+                            ) {
+                                Card(
+                                    modifier = Modifier.padding(horizontal = 12.dp),
+                                    colors = CardDefaults.defaultColors(MiuixTheme.colorScheme.surfaceContainer)
+                                ) {
+                                    ArrowPreference(
+                                        title = "项目地址",
+                                        endActions = {
+                                            MiuixText(
+                                                text = "GitHub",
+                                                fontSize = MiuixTheme.textStyles.body2.fontSize,
+                                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary
+                                            )
+                                        },
+                                        onClick = {
+                                            performHaptic()
+                                            uriHandler.openUri("https://github.com/badnng/Hyper-pick-up-code")
+                                        }
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                Card(
+                                    modifier = Modifier.padding(horizontal = 12.dp),
+                                    colors = CardDefaults.defaultColors(MiuixTheme.colorScheme.surfaceContainer)
+                                ) {
+                                    MiuixAboutBackupSection(performHaptic = performHaptic)
+                                }
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                Card(
+                                    modifier = Modifier.padding(horizontal = 12.dp),
+                                    colors = CardDefaults.defaultColors(MiuixTheme.colorScheme.surfaceContainer)
+                                ) {
+                                    MiuixAboutLogSection(performHaptic = performHaptic)
+                                }
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                Card(
+                                    modifier = Modifier.padding(horizontal = 12.dp),
+                                    colors = CardDefaults.defaultColors(MiuixTheme.colorScheme.surfaceContainer)
+                                ) {
+                                    ArrowPreference(
+                                        title = "致谢",
+                                        summary = "开源项目与贡献者",
+                                        onClick = {
+                                            performHaptic()
+                                            onNavigateToCredits()
+                                        }
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(12.dp))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ═══════════════════════════════════════════
+//  MD3E 关于页面
+// ═══════════════════════════════════════════
+
+@Composable
+private fun Md3eAboutPage(
+    versionName: String,
+    versionCode: Long,
+    networkUpdateEnabled: Boolean,
+    isChecking: Boolean,
+    onCheckUpdate: () -> Unit,
+    performHaptic: () -> Unit,
+    topPadding: androidx.compose.ui.unit.Dp,
+    scrollState: androidx.compose.foundation.ScrollState,
+    iconTapCount: Int,
+    onIconTap: (Int) -> Unit
+) {
+    val context = LocalContext.current
+    val uriHandler = LocalUriHandler.current
+    val coroutineScope = rememberCoroutineScope()
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 16.dp)
             .verticalScroll(scrollState)
-            .windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.safeDrawing.only(androidx.compose.foundation.layout.WindowInsetsSides.Bottom)),
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom)),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(Modifier.height(topPadding))
 
+        // 图标
         Surface(
             modifier = Modifier
                 .size(86.dp)
@@ -117,9 +579,9 @@ fun AboutSettingsContent(performHaptic: () -> Unit, topPadding: androidx.compose
                     indication = null,
                     interactionSource = remember { MutableInteractionSource() }
                 ) {
-                    iconTapCount++
-                    if (iconTapCount >= 10) {
-                        iconTapCount = 0
+                    onIconTap(iconTapCount + 1)
+                    if (iconTapCount + 1 >= 10) {
+                        onIconTap(0)
                         throw RuntimeException("Test crash triggered from About icon")
                     }
                 },
@@ -136,70 +598,22 @@ fun AboutSettingsContent(performHaptic: () -> Unit, topPadding: androidx.compose
             }
         }
 
-
         Spacer(Modifier.height(16.dp))
         Text(text = "澎湃记", fontSize = 26.sp, fontWeight = FontWeight.ExtraBold)
-        Text(text = "版本 $versionName($versionCode)", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
+        Text(text = "版本 $versionName ($versionCode)", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
 
         Spacer(Modifier.height(24.dp))
 
         // 检查更新按钮
-        val networkUpdateEnabled = prefs.getBoolean("network_update_enabled", false)
-        val updateChannel = prefs.getString("update_channel", "stable") ?: "stable"
-
         if (networkUpdateEnabled) {
             Button(
-                onClick = {
-                    performHaptic()
-                    isChecking = true
-                    coroutineScope.launch {
-                        val info = UpdateHelper.checkUpdate(updateChannel == "dev")
-                        isChecking = false
-                        if (info != null) {
-                            val localVersion = UpdateHelper.getCurrentVersionCode(context)
-                            android.util.Log.d("UpdateCheck", "本地版本号: $localVersion")
-                            android.util.Log.d("UpdateCheck", "远程版本号: ${info.versionCode}")
-                            android.util.Log.d("UpdateCheck", "版本比较: ${info.versionCode} > $localVersion = ${info.versionCode > localVersion}")
-
-                            if (info.versionCode > localVersion) {
-                                android.util.Log.d("UpdateCheck", "发现新版本")
-
-                                // 检查是否正在下载
-                                if (UpdateHelper.isDownloading) {
-                                    android.util.Log.d("UpdateCheck", "正在下载中，显示下载进度弹窗")
-                                    updateInfo = info
-                                    showProgressDialog = true
-                                }
-                                // 检查是否已下载
-                                else if (UpdateHelper.downloadedFile != null && UpdateHelper.downloadedFile!!.exists()) {
-                                    android.util.Log.d("UpdateCheck", "已下载完成，直接安装")
-                                    UpdateHelper.installUpdate(context, UpdateHelper.downloadedFile!!)
-                                }
-                                // 显示更新弹窗
-                                else {
-                                    android.util.Log.d("UpdateCheck", "显示更新弹窗")
-                                    updateInfo = info
-                                    showUpdateDialog = true
-                                }
-                            } else {
-                                android.util.Log.d("UpdateCheck", "当前已是最新版本")
-                                UpdateHelper.showNoUpdateToast(context)
-                            }
-                        } else {
-                            android.util.Log.e("UpdateCheck", "获取更新信息失败")
-                        }
-                    }
-                },
+                onClick = onCheckUpdate,
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 enabled = !isChecking
             ) {
                 if (isChecking) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        strokeWidth = 2.dp
-                    )
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
                     Spacer(Modifier.width(8.dp))
                 }
                 Icon(Icons.Default.SystemUpdate, null, Modifier.size(20.dp))
@@ -208,256 +622,33 @@ fun AboutSettingsContent(performHaptic: () -> Unit, topPadding: androidx.compose
             }
         }
 
-        Spacer(Modifier.height(48.dp))
+        Spacer(Modifier.height(24.dp))
 
-        PreferenceSection(title = "致谢") {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OssItem("Jetpack Compose", "现代化声明式 UI 框架", "https://developer.android.com/jetpack/compose", performHaptic)
-                OssItem("Material Design 3", "Google 现代设计语言规范", "https://m3.material.io", performHaptic)
-                OssItem("ML Kit", "Google 强大的设备端机器学习 SDK", "https://developers.google.com/ml-kit", performHaptic)
-                OssItem("Shizuku", "利用系统 API 实现高级权限调用", "https://shizuku.rikka.app", performHaptic)
-                OssItem("ZXing", "高效的二维码生成与处理库", "https://github.com/zxing/zxing", performHaptic)
-                OssItem("Room", "官方高性能 SQLite 数据库封装", "https://developer.android.com/training/data-storage/room", performHaptic)
-                OssItem("Coil", "现代化的 Android 图片加载库", "https://coil-kt.github.io/coil/", performHaptic)
-                OssItem("Kyant Backdrop", "优雅的毛玻璃与层级模糊效果实现", "https://github.com/Kyant0/AndroidLiquidGlass", performHaptic)
-                OssItem("Paddle Lite" , "使用深度识别算法在本地进行OCR识别" , "https://www.paddlepaddle.org.cn/paddle/paddlelite", performHaptic)
-                OssItem("Paddle4Android" , "不需要学习原理即可一键在Android上引入OCR识别" , "https://github.com/equationl/paddleocr4android", performHaptic)
-                OssItem("Miuix", "多平台UI/效果实现的UI设计库", "https://github.com/compose-miuix-ui/miuix/", performHaptic)
-            }
-        }
-
-        Spacer(Modifier.height(48.dp))
-
-        // 备份与恢复
-        PreferenceSection(title = "备份与恢复") {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                // 备份相关状态
-                var isBackingUp by remember { mutableStateOf(false) }
-                var isRestoring by remember { mutableStateOf(false) }
-                var pendingBackupData by remember { mutableStateOf<ByteArray?>(null) }
-
-                // 创建备份文件的launcher
-                val createBackupLauncher = rememberLauncherForActivityResult(
-                    contract = ActivityResultContracts.CreateDocument("application/octet-stream")
-                ) { uri ->
-                    uri?.let {
-                        coroutineScope.launch {
-                            try {
-                                pendingBackupData?.let { data ->
-                                    context.contentResolver.openOutputStream(uri)?.use { outputStream ->
-                                        outputStream.write(data)
-                                    }
-                                    android.widget.Toast.makeText(context, "备份成功！", android.widget.Toast.LENGTH_SHORT).show()
-                                }
-                            } catch (e: Exception) {
-                                android.util.Log.e("Backup", "保存备份失败", e)
-                                android.widget.Toast.makeText(context, "保存备份失败: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
-                            } finally {
-                                pendingBackupData = null
-                            }
-                        }
-                    }
-                }
-
-                // 恢复备份的launcher
-                val restoreBackupLauncher = rememberLauncherForActivityResult(
-                    contract = ActivityResultContracts.OpenDocument()
-                ) { uri ->
-                    uri?.let {
-                        isRestoring = true
-                        coroutineScope.launch {
-                            try {
-                                val backupData = context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                                    inputStream.readBytes()
-                                } ?: throw Exception("无法读取备份文件")
-
-                                val restoredData = BackupHelper.restoreBackup(context, backupData)
-
-                                // 恢复设置
-                                val editor = prefs.edit()
-                                restoredData.settings.forEach { (key, value) ->
-                                    when (value) {
-                                        is Boolean -> editor.putBoolean(key, value)
-                                        is String -> editor.putString(key, value)
-                                        is Int -> editor.putInt(key, value)
-                                        is Long -> editor.putLong(key, value)
-                                        is Float -> editor.putFloat(key, value)
-                                    }
-                                }
-                                editor.apply()
-
-                                // 恢复订单数据
-                                val database = OrderDatabase.getDatabase(context)
-                                val orderDao = database.orderDao()
-                                restoredData.orders.forEach { order ->
-                                    val existingOrder = orderDao.getOrderById(order.id)
-                                    if (existingOrder == null) {
-                                        orderDao.insert(order)
-                                    }
-                                }
-
-                                android.widget.Toast.makeText(context, "恢复成功！共恢复 ${restoredData.orders.size} 条取餐码", android.widget.Toast.LENGTH_SHORT).show()
-                            } catch (e: Exception) {
-                                android.util.Log.e("Backup", "恢复备份失败", e)
-                                android.widget.Toast.makeText(context, "恢复备份失败: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
-                            } finally {
-                                isRestoring = false
-                            }
-                        }
-                    }
-                }
-
-                // 备份卡片
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                    modifier = Modifier.fillMaxWidth(),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f))
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(text = "备份数据", fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                            Text(text = "备份取餐码和设置到压缩包", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        Button(
-                            onClick = {
-                                performHaptic()
-                                isBackingUp = true
-                                coroutineScope.launch {
-                                    try {
-                                        // 获取订单数据
-                                        val database = OrderDatabase.getDatabase(context)
-                                        val orders = database.orderDao().getAllOrdersList()
-
-                                        // 获取设置数据
-                                        val settingsMap = mutableMapOf<String, Any?>()
-                                        val allPrefs = prefs.all
-                                        allPrefs.forEach { (key, value) ->
-                                            settingsMap[key] = value
-                                        }
-
-                                        // 创建备份
-                                        val backupData = BackupHelper.createBackup(context, orders, settingsMap)
-                                        pendingBackupData = backupData
-
-                                        // 使用ActivityResultLauncher保存文件
-                                        val fileName = BackupHelper.generateBackupFileName()
-                                        createBackupLauncher.launch(fileName)
-
-                                    } catch (e: Exception) {
-                                        android.util.Log.e("Backup", "备份失败", e)
-                                        android.widget.Toast.makeText(context, "备份失败: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
-                                        isBackingUp = false
-                                    }
-                                }
-                            },
-                            shape = RoundedCornerShape(12.dp),
-                            enabled = !isBackingUp
-                        ) {
-                            if (isBackingUp) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(16.dp),
-                                    strokeWidth = 2.dp
-                                )
-                            } else {
-                                Text("备份")
-                            }
-                        }
-                    }
-                }
-
-                // 恢复卡片
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                    modifier = Modifier.fillMaxWidth(),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f))
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(text = "恢复数据", fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                            Text(text = "从备份文件恢复取餐码和设置", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        Button(
-                            onClick = {
-                                performHaptic()
-                                restoreBackupLauncher.launch(arrayOf("*/*"))
-                            },
-                            shape = RoundedCornerShape(12.dp),
-                            enabled = !isRestoring
-                        ) {
-                            if (isRestoring) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(16.dp),
-                                    strokeWidth = 2.dp
-                                )
-                            } else {
-                                Text("恢复")
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        Spacer(Modifier.height(48.dp))
-
-        // 日志导出
-        PreferenceSection(title = "日志") {
-            val scope = rememberCoroutineScope()
-            var pendingLogData by remember { mutableStateOf<ByteArray?>(null) }
-
-            val createLogLauncher = rememberLauncherForActivityResult(
-                contract = ActivityResultContracts.CreateDocument("application/zip")
-            ) { uri ->
-                uri?.let {
-                    scope.launch {
-                        try {
-                            pendingLogData?.let { data ->
-                                context.contentResolver.openOutputStream(uri)?.use { outputStream ->
-                                    outputStream.write(data)
-                                }
-                                android.widget.Toast.makeText(context, "日志导出成功！", android.widget.Toast.LENGTH_SHORT).show()
-                            }
-                        } catch (e: Exception) {
-                            android.util.Log.e("AppLogger", "导出日志失败", e)
-                            android.widget.Toast.makeText(context, "导出失败: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
-                        } finally {
-                            pendingLogData = null
-                        }
-                    }
-                }
-            }
-
+        // 项目地址
+        PreferenceSection(title = "项目") {
             SettingsListItem(
-                title = "导出当天日志",
-                description = "将今天的四类日志导出为 ZIP 文件",
+                title = "项目地址",
+                description = "GitHub · badnng/Hyper-pick-up-code",
                 onClick = {
                     performHaptic()
-                    scope.launch {
-                        val files = AppLogger.getTodayLogFiles(context)
-                        if (files.isEmpty()) {
-                            android.widget.Toast.makeText(context, "今天暂无日志记录", android.widget.Toast.LENGTH_SHORT).show()
-                            return@launch
-                        }
-                        val zipBytes = createLogZip(files)
-                        if (zipBytes != null) {
-                            pendingLogData = zipBytes
-                            val fileName = "com.Badnng.moe-Log-${java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())}.zip"
-                            createLogLauncher.launch(fileName)
-                        }
-                    }
+                    uriHandler.openUri("https://github.com/badnng/Hyper-pick-up-code")
                 }
             )
         }
 
+        Spacer(Modifier.height(32.dp))
+
+        // 备份与恢复
+        Md3eBackupSection(performHaptic = performHaptic)
+
+        Spacer(Modifier.height(32.dp))
+
+        // 日志导出
+        Md3eLogSection(performHaptic = performHaptic)
+
         Spacer(Modifier.height(64.dp))
+
+        // 致谢
         val currentYear = remember { java.util.Calendar.getInstance().get(java.util.Calendar.YEAR) }
         Text(
             text = "Made with ❤️ by Badnng and Vibe Codding\n© $currentYear 澎湃记",
@@ -468,63 +659,340 @@ fun AboutSettingsContent(performHaptic: () -> Unit, topPadding: androidx.compose
         )
         Spacer(Modifier.height(32.dp))
     }
+}
 
-    // 更新弹窗
-    if (showUpdateDialog && updateInfo != null) {
-        UpdateSheet(
-            show = showUpdateDialog,
-            updateInfo = updateInfo!!,
-            onDismiss = { showUpdateDialog = false },
-            onInstall = {
-                showUpdateDialog = false
-                showProgressDialog = true
-                downloadProgress = null  // 开始下载前显示不确定状态
-                isPaused = false
-                pausedFlag.set(false)
-                context.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE)
-                    .edit().putBoolean("show_update_download", true).apply()
+// ═══════════════════════════════════════════
+//  备份与恢复（Miuix）
+// ═══════════════════════════════════════════
+
+@Composable
+private fun MiuixAboutBackupSection(performHaptic: () -> Unit) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val prefs = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
+    var isBackingUp by remember { mutableStateOf(false) }
+    var isRestoring by remember { mutableStateOf(false) }
+    var pendingBackupData by remember { mutableStateOf<ByteArray?>(null) }
+
+    val createBackupLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/octet-stream")
+    ) { uri ->
+        uri?.let {
+            coroutineScope.launch {
+                try {
+                    pendingBackupData?.let { data ->
+                        context.contentResolver.openOutputStream(uri)?.use { it.write(data) }
+                        android.widget.Toast.makeText(context, "备份成功！", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                } catch (e: Exception) {
+                    android.widget.Toast.makeText(context, "保存备份失败: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                } finally {
+                    pendingBackupData = null
+                    isBackingUp = false
+                }
+            }
+        }
+    }
+
+    val restoreBackupLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let {
+            isRestoring = true
+            coroutineScope.launch {
+                try {
+                    val backupData = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: throw Exception("无法读取备份文件")
+                    val restoredData = BackupHelper.restoreBackup(context, backupData)
+                    val editor = prefs.edit()
+                    restoredData.settings.forEach { (key, value) ->
+                        when (value) {
+                            is Boolean -> editor.putBoolean(key, value)
+                            is String -> editor.putString(key, value)
+                            is Int -> editor.putInt(key, value)
+                            is Long -> editor.putLong(key, value)
+                            is Float -> editor.putFloat(key, value)
+                        }
+                    }
+                    editor.apply()
+                    val database = OrderDatabase.getDatabase(context)
+                    restoredData.orders.forEach { order ->
+                        if (database.orderDao().getOrderById(order.id) == null) database.orderDao().insert(order)
+                    }
+                    android.widget.Toast.makeText(context, "恢复成功！共恢复 ${restoredData.orders.size} 条取餐码", android.widget.Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    android.widget.Toast.makeText(context, "恢复备份失败: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                } finally {
+                    isRestoring = false
+                }
+            }
+        }
+    }
+
+    ArrowPreference(
+        title = "备份数据",
+        summary = "备份取餐码和设置到压缩包",
+            onClick = {
+                performHaptic()
+                isBackingUp = true
                 coroutineScope.launch {
-                    val file = UpdateHelper.downloadUpdate(
-                        context = context,
-                        updateInfo = updateInfo!!,
-                        onProgress = {
-                            downloadProgress = it
-                            notificationHelper.showUpdateDownloadNotification(
-                                versionName = updateInfo!!.versionName,
-                                progress = it,
-                                isPaused = pausedFlag.get()
-                            )
-                        },
-                        isPaused = { pausedFlag.get() }
-                    )
-                    showProgressDialog = false
-                    notificationHelper.cancelUpdateDownloadNotification()
-                    if (file != null) {
-                        UpdateHelper.installUpdate(context, file)
+                    try {
+                        val database = OrderDatabase.getDatabase(context)
+                        val orders = database.orderDao().getAllOrdersList()
+                        val settingsMap = mutableMapOf<String, Any?>()
+                        prefs.all.forEach { (key, value) -> settingsMap[key] = value }
+                        val backupData = BackupHelper.createBackup(context, orders, settingsMap)
+                        pendingBackupData = backupData
+                        createBackupLauncher.launch(BackupHelper.generateBackupFileName())
+                    } catch (e: Exception) {
+                        android.widget.Toast.makeText(context, "备份失败: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                        isBackingUp = false
                     }
                 }
             }
         )
-    }
+        ArrowPreference(
+            title = "恢复数据",
+            summary = "从备份文件恢复取餐码和设置",
+            onClick = {
+                performHaptic()
+                restoreBackupLauncher.launch(arrayOf("*/*"))
+            }
+        )
+}
 
-    // 下载进度弹窗
-    if (showProgressDialog && updateInfo != null) {
-        // 持续同步下载进度（从通知进入时也能更新）
-        LaunchedEffect(Unit) {
-            while (showProgressDialog && UpdateHelper.isDownloading) {
-                downloadProgress = UpdateHelper.currentProgress
-                delay(200)
+// ═══════════════════════════════════════════
+//  备份与恢复（MD3E）
+// ═══════════════════════════════════════════
+
+@Composable
+private fun Md3eBackupSection(performHaptic: () -> Unit) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val prefs = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
+    var isBackingUp by remember { mutableStateOf(false) }
+    var isRestoring by remember { mutableStateOf(false) }
+    var pendingBackupData by remember { mutableStateOf<ByteArray?>(null) }
+
+    val createBackupLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/octet-stream")
+    ) { uri ->
+        uri?.let {
+            coroutineScope.launch {
+                try {
+                    pendingBackupData?.let { data ->
+                        context.contentResolver.openOutputStream(uri)?.use { it.write(data) }
+                        android.widget.Toast.makeText(context, "备份成功！", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                } catch (e: Exception) {
+                    android.widget.Toast.makeText(context, "保存备份失败: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                } finally {
+                    pendingBackupData = null
+                    isBackingUp = false
+                }
             }
         }
-        UpdateProgressSheet(
-            show = showProgressDialog,
-            updateInfo = updateInfo!!,
-            progress = downloadProgress,
-            onDismiss = {
-                showProgressDialog = false
-                // 后台继续下载，显示通知
-                updateInfo?.let {
-                    notificationHelper.showUpdateDownloadNotification(it.versionName, downloadProgress ?: 0f, isPaused)
+    }
+
+    val restoreBackupLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let {
+            isRestoring = true
+            coroutineScope.launch {
+                try {
+                    val backupData = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: throw Exception("无法读取备份文件")
+                    val restoredData = BackupHelper.restoreBackup(context, backupData)
+                    val editor = prefs.edit()
+                    restoredData.settings.forEach { (key, value) ->
+                        when (value) {
+                            is Boolean -> editor.putBoolean(key, value)
+                            is String -> editor.putString(key, value)
+                            is Int -> editor.putInt(key, value)
+                            is Long -> editor.putLong(key, value)
+                            is Float -> editor.putFloat(key, value)
+                        }
+                    }
+                    editor.apply()
+                    val database = OrderDatabase.getDatabase(context)
+                    restoredData.orders.forEach { order ->
+                        if (database.orderDao().getOrderById(order.id) == null) database.orderDao().insert(order)
+                    }
+                    android.widget.Toast.makeText(context, "恢复成功！共恢复 ${restoredData.orders.size} 条取餐码", android.widget.Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    android.widget.Toast.makeText(context, "恢复备份失败: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                } finally {
+                    isRestoring = false
+                }
+            }
+        }
+    }
+
+    PreferenceSection(title = "备份与恢复") {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            // 备份卡片
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                modifier = Modifier.fillMaxWidth(),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f))
+            ) {
+                Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(text = "备份数据", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Text(text = "备份取餐码和设置到压缩包", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Button(
+                        onClick = {
+                            performHaptic()
+                            isBackingUp = true
+                            coroutineScope.launch {
+                                try {
+                                    val database = OrderDatabase.getDatabase(context)
+                                    val orders = database.orderDao().getAllOrdersList()
+                                    val settingsMap = mutableMapOf<String, Any?>()
+                                    prefs.all.forEach { (key, value) -> settingsMap[key] = value }
+                                    val backupData = BackupHelper.createBackup(context, orders, settingsMap)
+                                    pendingBackupData = backupData
+                                    createBackupLauncher.launch(BackupHelper.generateBackupFileName())
+                                } catch (e: Exception) {
+                                    android.widget.Toast.makeText(context, "备份失败: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                    isBackingUp = false
+                                }
+                            }
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        enabled = !isBackingUp
+                    ) {
+                        if (isBackingUp) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        else Text("备份")
+                    }
+                }
+            }
+
+            // 恢复卡片
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                modifier = Modifier.fillMaxWidth(),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f))
+            ) {
+                Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(text = "恢复数据", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Text(text = "从备份文件恢复取餐码和设置", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Button(
+                        onClick = { performHaptic(); restoreBackupLauncher.launch(arrayOf("*/*")) },
+                        shape = RoundedCornerShape(12.dp),
+                        enabled = !isRestoring
+                    ) {
+                        if (isRestoring) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        else Text("恢复")
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ═══════════════════════════════════════════
+//  日志导出（Miuix）
+// ═══════════════════════════════════════════
+
+@Composable
+private fun MiuixAboutLogSection(performHaptic: () -> Unit) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    var pendingLogData by remember { mutableStateOf<ByteArray?>(null) }
+
+    val createLogLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/zip")
+    ) { uri ->
+        uri?.let {
+            coroutineScope.launch {
+                try {
+                    pendingLogData?.let { data ->
+                        context.contentResolver.openOutputStream(uri)?.use { it.write(data) }
+                        android.widget.Toast.makeText(context, "日志导出成功！", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                } catch (e: Exception) {
+                    android.widget.Toast.makeText(context, "导出失败: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                } finally {
+                    pendingLogData = null
+                }
+            }
+        }
+    }
+
+    ArrowPreference(
+        title = "导出当天日志",
+        summary = "将今天的四类日志导出为 ZIP 文件",
+        onClick = {
+            performHaptic()
+            coroutineScope.launch {
+                val files = AppLogger.getTodayLogFiles(context)
+                if (files.isEmpty()) {
+                    android.widget.Toast.makeText(context, "今天暂无日志记录", android.widget.Toast.LENGTH_SHORT).show()
+                    return@launch
+                }
+                val zipBytes = createLogZip(files)
+                if (zipBytes != null) {
+                    pendingLogData = zipBytes
+                    val fileName = "com.Badnng.moe-Log-${java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())}.zip"
+                    createLogLauncher.launch(fileName)
+                }
+            }
+        }
+    )
+}
+
+// ═══════════════════════════════════════════
+//  日志导出（MD3E）
+// ═══════════════════════════════════════════
+
+@Composable
+private fun Md3eLogSection(performHaptic: () -> Unit) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    var pendingLogData by remember { mutableStateOf<ByteArray?>(null) }
+
+    val createLogLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/zip")
+    ) { uri ->
+        uri?.let {
+            coroutineScope.launch {
+                try {
+                    pendingLogData?.let { data ->
+                        context.contentResolver.openOutputStream(uri)?.use { it.write(data) }
+                        android.widget.Toast.makeText(context, "日志导出成功！", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                } catch (e: Exception) {
+                    android.widget.Toast.makeText(context, "导出失败: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                } finally {
+                    pendingLogData = null
+                }
+            }
+        }
+    }
+
+    PreferenceSection(title = "日志") {
+        SettingsListItem(
+            title = "导出当天日志",
+            description = "将今天的四类日志导出为 ZIP 文件",
+            onClick = {
+                performHaptic()
+                coroutineScope.launch {
+                    val files = AppLogger.getTodayLogFiles(context)
+                    if (files.isEmpty()) {
+                        android.widget.Toast.makeText(context, "今天暂无日志记录", android.widget.Toast.LENGTH_SHORT).show()
+                        return@launch
+                    }
+                    val zipBytes = createLogZip(files)
+                    if (zipBytes != null) {
+                        pendingLogData = zipBytes
+                        val fileName = "com.Badnng.moe-Log-${java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())}.zip"
+                        createLogLauncher.launch(fileName)
+                    }
                 }
             }
         )
@@ -537,50 +1005,92 @@ private suspend fun createLogZip(files: List<java.io.File>): ByteArray? {
             val baos = java.io.ByteArrayOutputStream()
             java.util.zip.ZipOutputStream(baos).use { zos ->
                 zos.setLevel(java.util.zip.Deflater.BEST_COMPRESSION)
-                for (file in files) {
-                    val entry = java.util.zip.ZipEntry(file.name)
-                    zos.putNextEntry(entry)
-                    file.inputStream().use { it.copyTo(zos) }
-                    zos.closeEntry()
+                files.forEach { file ->
+                    if (file.exists()) {
+                        val entry = java.util.zip.ZipEntry(file.name)
+                        zos.putNextEntry(entry)
+                        file.inputStream().use { it.copyTo(zos) }
+                        zos.closeEntry()
+                    }
                 }
             }
             baos.toByteArray()
         } catch (e: Exception) {
-            android.util.Log.e("AppLogger", "createLogZip failed", e)
             null
         }
     }
 }
 
+// ═══════════════════════════════════════════
+//  致谢页面
+// ═══════════════════════════════════════════
+
 @Composable
-fun OssItem(name: String, desc: String, url: String, performHaptic: () -> Unit) {
+fun CreditsSettingsContent(performHaptic: () -> Unit, topPadding: androidx.compose.ui.unit.Dp = 0.dp, scrollState: androidx.compose.foundation.ScrollState = androidx.compose.foundation.rememberScrollState()) {
     val uriHandler = LocalUriHandler.current
-    Surface(
-        onClick = {
-            performHaptic()
-            uriHandler.openUri(url)
-        },
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-        modifier = Modifier.fillMaxWidth(),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f))
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+    val isMiuix = rememberMiuixStyle()
+
+    val credits = listOf(
+        Triple("Jetpack Compose", "现代化声明式 UI 框架", "https://developer.android.com/jetpack/compose"),
+        Triple("Material Design 3", "Google 现代设计语言规范", "https://m3.material.io"),
+        Triple("ML Kit", "Google 强大的设备端机器学习 SDK", "https://developers.google.com/ml-kit"),
+        Triple("Shizuku", "利用系统 API 实现高级权限调用", "https://shizuku.rikka.app"),
+        Triple("ZXing", "高效的二维码生成与处理库", "https://github.com/zxing/zxing"),
+        Triple("Room", "官方高性能 SQLite 数据库封装", "https://developer.android.com/training/data-storage/room"),
+        Triple("Coil", "现代化的 Android 图片加载库", "https://coil-kt.github.io/coil/"),
+        Triple("Kyant Backdrop", "优雅的毛玻璃与层级模糊效果实现", "https://github.com/Kyant0/AndroidLiquidGlass"),
+        Triple("Paddle Lite", "使用深度识别算法在本地进行OCR识别", "https://www.paddlepaddle.org.cn/paddle/paddlelite"),
+        Triple("Paddle4Android", "不需要学习原理即可一键在Android上引入OCR识别", "https://github.com/equationl/paddleocr4android"),
+        Triple("Miuix", "多平台UI/效果实现的UI设计库", "https://github.com/compose-miuix-ui/miuix/"),
+    )
+
+    if (isMiuix) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(scrollState)
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = name, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                Spacer(Modifier.height(2.dp))
-                Text(text = desc, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f))
+            Spacer(Modifier.height(topPadding))
+            Card(
+                modifier = Modifier.padding(horizontal = 12.dp).padding(top = 12.dp),
+                colors = CardDefaults.defaultColors(MiuixTheme.colorScheme.surfaceContainer)
+            ) {
+                credits.forEach { (name, _, url) ->
+                    ArrowPreference(
+                        title = name,
+                        onClick = {
+                            performHaptic()
+                            uriHandler.openUri(url)
+                        }
+                    )
+                }
             }
-            Icon(
-                imageVector = Icons.Default.OpenInNew,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-            )
+            Spacer(Modifier.height(32.dp))
+        }
+    } else {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp)
+                .verticalScroll(scrollState)
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom)),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Spacer(Modifier.height(topPadding))
+            PreferenceSection(title = "开源项目") {
+                credits.forEach { (name, description, url) ->
+                    SettingsListItem(
+                        title = name,
+                        description = description,
+                        onClick = {
+                            performHaptic()
+                            uriHandler.openUri(url)
+                        }
+                    )
+                }
+            }
+            Spacer(Modifier.height(32.dp))
         }
     }
 }
