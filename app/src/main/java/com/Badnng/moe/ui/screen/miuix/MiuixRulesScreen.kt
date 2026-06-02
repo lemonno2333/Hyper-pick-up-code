@@ -282,7 +282,7 @@ fun MiuixRulesScreen(
                 }
 
                 // 自定义规则源
-                items(localCustomSources.size) { index ->
+                items(localCustomSources.size, key = { localCustomSources[it].id }) { index ->
                     val source = localCustomSources[index]
                     val sourceRules = customSourceRules[source.id]
                     Card(modifier = Modifier.padding(horizontal = 12.dp)) {

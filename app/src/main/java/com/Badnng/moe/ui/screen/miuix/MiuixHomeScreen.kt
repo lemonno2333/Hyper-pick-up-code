@@ -171,6 +171,7 @@ private fun MiuixMainContent(
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
     val pagerState = externalPagerState ?: rememberSaveablePagerState(pageCount = { 3 })
+    val currentPage by remember { androidx.compose.runtime.derivedStateOf { pagerState.currentPage } }
     val coroutineScope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
     val viewModel: OrderViewModel = viewModel()
@@ -221,22 +222,25 @@ private fun MiuixMainContent(
     ) { innerPadding ->
         HorizontalPager(
             state = pagerState,
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier.fillMaxSize(),
+            beyondViewportPageCount = 1 // 预加载相邻页面，减少切换时重组
         ) { page ->
-            when (page) {
-                0 -> MiuixCaptureScreen(
-                    padding = innerPadding,
-                    onScrollStateChange = { isScrollingDown = it },
-                    onEditModeChange = { isEditMode = it },
-                    onAddClick = { showBottomSheet = true },
-                    navAlignment = navAlignment,
-                    useFloatingNavBar = useFloatingNavBar
-                )
-                1 -> MiuixRulesScreen(padding = innerPadding)
-                2 -> MiuixSettingsScreen(
-                    padding = innerPadding,
-                    onNavigateToSubPage = onNavigateToSettingsSubPage
-                )
+            androidx.compose.runtime.key(page) {
+                when (page) {
+                    0 -> MiuixCaptureScreen(
+                        padding = innerPadding,
+                        onScrollStateChange = { isScrollingDown = it },
+                        onEditModeChange = { isEditMode = it },
+                        onAddClick = { showBottomSheet = true },
+                        navAlignment = navAlignment,
+                        useFloatingNavBar = useFloatingNavBar
+                    )
+                    1 -> MiuixRulesScreen(padding = innerPadding)
+                    2 -> MiuixSettingsScreen(
+                        padding = innerPadding,
+                        onNavigateToSubPage = onNavigateToSettingsSubPage
+                    )
+                }
             }
         }
     }
@@ -276,19 +280,19 @@ private fun MiuixMainContent(
         ) {
             NavigationBar(modifier = Modifier.fillMaxWidth(), color = barColor) {
                 NavigationBarItem(
-                    selected = pagerState.currentPage == 0,
+                    selected = currentPage == 0,
                     onClick = { performHaptic(); coroutineScope.launch { pagerState.animateScrollToPage(0) } },
                     icon = Icons.Default.Home,
                     label = "主页"
                 )
                 NavigationBarItem(
-                    selected = pagerState.currentPage == 1,
+                    selected = currentPage == 1,
                     onClick = { performHaptic(); coroutineScope.launch { pagerState.animateScrollToPage(1) } },
                     icon = MiuixIcons.Regular.Edit,
                     label = "规则"
                 )
                 NavigationBarItem(
-                    selected = pagerState.currentPage == 2,
+                    selected = currentPage == 2,
                     onClick = { performHaptic(); coroutineScope.launch { pagerState.animateScrollToPage(2) } },
                     icon = MiuixIcons.Regular.Settings,
                     label = "设置"
@@ -338,19 +342,19 @@ private fun MiuixMainContent(
                     color = floatingBarColor
                 ) {
                     FloatingNavigationBarItem(
-                        selected = pagerState.currentPage == 0,
+                        selected = currentPage == 0,
                         onClick = { performHaptic(); coroutineScope.launch { pagerState.animateScrollToPage(0) } },
                         icon = Icons.Default.Home,
                         label = "主页"
                     )
                     FloatingNavigationBarItem(
-                        selected = pagerState.currentPage == 1,
+                        selected = currentPage == 1,
                         onClick = { performHaptic(); coroutineScope.launch { pagerState.animateScrollToPage(1) } },
                         icon = MiuixIcons.Regular.Edit,
                         label = "规则"
                     )
                     FloatingNavigationBarItem(
-                        selected = pagerState.currentPage == 2,
+                        selected = currentPage == 2,
                         onClick = { performHaptic(); coroutineScope.launch { pagerState.animateScrollToPage(2) } },
                         icon = MiuixIcons.Regular.Settings,
                         label = "设置"

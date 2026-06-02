@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.os.Process
 import android.util.Log
 import android.widget.Toast
 import androidx.core.content.FileProvider
@@ -151,6 +152,9 @@ object UpdateHelper {
         isPaused: () -> Boolean
     ): File? = withContext(Dispatchers.IO) {
         try {
+            // 降低线程优先级，减少对 UI 线程的影响
+            Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)
+
             pausedStop = false
 
             // 设置下载状态
@@ -165,6 +169,8 @@ object UpdateHelper {
             val file = File(downloadsDir, "update_${updateInfo.versionName}.apk")
             var downloadedBytes = if (file.exists()) file.length() else 0L
             var totalBytes = -1L
+            var lastReportedBytes = 0L
+            val reportInterval = 64 * 1024L // 每 64KB 才回调一次进度，减少内存抖动
 
             downloadLoop@ while (true) {
                 while (isPaused()) {
@@ -205,11 +211,12 @@ object UpdateHelper {
                 var pausedDuringStream = false
                 body.byteStream().use { input ->
                     FileOutputStream(file, appendMode).use { output ->
-                        val buffer = ByteArray(8192)
+                        val buffer = ByteArray(32768) // 32KB 缓冲区，减少系统调用次数
                         while (true) {
                             if (isPaused()) {
                                 pausedStop = true
                                 pausedDuringStream = true
+                                output.flush() // 暂停前确保数据写入磁盘
                                 call.cancel()
                                 break
                             }
@@ -217,16 +224,25 @@ object UpdateHelper {
                             if (bytesRead == -1) break
                             output.write(buffer, 0, bytesRead)
                             downloadedBytes += bytesRead
-                            if (totalBytes > 0L) {
+                            // 每 64KB 回调一次进度，避免频繁回调导致内存抖动
+                            if (totalBytes > 0L && downloadedBytes - lastReportedBytes >= reportInterval) {
+                                lastReportedBytes = downloadedBytes
                                 val progress = (downloadedBytes.toFloat() / totalBytes.toFloat()).coerceIn(0f, 1f)
                                 currentProgress = progress
                                 onProgress(progress)
                             }
                         }
+                        output.flush() // 确保最后的数据写入磁盘
                     }
                 }
 
                 response.close()
+                // 最终进度回调
+                if (totalBytes > 0L) {
+                    val progress = (downloadedBytes.toFloat() / totalBytes.toFloat()).coerceIn(0f, 1f)
+                    currentProgress = progress
+                    onProgress(progress)
+                }
                 if (pausedDuringStream) {
                     continue@downloadLoop
                 }
