@@ -59,7 +59,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
 
 enum class SettingsPage {
-    Main, Preference, Permission, Screenshot, KeepAlive, Storage, About, Sponsor, NotificationApps
+    Main, Preference, Permission, Screenshot, KeepAlive, Storage, About, Sponsor, NotificationApps, Credits
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -186,6 +186,7 @@ fun SettingsScreen(
                         SettingsPage.About -> "关于"
                         SettingsPage.Sponsor -> "赞助"
                         SettingsPage.NotificationApps -> "通知识别应用管理"
+                        SettingsPage.Credits -> "致谢"
                         else -> ""
                     }
                     SubPage(
@@ -334,9 +335,10 @@ fun SubPage(
                     SettingsPage.Preference -> PreferenceSettingsContent(performHaptic, onNavigate, 0.dp, scrollState)
                     SettingsPage.KeepAlive -> KeepAliveSettingsContent(performHaptic, 0.dp, scrollState)
                     SettingsPage.Storage -> StorageSettingsContent(performHaptic, prefs, 0.dp, scrollState)
-                    SettingsPage.About -> AboutSettingsContent(performHaptic, 0.dp, scrollState)
+                    SettingsPage.About -> AboutSettingsContent(performHaptic, 0.dp, scrollState, onNavigateToCredits = { onNavigate(SettingsPage.Credits) })
                     SettingsPage.Sponsor -> SponsorSettingsContent(0.dp, scrollState)
                     SettingsPage.NotificationApps -> NotificationAppsSettingsContent(performHaptic, 0.dp)
+                    SettingsPage.Credits -> CreditsSettingsContent(performHaptic, 0.dp, scrollState)
                     SettingsPage.Main -> {}
                 }
             }
@@ -383,6 +385,7 @@ fun SubPage(
                 SettingsPage.About -> AboutSettingsContent(performHaptic, topContentPadding, scrollState)
                 SettingsPage.Sponsor -> SponsorSettingsContent(topContentPadding, scrollState)
                 SettingsPage.NotificationApps -> NotificationAppsSettingsContent(performHaptic, topContentPadding)
+                SettingsPage.Credits -> CreditsSettingsContent(performHaptic, topContentPadding, scrollState)
                 SettingsPage.Main -> {}
             }
         }

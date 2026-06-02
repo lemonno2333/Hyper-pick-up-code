@@ -3,6 +3,7 @@ package com.Badnng.moe.ui.component
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -61,13 +62,16 @@ fun UpdateProgressSheet(
     show: Boolean,
     updateInfo: UpdateInfo,
     progress: Float?,
+    isPaused: Boolean,
+    onPause: () -> Unit,
+    onResume: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val isMiuix = rememberMiuixStyle()
     if (isMiuix) {
-        MiuixUpdateProgressSheet(show = show, updateInfo = updateInfo, progress = progress, onDismiss = onDismiss)
+        MiuixUpdateProgressSheet(show = show, updateInfo = updateInfo, progress = progress, isPaused = isPaused, onPause = onPause, onResume = onResume, onDismiss = onDismiss)
     } else {
-        Md3eUpdateProgressDialog(progress = progress ?: 0f, onDismiss = onDismiss)
+        Md3eUpdateProgressDialog(progress = progress ?: 0f, isPaused = isPaused, onPause = onPause, onResume = onResume, onDismiss = onDismiss)
     }
 }
 
@@ -95,56 +99,56 @@ private fun MiuixUpdateSheet(
         CompositionLocalProvider(
             androidx.compose.foundation.LocalIndication provides miuixIndication
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
             ) {
-                MiuixText(
-                    text = updateInfo.versionName,
-                    style = MiuixTheme.textStyles.headline1,
-                    fontWeight = FontWeight.Bold,
-                    color = MiuixTheme.colorScheme.primary,
-                    modifier = Modifier.padding(start = 4.dp)
-                )
-
-                MiuixCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = MiuixCardDefaults.defaultColors(
-                        color = MiuixTheme.colorScheme.surfaceContainer
-                    )
-                ) {
+                item {
                     MiuixText(
-                        text = updateInfo.releaseNotes,
-                        style = MiuixTheme.textStyles.body2,
-                        color = MiuixTheme.colorScheme.onSurface,
-                        lineHeight = 20.sp,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 200.dp)
-                            .verticalScroll(rememberScrollState())
-                            .padding(16.dp)
+                        text = updateInfo.versionName,
+                        style = MiuixTheme.textStyles.headline1,
+                        fontWeight = FontWeight.Bold,
+                        color = MiuixTheme.colorScheme.primary,
+                        modifier = Modifier.padding(start = 4.dp, bottom = 12.dp)
                     )
                 }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    MiuixButton(
-                        onClick = { dismiss?.invoke() },
-                        modifier = Modifier.weight(1f),
-                        colors = MiuixButtonDefaults.buttonColors()
+                item {
+                    MiuixCard(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                        colors = MiuixCardDefaults.defaultColors(
+                            color = MiuixTheme.colorScheme.secondaryContainer
+                        )
                     ) {
-                        MiuixText("取消")
+                        MiuixText(
+                            text = updateInfo.releaseNotes,
+                            style = MiuixTheme.textStyles.body2,
+                            color = MiuixTheme.colorScheme.onSurface,
+                            lineHeight = 20.sp,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp)
+                        )
                     }
-                    MiuixButton(
-                        onClick = onInstall,
-                        modifier = Modifier.weight(1f),
-                        colors = MiuixButtonDefaults.buttonColorsPrimary()
+                }
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        MiuixText("更新")
+                        MiuixButton(
+                            onClick = { dismiss?.invoke() },
+                            modifier = Modifier.weight(1f),
+                            colors = MiuixButtonDefaults.buttonColors()
+                        ) {
+                            MiuixText("取消")
+                        }
+                        MiuixButton(
+                            onClick = onInstall,
+                            modifier = Modifier.weight(1f),
+                            colors = MiuixButtonDefaults.buttonColorsPrimary()
+                        ) {
+                            MiuixText("更新")
+                        }
                     }
                 }
             }
@@ -157,6 +161,9 @@ private fun MiuixUpdateProgressSheet(
     show: Boolean,
     updateInfo: UpdateInfo,
     progress: Float?,
+    isPaused: Boolean,
+    onPause: () -> Unit,
+    onResume: () -> Unit,
     onDismiss: () -> Unit
 ) {
     WindowBottomSheet(
@@ -172,87 +179,100 @@ private fun MiuixUpdateProgressSheet(
         CompositionLocalProvider(
             androidx.compose.foundation.LocalIndication provides miuixIndication
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
             ) {
-                MiuixText(
-                    text = updateInfo.versionName,
-                    style = MiuixTheme.textStyles.headline1,
-                    fontWeight = FontWeight.Bold,
-                    color = MiuixTheme.colorScheme.primary,
-                    modifier = Modifier.padding(start = 4.dp)
-                )
-
-                MiuixCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = MiuixCardDefaults.defaultColors(
-                        color = MiuixTheme.colorScheme.surfaceContainer
-                    )
-                ) {
+                item {
                     MiuixText(
-                        text = updateInfo.releaseNotes,
-                        style = MiuixTheme.textStyles.body2,
-                        color = MiuixTheme.colorScheme.onSurface,
-                        lineHeight = 20.sp,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 150.dp)
-                            .verticalScroll(rememberScrollState())
-                            .padding(16.dp)
+                        text = updateInfo.versionName,
+                        style = MiuixTheme.textStyles.headline1,
+                        fontWeight = FontWeight.Bold,
+                        color = MiuixTheme.colorScheme.primary,
+                        modifier = Modifier.padding(start = 4.dp, bottom = 12.dp)
                     )
                 }
-
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    if (progress != null) {
-                        MiuixText(
-                            text = "${(progress * 100).toInt()}%",
-                            style = MiuixTheme.textStyles.body2,
-                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                            modifier = Modifier.padding(start = 4.dp)
+                item {
+                    MiuixCard(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                        colors = MiuixCardDefaults.defaultColors(
+                            color = MiuixTheme.colorScheme.secondaryContainer
                         )
-                    } else {
+                    ) {
                         MiuixText(
-                            text = "正在获取更新信息...",
+                            text = updateInfo.releaseNotes,
                             style = MiuixTheme.textStyles.body2,
-                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                            modifier = Modifier.padding(start = 4.dp)
-                        )
-                    }
-
-                    if (progress != null) {
-                        LinearProgressIndicator(
-                            progress = { progress },
+                            color = MiuixTheme.colorScheme.onSurface,
+                            lineHeight = 20.sp,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(8.dp)
-                                .clip(RoundedCornerShape(4.dp)),
-                            color = MiuixTheme.colorScheme.primary,
-                            trackColor = MiuixTheme.colorScheme.surfaceContainer,
-                        )
-                    } else {
-                        LinearProgressIndicator(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(8.dp)
-                                .clip(RoundedCornerShape(4.dp)),
-                            color = MiuixTheme.colorScheme.primary,
-                            trackColor = MiuixTheme.colorScheme.surfaceContainer,
+                                .padding(16.dp)
                         )
                     }
                 }
+                item {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (progress != null) {
+                            MiuixText(
+                                text = "${(progress * 100).toInt()}%",
+                                style = MiuixTheme.textStyles.body2,
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                modifier = Modifier.padding(start = 4.dp)
+                            )
+                        } else {
+                            MiuixText(
+                                text = "正在获取更新信息...",
+                                style = MiuixTheme.textStyles.body2,
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                modifier = Modifier.padding(start = 4.dp)
+                            )
+                        }
 
-                MiuixButton(
-                    onClick = { dismiss?.invoke() },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = MiuixButtonDefaults.buttonColors()
-                ) {
-                    MiuixText("后台更新")
+                        if (progress != null) {
+                            LinearProgressIndicator(
+                                progress = { progress },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(8.dp)
+                                    .clip(RoundedCornerShape(4.dp)),
+                                color = MiuixTheme.colorScheme.primary,
+                                trackColor = MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            )
+                        } else {
+                            LinearProgressIndicator(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(8.dp)
+                                    .clip(RoundedCornerShape(4.dp)),
+                                color = MiuixTheme.colorScheme.primary,
+                                trackColor = MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            )
+                        }
+                    }
+                }
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        MiuixButton(
+                            onClick = { dismiss?.invoke() },
+                            modifier = Modifier.weight(1f),
+                            colors = MiuixButtonDefaults.buttonColors()
+                        ) {
+                            MiuixText("后台更新")
+                        }
+                        MiuixButton(
+                            onClick = { if (isPaused) onResume() else onPause() },
+                            modifier = Modifier.weight(1f),
+                            colors = MiuixButtonDefaults.buttonColorsPrimary()
+                        ) {
+                            MiuixText(if (isPaused) "继续" else "暂停")
+                        }
+                    }
                 }
             }
         }
@@ -322,6 +342,9 @@ private fun Md3eUpdateDialog(
 @Composable
 private fun Md3eUpdateProgressDialog(
     progress: Float,
+    isPaused: Boolean,
+    onPause: () -> Unit,
+    onResume: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val largeFont = LocalDensity.current.fontScale >= 1.2f
@@ -354,10 +377,12 @@ private fun Md3eUpdateProgressDialog(
                 if (largeFont) {
                     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shape = RoundedCornerShape(12.dp)) { Text("后台更新", maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                        Button(onClick = if (isPaused) onResume else onPause, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shape = RoundedCornerShape(12.dp)) { Text(if (isPaused) "继续" else "暂停", maxLines = 1, overflow = TextOverflow.Ellipsis) }
                     }
                 } else {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(12.dp)) { Text("后台更新") }
+                        Button(onClick = if (isPaused) onResume else onPause, modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(12.dp)) { Text(if (isPaused) "继续" else "暂停") }
                     }
                 }
             }

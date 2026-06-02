@@ -13,7 +13,6 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.VerticalDivider
 import androidx.compose.ui.draw.alpha
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LocationOn
@@ -34,8 +33,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.core.net.toUri
 import coil.compose.AsyncImage
 import androidx.compose.ui.graphics.asImageBitmap
@@ -44,9 +41,17 @@ import com.Badnng.moe.data.db.OrderDatabase
 import com.Badnng.moe.data.db.OrderEntity
 import com.Badnng.moe.helper.EdgeToEdgeHelper
 import com.Badnng.moe.helper.NotificationHelper
+import com.Badnng.moe.ui.miuix.rememberMiuixStyle
 import com.Badnng.moe.ui.theme.澎湃记Theme
 import kotlinx.coroutines.launch
 import java.io.File
+import top.yukonga.miuix.kmp.basic.Button as MiuixButton
+import top.yukonga.miuix.kmp.basic.ButtonDefaults as MiuixButtonDefaults
+import top.yukonga.miuix.kmp.basic.Card as MiuixCard
+import top.yukonga.miuix.kmp.basic.Icon as MiuixIcon
+import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
+import top.yukonga.miuix.kmp.basic.Text as MiuixText
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 class OrderQuickViewActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -85,18 +90,18 @@ fun OrderQuickViewScreen(
 
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-    
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .windowInsetsPadding(WindowInsets.systemBars), // 确保不顶到系统栏
+            .windowInsetsPadding(WindowInsets.systemBars),
         contentAlignment = Alignment.Center
     ) {
         // 背景遮罩层，点击关闭
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Transparent) // 去掉黑色背景
+                .background(Color.Transparent)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null
@@ -119,7 +124,15 @@ fun OrderQuickViewScreen(
                 }
             )
         } else {
-            CircularProgressIndicator(color = MaterialTheme.colorScheme.onSurface)
+            val isMiuix = rememberMiuixStyle()
+            if (isMiuix) {
+                InfiniteProgressIndicator(
+                    color = MiuixTheme.colorScheme.primary,
+                    modifier = Modifier.size(48.dp)
+                )
+            } else {
+                CircularProgressIndicator(color = MaterialTheme.colorScheme.onSurface)
+            }
         }
     }
 }
@@ -127,13 +140,11 @@ fun OrderQuickViewScreen(
 @Composable
 fun QuickViewDialogContent(order: OrderEntity, onDismiss: () -> Unit) {
     val context = LocalContext.current
+    val isMiuix = rememberMiuixStyle()
     val isExpress = order.orderType == "快递"
     val label = if (isExpress) "取件码" else "取餐码"
-    val secondaryTextColor = MaterialTheme.colorScheme.onSurfaceVariant
-    val hintTextColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
-    val isDarkPalette = MaterialTheme.colorScheme.background.luminance() < 0.5f
-    val qrBackgroundColor = if (isDarkPalette) Color.White else Color.Transparent
     val scope = rememberCoroutineScope()
+
     val markCompleted: () -> Unit = {
         val orderId = order.id
         val completedTime = System.currentTimeMillis()
@@ -160,14 +171,14 @@ fun QuickViewDialogContent(order: OrderEntity, onDismiss: () -> Unit) {
             onDismiss()
         }
     }
-    
+
     // 动画状态
     var animationPlayed by remember { mutableStateOf(false) }
-    
+
     LaunchedEffect(Unit) {
         animationPlayed = true
     }
-    
+
     val brandIcon = remember(order.brandName, order.orderType) {
         val resName = when (order.brandName) {
             "麦当劳" -> "ic_mcdonalds"
@@ -190,523 +201,371 @@ fun QuickViewDialogContent(order: OrderEntity, onDismiss: () -> Unit) {
 
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-    
+
     // 弹出动画
     val scale by animateFloatAsState(
         targetValue = if (animationPlayed) 1f else 0.8f,
-        animationSpec = tween(
-            durationMillis = 300,
-            easing = EaseOutBack
-        ),
+        animationSpec = tween(durationMillis = 300, easing = EaseOutBack),
         label = "scale"
     )
-    
+
     val alpha by animateFloatAsState(
         targetValue = if (animationPlayed) 1f else 0f,
-        animationSpec = tween(
-            durationMillis = 300,
-            easing = EaseOut
-        ),
+        animationSpec = tween(durationMillis = 300, easing = EaseOut),
         label = "alpha"
     )
-    
-    Card(
-        modifier = Modifier
-            .fillMaxWidth(if (isLandscape) 0.7f else 0.85f)
-            .widthIn(max = if (isLandscape) 600.dp else 450.dp)
-            .wrapContentHeight()
-            .padding(vertical = 24.dp) // 上下添加padding，避免顶到边缘
-            .graphicsLayer(
-                scaleX = scale,
-                scaleY = scale,
-                alpha = alpha
-            ),
-        shape = RoundedCornerShape(28.dp), // MD3规范的圆角大小
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp) // MD3规范的弹窗海拔
-    ) {
-        if (isLandscape) {
-            // 横屏布局：上半部分左右分栏，下半部分关闭按钮
-            Column(
-                modifier = Modifier.padding(20.dp)
-            ) {
-                // 上半部分：左右分栏
-                Row(
-                    modifier = Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(24.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // 左边：取餐信息
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        // 品牌信息
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(
-                                painter = painterResource(id = brandIcon),
-                                contentDescription = null,
-                                modifier = Modifier.size(28.dp),
-                                tint = Color.Unspecified
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text(
-                                text = order.brandName ?: if (isExpress) "快递" else "取餐码",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
 
-                        Spacer(modifier = Modifier.height(12.dp))
+    // 颜色
+    val surfaceColor = if (isMiuix) MiuixTheme.colorScheme.surface else MaterialTheme.colorScheme.surface
+    val onSurfaceColor = if (isMiuix) MiuixTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface
+    val primaryColor = if (isMiuix) MiuixTheme.colorScheme.primary else MaterialTheme.colorScheme.primary
+    val secondaryTextColor = if (isMiuix) MiuixTheme.colorScheme.onSurfaceVariantSummary else MaterialTheme.colorScheme.onSurfaceVariant
+    val hintTextColor = secondaryTextColor.copy(alpha = 0.75f)
+    val isDarkPalette = surfaceColor.luminance() < 0.5f
+    val qrBackgroundColor = if (isDarkPalette) Color.White else Color.Transparent
 
-                        // 取餐码/取件码
-                        Text(
-                            text = label,
-                            fontSize = 12.sp,
-                            color = secondaryTextColor,
-                            letterSpacing = 1.2.sp
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = order.takeoutCode,
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = MaterialTheme.colorScheme.primary,
-                            letterSpacing = 2.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-
-                        // 取货地点（如果有）
-                        if (!order.pickupLocation.isNullOrEmpty()) {
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center
-                            ) {
-                                Icon(
-                                    Icons.Default.LocationOn,
-                                    null,
-                                    modifier = Modifier.size(16.dp),
-                                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
-                                )
-                                Spacer(Modifier.width(6.dp))
-                                Text(
-                                    text = order.pickupLocation!!,
-                                    fontSize = 14.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "请向商家出示此码",
-                            fontSize = 13.sp,
-                            color = hintTextColor,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-
-                    // 分隔线（竖向）
-                    VerticalDivider(
-                        modifier = Modifier.fillMaxHeight(), // 填充高度
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                    )
-
-                    // 右边：二维码或截图副本
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Text(
-                            text = if (!order.qrCodeData.isNullOrEmpty()) "二维码" else "截图副本",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(bottom = 12.dp)
-                        )
-
-                        if (!order.qrCodeData.isNullOrEmpty()) {
-                            // 显示二维码
-                            val qrBitmap = remember(order.qrCodeData) {
-                                try {
-                                    val writer = com.google.zxing.qrcode.QRCodeWriter()
-                                    val bitMatrix = writer.encode(order.qrCodeData, com.google.zxing.BarcodeFormat.QR_CODE, 200, 200)
-                                    val width = bitMatrix.width
-                                    val height = bitMatrix.height
-                                    val bitmap = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.RGB_565)
-                                    for (x in 0 until width) {
-                                        for (y in 0 until height) {
-                                            bitmap.setPixel(x, y, if (bitMatrix.get(x, y)) android.graphics.Color.BLACK else android.graphics.Color.WHITE)
-                                        }
-                                    }
-                                    bitmap
-                                } catch (e: Exception) {
-                                    null
-                                }
-                            }
-
-                            if (qrBitmap != null) {
-                                androidx.compose.foundation.Image(
-                                    bitmap = qrBitmap.asImageBitmap(),
-                                    contentDescription = "二维码",
-                                    modifier = Modifier
-                                        .size(200.dp)
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(qrBackgroundColor)
-                                )
-                            } else {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(150.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        "二维码生成失败",
-                                        color = MaterialTheme.colorScheme.error,
-                                        fontSize = 14.sp
-                                    )
-                                }
-                            }
-                        } else if (!order.screenshotPath.isNullOrEmpty() && File(order.screenshotPath).exists()) {
-                            // 显示截图副本
-                            AsyncImage(
-                                model = File(order.screenshotPath),
-                                contentDescription = "原图",
-                                modifier = Modifier
-                                    .fillMaxWidth(0.9f) // 限制宽度，保持边距
-                                    .heightIn(max = 200.dp)
-                                    .clip(RoundedCornerShape(12.dp)),
-                                contentScale = ContentScale.Fit,
-                                alignment = Alignment.Center
-                            )
-                        } else {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(150.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Icon(
-                                        painter = painterResource(id = R.drawable.note),
-                                        contentDescription = null,
-                                        modifier = Modifier.size(50.dp).alpha(0.3f),
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Text(
-                                        "暂无图片数据",
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                                        fontSize = 14.sp
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if (isExpress) {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Button(
-                            onClick = { openTaobaoIdentityEntry(context) },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFFFF8A00),
-                                contentColor = Color.White
-                            )
-                        ) {
-                            Text("打开淘宝身份码")
-                        }
-                        Button(
-                            onClick = { openPddIdentityEntry(context) },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFFE53935),
-                                contentColor = Color.White
-                            )
-                        ) {
-                            Text("打开拼多多身份码")
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // 下半部分：关闭和已完成按钮（放在身份码按钮下面）
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Button(
-                        onClick = onDismiss,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text("关闭", fontSize = 16.sp)
-                    }
-
-                    OutlinedButton(
-                        onClick = markCompleted,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.primary
-                        )
-                    ) {
-                        Text("已完成", fontSize = 16.sp)
-                    }
-                }
+    // 卡片
+    if (isMiuix) {
+        MiuixCard(
+            modifier = Modifier
+                .fillMaxWidth(if (isLandscape) 0.7f else 0.85f)
+                .widthIn(max = if (isLandscape) 600.dp else 450.dp)
+                .wrapContentHeight()
+                .padding(vertical = 24.dp)
+                .graphicsLayer(scaleX = scale, scaleY = scale, alpha = alpha)
+        ) {
+            if (isLandscape) {
+                LandscapeContent(order, isExpress, label, brandIcon, primaryColor, onSurfaceColor, secondaryTextColor, hintTextColor, qrBackgroundColor, markCompleted, onDismiss, isMiuix)
+            } else {
+                PortraitContent(order, isExpress, label, brandIcon, primaryColor, onSurfaceColor, secondaryTextColor, hintTextColor, qrBackgroundColor, markCompleted, onDismiss, isMiuix)
             }
-        } else {
-            // 竖屏布局：保持原有样式
+        }
+    } else {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth(if (isLandscape) 0.7f else 0.85f)
+                .widthIn(max = if (isLandscape) 600.dp else 450.dp)
+                .wrapContentHeight()
+                .padding(vertical = 24.dp)
+                .graphicsLayer(scaleX = scale, scaleY = scale, alpha = alpha),
+            shape = RoundedCornerShape(28.dp),
+            colors = CardDefaults.cardColors(containerColor = surfaceColor),
+            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
+        ) {
+            if (isLandscape) {
+                LandscapeContent(order, isExpress, label, brandIcon, primaryColor, onSurfaceColor, secondaryTextColor, hintTextColor, qrBackgroundColor, markCompleted, onDismiss, isMiuix)
+            } else {
+                PortraitContent(order, isExpress, label, brandIcon, primaryColor, onSurfaceColor, secondaryTextColor, hintTextColor, qrBackgroundColor, markCompleted, onDismiss, isMiuix)
+            }
+        }
+    }
+}
+
+@Composable
+private fun LandscapeContent(
+    order: OrderEntity,
+    isExpress: Boolean,
+    label: String,
+    brandIcon: Int,
+    primaryColor: Color,
+    onSurfaceColor: Color,
+    secondaryTextColor: Color,
+    hintTextColor: Color,
+    qrBackgroundColor: Color,
+    markCompleted: () -> Unit,
+    onDismiss: () -> Unit,
+    isMiuix: Boolean
+) {
+    Column(modifier = Modifier.padding(20.dp)) {
+        Row(
+            modifier = Modifier.weight(1f),
+            horizontalArrangement = Arrangement.spacedBy(24.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 左边：取餐信息
             Column(
-                modifier = Modifier.padding(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
             ) {
-                // 品牌信息
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(
-                        painter = painterResource(id = brandIcon),
-                        contentDescription = null,
-                        modifier = Modifier.size(32.dp),
-                        tint = Color.Unspecified
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text(
-                        text = order.brandName ?: if (isExpress) "快递" else "取餐码",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // 取餐码/取件码
-                Text(
-                    text = label,
-                    fontSize = 12.sp,
-                    color = secondaryTextColor,
-                    letterSpacing = 1.2.sp
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = order.takeoutCode,
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = MaterialTheme.colorScheme.primary,
-                    letterSpacing = 4.sp
-                )
-
-                // 取货地点（如果有）
-                if (!order.pickupLocation.isNullOrEmpty()) {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            Icons.Default.LocationOn,
-                            null,
-                            modifier = Modifier.size(14.dp),
-                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        Text(
-                            text = order.pickupLocation!!,
-                            fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "请向商家出示此码",
-                    fontSize = 12.sp,
-                    color = hintTextColor,
-                    fontWeight = FontWeight.Medium
-                )
-
-                // 分隔线
-                HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 12.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                )
-
-                // 二维码或截图副本
-                Text(
-                    text = if (!order.qrCodeData.isNullOrEmpty()) "二维码" else "截图副本",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-
-                if (!order.qrCodeData.isNullOrEmpty()) {
-                    // 显示二维码
-                    val qrBitmap = remember(order.qrCodeData) {
-                        try {
-                            val writer = com.google.zxing.qrcode.QRCodeWriter()
-                            val bitMatrix = writer.encode(order.qrCodeData, com.google.zxing.BarcodeFormat.QR_CODE, 200, 200)
-                            val width = bitMatrix.width
-                            val height = bitMatrix.height
-                            val bitmap = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.RGB_565)
-                            for (x in 0 until width) {
-                                for (y in 0 until height) {
-                                    bitmap.setPixel(x, y, if (bitMatrix.get(x, y)) android.graphics.Color.BLACK else android.graphics.Color.WHITE)
-                                }
-                            }
-                            bitmap
-                        } catch (e: Exception) {
-                            null
-                        }
-                    }
-                    
-                    if (qrBitmap != null) {
-                        androidx.compose.foundation.Image(
-                            bitmap = qrBitmap.asImageBitmap(),
-                            contentDescription = "二维码",
-                            modifier = Modifier
-                                .size(250.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(qrBackgroundColor)
-                        )
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(80.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                "二维码生成失败",
-                                color = MaterialTheme.colorScheme.error,
-                                fontSize = 12.sp
-                            )
-                        }
-                    }
-                } else if (!order.screenshotPath.isNullOrEmpty() && File(order.screenshotPath).exists()) {
-                    // 显示截图副本
-                    AsyncImage(
-                        model = File(order.screenshotPath),
-                        contentDescription = "原图",
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 250.dp)
-                            .clip(RoundedCornerShape(12.dp)),
-                        contentScale = ContentScale.Fit
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(80.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(
-                                painter = painterResource(id = R.drawable.note),
-                                contentDescription = null,
-                                modifier = Modifier.size(32.dp).alpha(0.3f),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                "暂无图片数据",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                                fontSize = 11.sp
-                            )
-                        }
-                    }
-                }
-
-                if (isExpress) {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Button(
-                            onClick = { openTaobaoIdentityEntry(context) },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFFFF8A00),
-                                contentColor = Color.White
-                            )
-                        ) {
-                            Text("打开淘宝身份码")
-                        }
-                        Button(
-                            onClick = { openPddIdentityEntry(context) },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFFE53935),
-                                contentColor = Color.White
-                            )
-                        ) {
-                            Text("打开拼多多身份码")
-                        }
-                    }
-                }
-
+                BrandInfo(order, brandIcon, onSurfaceColor, isMiuix)
                 Spacer(modifier = Modifier.height(12.dp))
+                CodeLabel(label, secondaryTextColor, isMiuix)
+                Spacer(modifier = Modifier.height(6.dp))
+                TakeoutCode(order, primaryColor, 24.sp, isMiuix)
+                PickupLocation(order, primaryColor, secondaryTextColor, isMiuix)
+                Spacer(modifier = Modifier.height(8.dp))
+                HintText(hintTextColor, isMiuix)
+            }
 
-                // 关闭和已完成按钮（放在身份码按钮下面）
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Button(
-                        onClick = onDismiss,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text("关闭", fontSize = 16.sp)
-                    }
+            // 分隔线
+            if (isMiuix) {
+                VerticalDivider(modifier = Modifier.fillMaxHeight(), color = MiuixTheme.colorScheme.outline.copy(alpha = 0.5f))
+            } else {
+                VerticalDivider(modifier = Modifier.fillMaxHeight(), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+            }
 
-                    OutlinedButton(
-                        onClick = markCompleted,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.primary
-                        )
-                    ) {
-                        Text("已完成", fontSize = 16.sp)
+            // 右边：二维码或截图
+            Column(
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                QrSectionTitle(order, primaryColor, isMiuix)
+                QrContent(order, qrBackgroundColor, isMiuix)
+            }
+        }
+
+        if (isExpress) {
+            Spacer(modifier = Modifier.height(16.dp))
+            IdentityButtons(isMiuix)
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+        ActionButtons(markCompleted, onDismiss, isMiuix)
+    }
+}
+
+@Composable
+private fun PortraitContent(
+    order: OrderEntity,
+    isExpress: Boolean,
+    label: String,
+    brandIcon: Int,
+    primaryColor: Color,
+    onSurfaceColor: Color,
+    secondaryTextColor: Color,
+    hintTextColor: Color,
+    qrBackgroundColor: Color,
+    markCompleted: () -> Unit,
+    onDismiss: () -> Unit,
+    isMiuix: Boolean
+) {
+    Column(
+        modifier = Modifier.padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        BrandInfo(order, brandIcon, onSurfaceColor, isMiuix)
+        Spacer(modifier = Modifier.height(16.dp))
+        CodeLabel(label, secondaryTextColor, isMiuix)
+        Spacer(modifier = Modifier.height(4.dp))
+        TakeoutCode(order, primaryColor, 28.sp, isMiuix)
+        PickupLocation(order, primaryColor, secondaryTextColor, isMiuix)
+        Spacer(modifier = Modifier.height(8.dp))
+        HintText(hintTextColor, isMiuix)
+
+        // 分隔线
+        if (isMiuix) {
+            top.yukonga.miuix.kmp.basic.HorizontalDivider(
+                modifier = Modifier.padding(vertical = 12.dp),
+                color = MiuixTheme.colorScheme.outline.copy(alpha = 0.5f)
+            )
+        } else {
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = 12.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+            )
+        }
+
+        QrSectionTitle(order, primaryColor, isMiuix)
+        QrContent(order, qrBackgroundColor, isMiuix)
+
+        if (isExpress) {
+            Spacer(modifier = Modifier.height(12.dp))
+            IdentityButtons(isMiuix)
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+        ActionButtons(markCompleted, onDismiss, isMiuix)
+    }
+}
+
+@Composable
+private fun BrandInfo(order: OrderEntity, brandIcon: Int, onSurfaceColor: Color, isMiuix: Boolean) {
+    val isExpress = order.orderType == "快递"
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        if (isMiuix) {
+            MiuixIcon(painter = painterResource(id = brandIcon), contentDescription = null, modifier = Modifier.size(32.dp), tint = Color.Unspecified)
+            Spacer(modifier = Modifier.width(12.dp))
+            MiuixText(text = order.brandName ?: if (isExpress) "快递" else "取餐码", style = MiuixTheme.textStyles.headline1, fontWeight = FontWeight.Bold, color = onSurfaceColor)
+        } else {
+            Icon(painter = painterResource(id = brandIcon), contentDescription = null, modifier = Modifier.size(32.dp), tint = Color.Unspecified)
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(text = order.brandName ?: if (isExpress) "快递" else "取餐码", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = onSurfaceColor)
+        }
+    }
+}
+
+@Composable
+private fun CodeLabel(label: String, secondaryTextColor: Color, isMiuix: Boolean) {
+    if (isMiuix) {
+        MiuixText(text = label, style = MiuixTheme.textStyles.body2, color = secondaryTextColor)
+    } else {
+        Text(text = label, fontSize = 12.sp, color = secondaryTextColor, letterSpacing = 1.2.sp)
+    }
+}
+
+@Composable
+private fun TakeoutCode(order: OrderEntity, primaryColor: Color, fontSize: androidx.compose.ui.unit.TextUnit, isMiuix: Boolean) {
+    if (isMiuix) {
+        MiuixText(
+            text = order.takeoutCode,
+            style = MiuixTheme.textStyles.title1,
+            fontWeight = FontWeight.ExtraBold,
+            color = primaryColor,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    } else {
+        Text(
+            text = order.takeoutCode,
+            fontSize = fontSize,
+            fontWeight = FontWeight.ExtraBold,
+            color = primaryColor,
+            letterSpacing = if (fontSize == 28.sp) 4.sp else 2.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun PickupLocation(order: OrderEntity, primaryColor: Color, secondaryTextColor: Color, isMiuix: Boolean) {
+    if (!order.pickupLocation.isNullOrEmpty()) {
+        Spacer(modifier = Modifier.height(12.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+            if (isMiuix) {
+                MiuixIcon(Icons.Default.LocationOn, null, modifier = Modifier.size(14.dp), tint = primaryColor.copy(alpha = 0.7f))
+                Spacer(modifier = Modifier.width(4.dp))
+                MiuixText(text = order.pickupLocation!!, style = MiuixTheme.textStyles.body2, color = secondaryTextColor, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            } else {
+                Icon(Icons.Default.LocationOn, null, modifier = Modifier.size(14.dp), tint = primaryColor.copy(alpha = 0.7f))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(text = order.pickupLocation!!, fontSize = 13.sp, color = secondaryTextColor, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+        }
+    }
+}
+
+@Composable
+private fun HintText(hintTextColor: Color, isMiuix: Boolean) {
+    if (isMiuix) {
+        MiuixText(text = "请向商家出示此码", style = MiuixTheme.textStyles.body2, color = hintTextColor)
+    } else {
+        Text(text = "请向商家出示此码", fontSize = 12.sp, color = hintTextColor, fontWeight = FontWeight.Medium)
+    }
+}
+
+@Composable
+private fun QrSectionTitle(order: OrderEntity, primaryColor: Color, isMiuix: Boolean) {
+    val title = if (!order.qrCodeData.isNullOrEmpty()) "二维码" else "截图副本"
+    if (isMiuix) {
+        MiuixText(text = title, style = MiuixTheme.textStyles.body1, fontWeight = FontWeight.Bold, color = primaryColor, modifier = Modifier.padding(bottom = 8.dp))
+    } else {
+        Text(text = title, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = primaryColor, modifier = Modifier.padding(bottom = 8.dp))
+    }
+}
+
+@Composable
+private fun QrContent(order: OrderEntity, qrBackgroundColor: Color, isMiuix: Boolean) {
+    val context = LocalContext.current
+    if (!order.qrCodeData.isNullOrEmpty()) {
+        val qrBitmap = remember(order.qrCodeData) {
+            try {
+                val writer = com.google.zxing.qrcode.QRCodeWriter()
+                val bitMatrix = writer.encode(order.qrCodeData, com.google.zxing.BarcodeFormat.QR_CODE, 200, 200)
+                val width = bitMatrix.width
+                val height = bitMatrix.height
+                val bitmap = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.RGB_565)
+                for (x in 0 until width) {
+                    for (y in 0 until height) {
+                        bitmap.setPixel(x, y, if (bitMatrix.get(x, y)) android.graphics.Color.BLACK else android.graphics.Color.WHITE)
                     }
                 }
+                bitmap
+            } catch (e: Exception) { null }
+        }
+        if (qrBitmap != null) {
+            androidx.compose.foundation.Image(
+                bitmap = qrBitmap.asImageBitmap(),
+                contentDescription = "二维码",
+                modifier = Modifier.size(250.dp).clip(RoundedCornerShape(12.dp)).background(qrBackgroundColor)
+            )
+        } else {
+            Box(modifier = Modifier.fillMaxWidth().height(80.dp), contentAlignment = Alignment.Center) {
+                if (isMiuix) MiuixText("二维码生成失败", color = MiuixTheme.colorScheme.error, style = MiuixTheme.textStyles.body2)
+                else Text("二维码生成失败", color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
             }
+        }
+    } else if (!order.screenshotPath.isNullOrEmpty() && File(order.screenshotPath).exists()) {
+        AsyncImage(
+            model = File(order.screenshotPath),
+            contentDescription = "原图",
+            modifier = Modifier.fillMaxWidth().heightIn(max = 250.dp).clip(RoundedCornerShape(12.dp)),
+            contentScale = ContentScale.Fit
+        )
+    } else {
+        Box(modifier = Modifier.fillMaxWidth().height(80.dp), contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                if (isMiuix) {
+                    MiuixIcon(painter = painterResource(id = R.drawable.note), contentDescription = null, modifier = Modifier.size(32.dp).alpha(0.3f), tint = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    MiuixText("暂无图片数据", color = MiuixTheme.colorScheme.onSurfaceVariantSummary.copy(alpha = 0.5f), style = MiuixTheme.textStyles.body2)
+                } else {
+                    Icon(painter = painterResource(id = R.drawable.note), contentDescription = null, modifier = Modifier.size(32.dp).alpha(0.3f), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("暂无图片数据", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f), fontSize = 11.sp)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun IdentityButtons(isMiuix: Boolean) {
+    val context = LocalContext.current
+    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (isMiuix) {
+            MiuixButton(
+                onClick = { openTaobaoIdentityEntry(context) },
+                modifier = Modifier.fillMaxWidth(),
+                colors = MiuixButtonDefaults.buttonColors(color = Color(0xFFFF8A00), contentColor = Color.White)
+            ) { MiuixText("打开淘宝身份码") }
+            MiuixButton(
+                onClick = { openPddIdentityEntry(context) },
+                modifier = Modifier.fillMaxWidth(),
+                colors = MiuixButtonDefaults.buttonColors(color = Color(0xFFE53935), contentColor = Color.White)
+            ) { MiuixText("打开拼多多身份码") }
+        } else {
+            Button(
+                onClick = { openTaobaoIdentityEntry(context) },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF8A00), contentColor = Color.White)
+            ) { Text("打开淘宝身份码") }
+            Button(
+                onClick = { openPddIdentityEntry(context) },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935), contentColor = Color.White)
+            ) { Text("打开拼多多身份码") }
+        }
+    }
+}
+
+@Composable
+private fun ActionButtons(markCompleted: () -> Unit, onDismiss: () -> Unit, isMiuix: Boolean) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        if (isMiuix) {
+            MiuixButton(onClick = onDismiss, modifier = Modifier.weight(1f), colors = MiuixButtonDefaults.buttonColors()) { MiuixText("关闭") }
+            MiuixButton(onClick = markCompleted, modifier = Modifier.weight(1f), colors = MiuixButtonDefaults.buttonColorsPrimary()) { MiuixText("已完成") }
+        } else {
+            Button(onClick = onDismiss, modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp)) { Text("关闭", fontSize = 16.sp) }
+            OutlinedButton(onClick = markCompleted, modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary)) { Text("已完成", fontSize = 16.sp) }
         }
     }
 }
@@ -714,42 +573,33 @@ fun QuickViewDialogContent(order: OrderEntity, onDismiss: () -> Unit) {
 private fun openTaobaoIdentityEntry(context: android.content.Context) {
     val pkg = "com.taobao.taobao"
     val lastmile = "https://pages-fast.m.taobao.com/wow/z/uniapp/1100333/last-mile-fe/m-end-school-tab/home"
-    val candidates = listOf(
-        "tbopen://m.taobao.com/tbopen/index.html?h5Url=" + Uri.encode(lastmile)
-    )
+    val candidates = listOf("tbopen://m.taobao.com/tbopen/index.html?h5Url=" + Uri.encode(lastmile))
     for (u in candidates) {
         try {
             val i = Intent(Intent.ACTION_VIEW, u.toUri())
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             context.startActivity(i)
             return
-        } catch (_: Exception) {
-        }
+        } catch (_: Exception) {}
     }
     try {
         val i = Intent(Intent.ACTION_VIEW, lastmile.toUri())
         i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         i.setClassName(pkg, "com.taobao.browser.BrowserActivity")
         context.startActivity(i)
-    } catch (_: Exception) {
-    }
+    } catch (_: Exception) {}
 }
 
 private fun openPddIdentityEntry(context: android.content.Context) {
     val pkg = "com.xunmeng.pinduoduo"
-    val schemes = listOf(
-        "pinduoduo://com.xunmeng.pinduoduo/mdkd/package",
-        "pinduoduo://com.xunmeng.pinduoduo/",
-        "pinduoduo://"
-    )
+    val schemes = listOf("pinduoduo://com.xunmeng.pinduoduo/mdkd/package", "pinduoduo://com.xunmeng.pinduoduo/", "pinduoduo://")
     for (u in schemes) {
         try {
             val i = Intent(Intent.ACTION_VIEW, u.toUri())
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             context.startActivity(i)
             return
-        } catch (_: Exception) {
-        }
+        } catch (_: Exception) {}
     }
     try {
         val i = context.packageManager.getLaunchIntentForPackage(pkg)
@@ -757,6 +607,5 @@ private fun openPddIdentityEntry(context: android.content.Context) {
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             context.startActivity(i)
         }
-    } catch (_: Exception) {
-    }
+    } catch (_: Exception) {}
 }

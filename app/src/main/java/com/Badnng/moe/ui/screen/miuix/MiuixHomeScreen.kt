@@ -377,6 +377,7 @@ private fun MiuixSettingsSubPageDirect(
         SettingsPage.About -> "关于"
         SettingsPage.Sponsor -> "赞助"
         SettingsPage.NotificationApps -> "通知识别应用管理"
+        SettingsPage.Credits -> "致谢"
         SettingsPage.Main -> ""
     }
 
@@ -403,44 +404,56 @@ private fun MiuixSettingsSubPageDirect(
     }
     val blurEnabled = backdrop != null
 
-    Scaffold(
-        topBar = {
-            val topBarColor = if (blurEnabled) Color.Transparent else MiuixTheme.colorScheme.surface
-            com.Badnng.moe.ui.miuix.MiuixBlurredBar(backdrop = backdrop, blurEnabled = blurEnabled) {
-                TopAppBar(
-                    title = title,
-                    color = topBarColor,
-                    scrollBehavior = topAppBarScrollBehavior,
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(
-                                MiuixIcons.Regular.Back,
-                                contentDescription = "返回"
-                            )
+    if (page == SettingsPage.About) {
+        // 关于页面：自包含 Scaffold（照搬示例项目 AboutPage）
+        com.Badnng.moe.ui.screen.settings.AboutSettingsContent(
+            performHaptic = performHaptic,
+            topPadding = 0.dp,
+            scrollState = androidx.compose.foundation.rememberScrollState(),
+            onNavigateToCredits = { onNavigate(SettingsPage.Credits) },
+            onBack = onBack
+        )
+    } else {
+        Scaffold(
+            topBar = {
+                val topBarColor = if (blurEnabled) Color.Transparent else MiuixTheme.colorScheme.surface
+                com.Badnng.moe.ui.miuix.MiuixBlurredBar(backdrop = backdrop, blurEnabled = blurEnabled) {
+                    TopAppBar(
+                        title = title,
+                        color = topBarColor,
+                        scrollBehavior = topAppBarScrollBehavior,
+                        navigationIcon = {
+                            IconButton(onClick = onBack) {
+                                Icon(
+                                    MiuixIcons.Regular.Back,
+                                    contentDescription = "返回"
+                                )
+                            }
                         }
-                    }
-                )
+                    )
+                }
             }
-        }
-    ) { innerPadding ->
-        val scrollState = androidx.compose.foundation.rememberScrollState()
-        val topBarHeight = innerPadding.calculateTopPadding()
-        Box(modifier = if (backdrop != null) Modifier.layerBackdrop(backdrop) else Modifier) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .nestedScroll(topAppBarScrollBehavior.nestedScrollConnection)
-            ) {
-                when (page) {
-                    SettingsPage.Screenshot -> com.Badnng.moe.ui.screen.settings.ScreenshotSettingsContent(performHaptic, topBarHeight, scrollState)
-                    SettingsPage.Permission -> com.Badnng.moe.ui.screen.settings.PermissionSettingsContent(performHaptic, topBarHeight, scrollState)
-                    SettingsPage.Preference -> com.Badnng.moe.ui.screen.settings.PreferenceSettingsContent(performHaptic, onNavigate, topBarHeight, scrollState)
-                    SettingsPage.KeepAlive -> com.Badnng.moe.ui.screen.settings.KeepAliveSettingsContent(performHaptic, topBarHeight, scrollState)
-                    SettingsPage.Storage -> com.Badnng.moe.ui.screen.settings.StorageSettingsContent(performHaptic, prefs, topBarHeight + 26.dp, scrollState)
-                    SettingsPage.About -> com.Badnng.moe.ui.screen.settings.AboutSettingsContent(performHaptic, topBarHeight, scrollState)
-                    SettingsPage.Sponsor -> com.Badnng.moe.ui.screen.settings.SponsorSettingsContent(topBarHeight, scrollState)
-                    SettingsPage.NotificationApps -> com.Badnng.moe.ui.screen.settings.NotificationAppsSettingsContent(performHaptic, topBarHeight + 8.dp)
-                    SettingsPage.Main -> {}
+        ) { innerPadding ->
+            val scrollState = androidx.compose.foundation.rememberScrollState()
+            val topBarHeight = innerPadding.calculateTopPadding()
+            Box(modifier = if (backdrop != null) Modifier.layerBackdrop(backdrop) else Modifier) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .nestedScroll(topAppBarScrollBehavior.nestedScrollConnection)
+                ) {
+                    when (page) {
+                        SettingsPage.Screenshot -> com.Badnng.moe.ui.screen.settings.ScreenshotSettingsContent(performHaptic, topBarHeight, scrollState)
+                        SettingsPage.Permission -> com.Badnng.moe.ui.screen.settings.PermissionSettingsContent(performHaptic, topBarHeight, scrollState)
+                        SettingsPage.Preference -> com.Badnng.moe.ui.screen.settings.PreferenceSettingsContent(performHaptic, onNavigate, topBarHeight, scrollState)
+                        SettingsPage.KeepAlive -> com.Badnng.moe.ui.screen.settings.KeepAliveSettingsContent(performHaptic, topBarHeight, scrollState)
+                        SettingsPage.Storage -> com.Badnng.moe.ui.screen.settings.StorageSettingsContent(performHaptic, prefs, topBarHeight + 26.dp, scrollState)
+                        SettingsPage.Sponsor -> com.Badnng.moe.ui.screen.settings.SponsorSettingsContent(topBarHeight, scrollState)
+                        SettingsPage.NotificationApps -> com.Badnng.moe.ui.screen.settings.NotificationAppsSettingsContent(performHaptic, topBarHeight + 8.dp)
+                        SettingsPage.Credits -> com.Badnng.moe.ui.screen.settings.CreditsSettingsContent(performHaptic, topBarHeight, scrollState)
+                        SettingsPage.Main -> {}
+                        else -> {}
+                    }
                 }
             }
         }

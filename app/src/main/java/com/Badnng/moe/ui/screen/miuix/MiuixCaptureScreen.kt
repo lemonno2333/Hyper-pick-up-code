@@ -954,20 +954,18 @@ private fun MiuixOrderGroupCard(
     }
 
     // 定时选择弹窗
-    if (showTimePicker) {
-        com.Badnng.moe.ui.component.MiuixScheduledNotificationSheet(
-            show = showTimePicker,
-            onDismiss = { showTimePicker = false },
-            onSchedule = { triggerAtMillis ->
-                com.Badnng.moe.helper.NotificationScheduler.scheduleGroup(context, group, triggerAtMillis)
-                isScheduled = true
-                val cal = java.util.Calendar.getInstance().apply { timeInMillis = triggerAtMillis }
-                val timeStr2 = String.format("%02d:%02d", cal.get(java.util.Calendar.HOUR_OF_DAY), cal.get(java.util.Calendar.MINUTE))
-                android.widget.Toast.makeText(context, "已设置 $timeStr2 推送", android.widget.Toast.LENGTH_SHORT).show()
-                showTimePicker = false
-            }
-        )
-    }
+    com.Badnng.moe.ui.component.MiuixScheduledNotificationSheet(
+        show = showTimePicker,
+        onDismiss = { showTimePicker = false },
+        onSchedule = { triggerAtMillis ->
+            com.Badnng.moe.helper.NotificationScheduler.scheduleGroup(context, group, triggerAtMillis)
+            isScheduled = true
+            val cal = java.util.Calendar.getInstance().apply { timeInMillis = triggerAtMillis }
+            val timeStr2 = String.format("%02d:%02d", cal.get(java.util.Calendar.HOUR_OF_DAY), cal.get(java.util.Calendar.MINUTE))
+            android.widget.Toast.makeText(context, "已设置 $timeStr2 推送", android.widget.Toast.LENGTH_SHORT).show()
+            showTimePicker = false
+        }
+    )
 }
 
 @Composable
@@ -1193,18 +1191,16 @@ private fun MiuixOrderCard(
     }
 
     // 定时选择弹窗
-    if (showTimePicker) {
-        com.Badnng.moe.ui.component.MiuixScheduledNotificationSheet(
-            show = showTimePicker,
-            onDismiss = { showTimePicker = false },
-            onSchedule = { triggerAtMillis ->
-                com.Badnng.moe.helper.NotificationScheduler.schedule(context, order, triggerAtMillis)
-                isScheduled = true
-                val cal = java.util.Calendar.getInstance().apply { timeInMillis = triggerAtMillis }
-                val timeStr2 = String.format("%02d:%02d", cal.get(java.util.Calendar.HOUR_OF_DAY), cal.get(java.util.Calendar.MINUTE))
-                android.widget.Toast.makeText(context, "已设置 $timeStr2 推送", android.widget.Toast.LENGTH_SHORT).show()
-                showTimePicker = false
-            }
-        )
-    }
+    com.Badnng.moe.ui.component.MiuixScheduledNotificationSheet(
+        show = showTimePicker,
+        onDismiss = { showTimePicker = false },
+        onSchedule = { triggerAtMillis ->
+            com.Badnng.moe.helper.NotificationScheduler.schedule(context, order, triggerAtMillis)
+            isScheduled = true
+            val cal = java.util.Calendar.getInstance().apply { timeInMillis = triggerAtMillis }
+            val timeStr2 = String.format("%02d:%02d", cal.get(java.util.Calendar.HOUR_OF_DAY), cal.get(java.util.Calendar.MINUTE))
+            android.widget.Toast.makeText(context, "已设置 $timeStr2 推送", android.widget.Toast.LENGTH_SHORT).show()
+            showTimePicker = false
+        }
+    )
 }
