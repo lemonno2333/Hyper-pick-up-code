@@ -3,6 +3,15 @@ package com.Badnng.moe.ui.screen.miuix
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import top.yukonga.miuix.kmp.blur.textureBlur
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -54,7 +63,8 @@ import java.util.*
 
 @Composable
 fun MiuixRulesScreen(
-    padding: androidx.compose.foundation.layout.PaddingValues
+    padding: androidx.compose.foundation.layout.PaddingValues,
+    onShowMenu: ((position: androidx.compose.ui.geometry.Offset, rename: (() -> Unit)?, delete: (() -> Unit)?, export: (() -> Unit)?) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -83,9 +93,12 @@ fun MiuixRulesScreen(
     var editingSource by remember { mutableStateOf<OnlineRuleSource?>(null) }
     var showResetDialog by remember { mutableStateOf(false) }
     var deletingCustomSourceId by remember { mutableStateOf<String?>(null) }
+    var renamingTarget by remember { mutableStateOf<String?>(null) }
+    var renamingName by remember { mutableStateOf("") }
     var pendingImportRules by remember { mutableStateOf<RecognitionRules?>(null) }
     var pendingImportFileName by remember { mutableStateOf("") }
     var pendingImportName by remember { mutableStateOf("") }
+
 
     val singleExportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/json")
@@ -275,7 +288,12 @@ fun MiuixRulesScreen(
                             ),
                             onLongPress = { offset ->
                                 performHaptic()
-                                singleExportLauncher.launch("builtin_rules.json")
+                                onShowMenu?.invoke(
+                                    offset,
+                                    null,
+                                    null,
+                                    { singleExportLauncher.launch("builtin_rules.json") }
+                                )
                             }
                         )
                     }
@@ -306,7 +324,15 @@ fun MiuixRulesScreen(
                             },
                             onLongPress = { offset ->
                                 performHaptic()
-                                singleExportLauncher.launch("${source.displayName}.json")
+                                onShowMenu?.invoke(
+                                    offset,
+                                    {
+                                        renamingTarget = "local_custom_${source.id}"
+                                        renamingName = source.displayName.ifBlank { "自定义JSON规则" }
+                                    },
+                                    { deletingCustomSourceId = source.id },
+                                    { singleExportLauncher.launch("${source.displayName}.json") }
+                                )
                             },
                             onToggle = { enabled ->
                                 scope.launch {
@@ -447,7 +473,28 @@ fun MiuixRulesScreen(
                             },
                             onLongPress = { offset ->
                                 performHaptic()
-                                editingSource = source
+                                onShowMenu?.invoke(
+                                    offset,
+                                    { editingSource = source },
+                                    {
+                                        scope.launch {
+                                            val newSources = onlineSources.toMutableList().apply { removeAt(index) }
+                                            RecognitionRuleEngine.saveOnlineSources(newSources)
+                                            if (activeSourceId == source.id) {
+                                                RecognitionRuleEngine.switchActiveSource("builtin", context)
+                                                activeSourceId = "builtin"
+                                            }
+                                            val (local, custom, online) = RecognitionRuleEngine.loadAllSourcesSystem(context)
+                                            localConfig = local
+                                            localCustomSources = custom
+                                            onlineSources = online
+                                            onlineSourceRules = onlineSourceRules - source.id
+                                            rules = RecognitionRuleEngine.rules
+                                            Toast.makeText(context, "已删除", Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
+                                    null
+                                )
                             },
                             onToggle = { enabled ->
                                 scope.launch {
@@ -551,6 +598,167 @@ fun MiuixRulesScreen(
                                         colors = ButtonDefaults.buttonColorsPrimary()
                                     ) {
                                         Text("保存")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 自定义品牌图标
+                item {
+                    var brandIconExpanded by remember { mutableStateOf(false) }
+                    var brandIconMappings by remember { mutableStateOf(BrandIconResolver.getCustomMappings(context)) }
+                    var pendingImageIndex by remember { mutableIntStateOf(-1) }
+                    val imagePickerLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+                        contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
+                    ) { uri ->
+                        if (uri != null && pendingImageIndex >= 0) {
+                            val savedPath = BrandIconResolver.saveCustomIcon(context, uri)
+                            if (savedPath != null) {
+                                brandIconMappings = brandIconMappings.toMutableList().apply {
+                                    set(pendingImageIndex, BrandIconResolver.IconMapping(savedPath, this[pendingImageIndex].keywords))
+                                }
+                            }
+                            pendingImageIndex = -1
+                        }
+                    }
+
+                    SmallTitle(text = "自定义品牌图标")
+                    Card(
+                        modifier = Modifier.padding(horizontal = 12.dp),
+                        onClick = { performHaptic(); brandIconExpanded = !brandIconExpanded }
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(text = "自定义品牌图标", style = MiuixTheme.textStyles.body1, fontWeight = FontWeight.Medium)
+                                    Text(
+                                        text = if (brandIconMappings.isNotEmpty()) "${brandIconMappings.size} 条规则" else "未设置",
+                                        style = MiuixTheme.textStyles.body2,
+                                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary
+                                    )
+                                }
+                                val arrowRotation by animateFloatAsState(
+                                    targetValue = if (brandIconExpanded) 180f else 0f,
+                                    animationSpec = spring()
+                                )
+                                Icon(
+                                    imageVector = Icons.Default.ExpandMore,
+                                    contentDescription = null,
+                                    modifier = Modifier.rotate(arrowRotation)
+                                )
+                            }
+
+                            AnimatedVisibility(
+                                visible = brandIconExpanded,
+                                enter = fadeIn() + expandVertically(),
+                                exit = fadeOut() + shrinkVertically()
+                            ) {
+                                Column(modifier = Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text(
+                                        text = "当品牌名称包含关键词时显示自定义图标。点击图标从相册选择，图片不小于 224x224px。",
+                                        style = MiuixTheme.textStyles.body2,
+                                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary
+                                    )
+
+                                    brandIconMappings.forEachIndexed { index, mapping ->
+                                        Card(
+                                            colors = top.yukonga.miuix.kmp.basic.CardDefaults.defaultColors(
+                                                MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                                            )
+                                        ) {
+                                            Column(
+                                                modifier = Modifier.padding(12.dp),
+                                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                ) {
+                                                    Box(
+                                                        contentAlignment = Alignment.Center,
+                                                        modifier = Modifier
+                                                            .size(48.dp)
+                                                            .clip(RoundedCornerShape(8.dp))
+                                                            .background(
+                                                                if (mapping.iconPath.isNotEmpty()) Color.Transparent
+                                                                else MiuixTheme.colorScheme.surfaceVariant
+                                                            )
+                                                            .clickable {
+                                                                performHaptic()
+                                                                pendingImageIndex = index
+                                                                imagePickerLauncher.launch("image/*")
+                                                            }
+                                                    ) {
+                                                        if (mapping.iconPath.isNotEmpty()) {
+                                                            coil.compose.AsyncImage(
+                                                                model = java.io.File(mapping.iconPath),
+                                                                contentDescription = null,
+                                                                modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(8.dp))
+                                                            )
+                                                        } else {
+                                                            Icon(
+                                                                Icons.Default.Add,
+                                                                contentDescription = "选择图标",
+                                                                tint = MiuixTheme.colorScheme.onSurfaceVariantSummary
+                                                            )
+                                                        }
+                                                    }
+
+                                                    TextField(
+                                                        value = mapping.keywords,
+                                                        onValueChange = { newKeywords ->
+                                                            brandIconMappings = brandIconMappings.toMutableList().apply {
+                                                                set(index, BrandIconResolver.IconMapping(mapping.iconPath, newKeywords))
+                                                            }
+                                                        },
+                                                        label = "关键词（品牌A,品牌B）",
+                                                        modifier = Modifier.weight(1f)
+                                                    )
+
+                                                    IconButton(
+                                                        onClick = {
+                                                            performHaptic()
+                                                            BrandIconResolver.saveCustomMappings(context, brandIconMappings)
+                                                            Toast.makeText(context, "已保存", Toast.LENGTH_SHORT).show()
+                                                        }
+                                                    ) {
+                                                        Icon(Icons.Default.Save, contentDescription = "保存", modifier = Modifier.size(20.dp))
+                                                    }
+
+                                                    IconButton(
+                                                        onClick = {
+                                                            performHaptic()
+                                                            brandIconMappings = brandIconMappings.toMutableList().apply { removeAt(index) }
+                                                            BrandIconResolver.saveCustomMappings(context, brandIconMappings)
+                                                        }
+                                                    ) {
+                                                        Icon(Icons.Default.Delete, contentDescription = "删除", tint = Color.Red, modifier = Modifier.size(20.dp))
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    Button(
+                                        onClick = {
+                                            performHaptic()
+                                            brandIconMappings = brandIconMappings.toMutableList().apply {
+                                                add(BrandIconResolver.IconMapping("", ""))
+                                            }
+                                        },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        colors = ButtonDefaults.buttonColorsPrimary()
+                                    ) {
+                                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("添加规则")
                                     }
                                 }
                             }
@@ -711,16 +919,33 @@ private fun RuleSourceRow(
     onLongPress: ((androidx.compose.ui.geometry.Offset) -> Unit)? = null
 ) {
     var expanded by remember { mutableStateOf(false) }
+    var globalPosition by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .clickable {
-                if (expandable) {
-                    performHaptic()
-                    expanded = !expanded
-                }
+            .onGloballyPositioned { coordinates ->
+                globalPosition = coordinates.positionInWindow()
+            }
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = {
+                        if (expandable) {
+                            performHaptic()
+                            expanded = !expanded
+                        }
+                    },
+                    onLongPress = { offset ->
+                        performHaptic()
+                        onLongPress?.invoke(
+                            androidx.compose.ui.geometry.Offset(
+                                globalPosition.x + offset.x,
+                                globalPosition.y + offset.y
+                            )
+                        )
+                    }
+                )
             }
             .background(
                 if (isActive) MiuixTheme.colorScheme.primaryContainer

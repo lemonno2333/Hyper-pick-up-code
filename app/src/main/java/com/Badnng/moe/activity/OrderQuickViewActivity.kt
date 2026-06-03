@@ -92,16 +92,14 @@ fun OrderQuickViewScreen(
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .windowInsetsPadding(WindowInsets.systemBars),
+        modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
-        // 背景遮罩层，点击关闭
+        // 背景遮罩层，点击背景关闭（全屏，不含安全边距）
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Transparent)
+                .background(Color.Black.copy(alpha = 0.5f))
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null
@@ -113,16 +111,18 @@ fun OrderQuickViewScreen(
                 }
         )
 
-        if (order != null) {
-            QuickViewDialogContent(
-                order = order!!,
-                onDismiss = {
-                    if (fromNotification) {
-                        (context as? ComponentActivity)?.moveTaskToBack(true)
+        // 卡片内容（应用安全边距）
+        Box(modifier = Modifier.windowInsetsPadding(WindowInsets.systemBars)) {
+            if (order != null) {
+                QuickViewDialogContent(
+                    order = order!!,
+                    onDismiss = {
+                        if (fromNotification) {
+                            (context as? ComponentActivity)?.moveTaskToBack(true)
+                        }
+                        onDismiss()
                     }
-                    onDismiss()
-                }
-            )
+                )
         } else {
             val isMiuix = rememberMiuixStyle()
             if (isMiuix) {
@@ -133,6 +133,7 @@ fun OrderQuickViewScreen(
             } else {
                 CircularProgressIndicator(color = MaterialTheme.colorScheme.onSurface)
             }
+        }
         }
     }
 }
@@ -233,6 +234,10 @@ fun QuickViewDialogContent(order: OrderEntity, onDismiss: () -> Unit) {
                 .wrapContentHeight()
                 .padding(vertical = 24.dp)
                 .graphicsLayer(scaleX = scale, scaleY = scale, alpha = alpha)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) { /* 消费点击事件，阻止穿透到背景 */ }
         ) {
             if (isLandscape) {
                 LandscapeContent(order, isExpress, label, brandIcon, primaryColor, onSurfaceColor, secondaryTextColor, hintTextColor, qrBackgroundColor, markCompleted, onDismiss, isMiuix)
@@ -247,7 +252,11 @@ fun QuickViewDialogContent(order: OrderEntity, onDismiss: () -> Unit) {
                 .widthIn(max = if (isLandscape) 600.dp else 450.dp)
                 .wrapContentHeight()
                 .padding(vertical = 24.dp)
-                .graphicsLayer(scaleX = scale, scaleY = scale, alpha = alpha),
+                .graphicsLayer(scaleX = scale, scaleY = scale, alpha = alpha)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) { /* 消费点击事件，阻止穿透到背景 */ },
             shape = RoundedCornerShape(28.dp),
             colors = CardDefaults.cardColors(containerColor = surfaceColor),
             elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)

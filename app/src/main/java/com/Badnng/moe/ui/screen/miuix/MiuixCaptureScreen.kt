@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -33,6 +34,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -122,7 +124,9 @@ fun MiuixCaptureScreen(
     onEditModeChange: (Boolean) -> Unit = {},
     onAddClick: () -> Unit = {},
     navAlignment: String = "center",
-    useFloatingNavBar: Boolean = false
+    useFloatingNavBar: Boolean = false,
+    onNavigateToOrderDetail: (String) -> Unit = {},
+    onNavigateToGroupDetail: (Long) -> Unit = {}
 ) {
     val viewModel: OrderViewModel = viewModel()
     val incompleteOrders by viewModel.incompleteOrders.collectAsState()
@@ -300,7 +304,10 @@ fun MiuixCaptureScreen(
                 if (filteredIncompleteGroups.isNotEmpty()) {
                     items(items = filteredIncompleteGroups, key = { "group_${it.id}" }) { group ->
                         Row(
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.animateItem(
+                                placementSpec = spring(dampingRatio = 0.8f, stiffness = 300f)
+                            )
                         ) {
                             // 多选框（左侧，动画显示）
                             Box(modifier = Modifier.width(if (isEditMode) 40.dp else 0.dp)) {
@@ -326,7 +333,7 @@ fun MiuixCaptureScreen(
                             MiuixOrderGroupCard(
                                 group = group,
                                 viewModel = viewModel,
-                                onClick = { },
+                                onClick = { onNavigateToGroupDetail(group.id) },
                                 onMarkAllCompleted = {
                                     performHaptic()
                                     viewModel.markGroupAsCompleted(group.id)
@@ -343,7 +350,10 @@ fun MiuixCaptureScreen(
                 if (standaloneOrders.isNotEmpty()) {
                     items(items = standaloneOrders, key = { it.id }) { order ->
                         Row(
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.animateItem(
+                                placementSpec = spring(dampingRatio = 0.8f, stiffness = 300f)
+                            )
                         ) {
                             // 多选框（左侧，动画显示）
                             Box(modifier = Modifier.width(if (isEditMode) 40.dp else 0.dp)) {
@@ -368,7 +378,7 @@ fun MiuixCaptureScreen(
                             }
                             MiuixOrderCard(
                                 order = order,
-                                onClick = { },
+                                onClick = { onNavigateToOrderDetail(order.id) },
                                 onMarkCompleted = {
                                     performHaptic()
                                     viewModel.markAsCompleted(order.id)
@@ -408,7 +418,12 @@ fun MiuixCaptureScreen(
                         SmallTitle(text = "已完成订单组")
                     }
                     items(items = completedGroups, key = { "completed_group_${it.id}" }) { group ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.animateItem(
+                                placementSpec = spring(dampingRatio = 0.8f, stiffness = 300f)
+                            )
+                        ) {
                             Box(modifier = Modifier.width(if (isEditMode) 40.dp else 0.dp)) {
                                 androidx.compose.animation.AnimatedVisibility(
                                     visible = isEditMode,
@@ -450,7 +465,12 @@ fun MiuixCaptureScreen(
                         SmallTitle(text = "已完成订单")
                     }
                     items(items = completedOrders, key = { "completed_${it.id}" }) { order ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.animateItem(
+                                placementSpec = spring(dampingRatio = 0.8f, stiffness = 300f)
+                            )
+                        ) {
                             Box(modifier = Modifier.width(if (isEditMode) 40.dp else 0.dp)) {
                                 androidx.compose.animation.AnimatedVisibility(
                                     visible = isEditMode,
@@ -513,8 +533,114 @@ fun MiuixCaptureScreen(
         }
     }
 
-    // FloatingToolbar：移出 Scaffold，自由定位
-    // 编辑模式：完成/删除按钮（底部居中）
+    // 删除确认弹窗状态
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+
+    // 全选按钮（编辑模式下显示，底部 FloatingToolbar 上方）
+    AnimatedVisibility(
+        visible = isEditMode,
+        enter = fadeIn() + expandVertically(),
+        exit = fadeOut() + shrinkVertically(),
+        modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 140.dp)
+    ) {
+        FloatingToolbar(
+            color = MiuixTheme.colorScheme.surfaceVariant,
+            cornerRadius = 16.dp,
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(
+                    onClick = {
+                        performHaptic()
+                        val currentOrders = if (selectedTab == 0) filteredIncompleteOrders.filter { it.groupId == null } else completedOrders
+                        if (selectedIds.size == currentOrders.size && currentOrders.isNotEmpty()) {
+                            selectedIds = emptySet()
+                        } else {
+                            selectedIds = currentOrders.map { it.id }.toSet()
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColorsPrimary(),
+                    cornerRadius = 12.dp
+                ) {
+                    Text(
+                        text = if (selectedTab == 0) {
+                            val currentOrders = filteredIncompleteOrders.filter { it.groupId == null }
+                            if (selectedIds.size == currentOrders.size && currentOrders.isNotEmpty()) "取消全选订单" else "全选订单"
+                        } else {
+                            if (selectedIds.size == completedOrders.size && completedOrders.isNotEmpty()) "取消全选订单" else "全选订单"
+                        },
+                        fontSize = 13.sp
+                    )
+                }
+                Button(
+                    onClick = {
+                        performHaptic()
+                        val currentGroups = if (selectedTab == 0) filteredIncompleteGroups else completedGroups
+                        if (selectedGroupIds.size == currentGroups.size && currentGroups.isNotEmpty()) {
+                            selectedGroupIds = emptySet()
+                        } else {
+                            selectedGroupIds = currentGroups.map { it.id }.toSet()
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColorsPrimary(),
+                    cornerRadius = 12.dp
+                ) {
+                    Text(
+                        text = if (selectedTab == 0) {
+                            if (selectedGroupIds.size == filteredIncompleteGroups.size && filteredIncompleteGroups.isNotEmpty()) "取消全选组" else "全选组"
+                        } else {
+                            if (selectedGroupIds.size == completedGroups.size && completedGroups.isNotEmpty()) "取消全选组" else "全选组"
+                        },
+                        fontSize = 13.sp
+                    )
+                }
+            }
+        }
+    }
+
+    // 删除确认弹窗（OverlayDialog）
+    if (showDeleteConfirm) {
+        top.yukonga.miuix.kmp.overlay.OverlayDialog(
+            title = "确认删除",
+            summary = "确定要删除选中的 ${selectedIds.size + selectedGroupIds.size} 条记录吗？此操作不可撤销。",
+            show = showDeleteConfirm,
+            onDismissRequest = { showDeleteConfirm = false }
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                TextButton(
+                    text = "取消",
+                    onClick = { showDeleteConfirm = false },
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(
+                    text = "删除",
+                    onClick = {
+                        performHaptic()
+                        selectedIds.forEach { id ->
+                            incompleteOrders.find { it.id == id }?.let { viewModel.deleteOrder(it) }
+                                ?: completedOrders.find { it.id == id }?.let { viewModel.deleteOrder(it) }
+                        }
+                        selectedGroupIds.forEach { id ->
+                            incompleteGroups.find { it.id == id }?.let { viewModel.deleteGroup(it) }
+                                ?: completedGroups.find { it.id == id }?.let { viewModel.deleteGroup(it) }
+                        }
+                        selectedIds = emptySet()
+                        selectedGroupIds = emptySet()
+                        showDeleteConfirm = false
+                    },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.textButtonColorsPrimary()
+                )
+            }
+        }
+    }
+
+    // FloatingToolbar：编辑模式底部操作栏
     AnimatedVisibility(
         visible = isEditMode && (selectedIds.isNotEmpty() || selectedGroupIds.isNotEmpty()),
         enter = fadeIn(),
@@ -544,14 +670,7 @@ fun MiuixCaptureScreen(
                 }
                 IconButton(onClick = {
                     performHaptic()
-                    selectedIds.forEach { id ->
-                        incompleteOrders.find { it.id == id }?.let { viewModel.deleteOrder(it) }
-                    }
-                    selectedGroupIds.forEach { id ->
-                        incompleteGroups.find { it.id == id }?.let { viewModel.deleteGroup(it) }
-                    }
-                    selectedIds = emptySet()
-                    selectedGroupIds = emptySet()
+                    showDeleteConfirm = true
                 }) {
                     Icon(
                         imageVector = Icons.Default.Delete,

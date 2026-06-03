@@ -646,9 +646,37 @@ private fun Md3eAboutPage(
         // 日志导出
         Md3eLogSection(performHaptic = performHaptic)
 
-        Spacer(Modifier.height(64.dp))
+        Spacer(Modifier.height(32.dp))
 
         // 致谢
+        val credits = listOf(
+            Triple("Jetpack Compose", "现代化声明式 UI 框架", "https://developer.android.com/jetpack/compose"),
+            Triple("Material Design 3", "Google 现代设计语言规范", "https://m3.material.io"),
+            Triple("ML Kit", "Google 强大的设备端机器学习 SDK", "https://developers.google.com/ml-kit"),
+            Triple("Shizuku", "利用系统 API 实现高级权限调用", "https://shizuku.rikka.app"),
+            Triple("ZXing", "高效的二维码生成与处理库", "https://github.com/zxing/zxing"),
+            Triple("Room", "官方高性能 SQLite 数据库封装", "https://developer.android.com/training/data-storage/room"),
+            Triple("Coil", "现代化的 Android 图片加载库", "https://coil-kt.github.io/coil/"),
+            Triple("Kyant Backdrop", "优雅的毛玻璃与层级模糊效果实现", "https://github.com/Kyant0/AndroidLiquidGlass"),
+            Triple("Paddle Lite", "使用深度识别算法在本地进行OCR识别", "https://www.paddlepaddle.org.cn/paddle/paddlelite"),
+            Triple("Paddle4Android", "不需要学习原理即可一键在Android上引入OCR识别", "https://github.com/equationl/paddleocr4android"),
+            Triple("Miuix", "多平台UI/效果实现的UI设计库", "https://github.com/compose-miuix-ui/miuix/"),
+        )
+        PreferenceSection(title = "开源项目") {
+            credits.forEach { (name, description, url) ->
+                SettingsListItem(
+                    title = name,
+                    description = description,
+                    onClick = {
+                        performHaptic()
+                        uriHandler.openUri(url)
+                    }
+                )
+            }
+        }
+
+        Spacer(Modifier.height(64.dp))
+
         val currentYear = remember { java.util.Calendar.getInstance().get(java.util.Calendar.YEAR) }
         Text(
             text = "Made with ❤️ by Badnng and Vibe Codding\n© $currentYear 澎湃记",
