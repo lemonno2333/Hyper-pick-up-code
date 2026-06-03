@@ -57,12 +57,16 @@ fun MiuixScheduledNotificationSheet(
     var selectedHour by remember { mutableIntStateOf(java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)) }
     var selectedMinute by remember { mutableIntStateOf(java.util.Calendar.getInstance().get(java.util.Calendar.MINUTE)) }
 
+    androidx.compose.runtime.LaunchedEffect(show) {
+        if (show) com.Badnng.moe.ui.component.BlurState.show() else com.Badnng.moe.ui.component.BlurState.hide()
+    }
     WindowBottomSheet(
         show = show,
         title = "选择推送时间",
+        enableWindowDim = false,
         allowDismiss = true,
         enableNestedScroll = true,
-        onDismissRequest = onDismiss
+        onDismissRequest = { com.Badnng.moe.ui.component.BlurState.hide(); onDismiss() }
     ) {
         val dismiss = LocalDismissState.current
 

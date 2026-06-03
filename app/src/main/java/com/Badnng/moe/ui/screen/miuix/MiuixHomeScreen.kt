@@ -344,6 +344,32 @@ private fun MiuixMainContent(
         onDismiss = { showBottomSheet = false }
     )
 
+    // BottomSheet 全屏模糊背景（和长按菜单同级，在底栏之前）
+    val animatedSheetAlpha by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (showBottomSheet || rulesMenuShow || com.Badnng.moe.ui.component.BlurState.isAnySheetVisible.value) 1f else 0f,
+        animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.9f, stiffness = 300f)
+    )
+    if (animatedSheetAlpha > 0f && backdrop != null) {
+        val isInDark = isSystemInDarkTheme()
+        val baseBrightness = if (isInDark) -0.18f else 0.18f
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.3f))
+                .textureBlur(
+                    backdrop = backdrop,
+                    shape = RectangleShape,
+                    blurRadius = 56f * animatedSheetAlpha,
+                    colors = BlurDefaults.blurColors(
+                        brightness = baseBrightness * animatedSheetAlpha,
+                        contrast = 1f + 0.2f * animatedSheetAlpha,
+                        saturation = 1f + 0.08f * animatedSheetAlpha,
+                    ),
+                )
+                .graphicsLayer(alpha = animatedSheetAlpha)
+        )
+    }
+
     // 底栏：覆盖在 Scaffold 上方，支持 Start/Center/End 位置
     // 标准底栏（非悬浮）
     AnimatedVisibility(
@@ -455,7 +481,7 @@ private fun MiuixMainContent(
         }
     }
 
-    // 规则页长按菜单（在底栏之后渲染，模糊覆盖底栏）
+    // 规则页长按菜单（模糊由上方共享处理）
     val animatedMenuAlpha by androidx.compose.animation.core.animateFloatAsState(
         targetValue = if (rulesMenuShow) 1f else 0f,
         animationSpec = androidx.compose.animation.core.tween(durationMillis = 300)
@@ -471,29 +497,10 @@ private fun MiuixMainContent(
     if (animatedMenuAlpha > 0f) {
         val density = LocalDensity.current
         Box(modifier = Modifier.fillMaxSize()) {
+            // 点击遮罩关闭菜单
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.3f)) // 固定暗色底衬，防止露白
-                    .then(
-                        if (backdrop != null) {
-                            val isInDark = isSystemInDarkTheme()
-                            val baseBrightness = if (isInDark) -0.18f else 0.18f
-                            Modifier.textureBlur(
-                                backdrop = backdrop,
-                                shape = RectangleShape,
-                                blurRadius = 56f * animatedMenuAlpha,
-                                colors = BlurDefaults.blurColors(
-                                    brightness = baseBrightness * animatedMenuAlpha,
-                                    contrast = 1f + 0.2f * animatedMenuAlpha,
-                                    saturation = 1f + 0.08f * animatedMenuAlpha,
-                                ),
-                            )
-                        } else {
-                            Modifier.background(Color.Black.copy(alpha = animatedMenuAlpha * 0.5f))
-                        }
-                    )
-                    .graphicsLayer(alpha = animatedMenuAlpha)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null

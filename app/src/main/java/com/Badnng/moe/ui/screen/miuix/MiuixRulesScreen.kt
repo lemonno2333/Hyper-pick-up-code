@@ -1071,12 +1071,14 @@ private fun OnlineSourceWindowSheet(
     var autoUpdate by remember(source?.id) { mutableStateOf(source?.enabled ?: false) }
     var updateIntervalMinutes by remember(source?.id) { mutableStateOf("${source?.updateIntervalMinutes ?: 1440}") }
 
+    com.Badnng.moe.ui.component.BlurState.show()
     top.yukonga.miuix.kmp.window.WindowBottomSheet(
         show = true,
         title = if (source != null) "修改配置" else "添加规则源",
+        enableWindowDim = false,
         allowDismiss = true,
         enableNestedScroll = true,
-        onDismissRequest = onDismiss
+        onDismissRequest = { com.Badnng.moe.ui.component.BlurState.hide(); onDismiss() }
     ) {
         val dismiss = top.yukonga.miuix.kmp.theme.LocalDismissState.current
         val indicationColor = MiuixTheme.colorScheme.onBackground

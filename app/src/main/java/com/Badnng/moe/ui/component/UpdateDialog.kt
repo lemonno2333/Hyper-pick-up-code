@@ -2,6 +2,7 @@ package com.Badnng.moe.ui.component
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
@@ -86,12 +87,16 @@ private fun MiuixUpdateSheet(
     onDismiss: () -> Unit,
     onInstall: () -> Unit
 ) {
+    androidx.compose.runtime.LaunchedEffect(show) {
+        if (show) BlurState.show() else BlurState.hide()
+    }
     WindowBottomSheet(
         show = show,
         title = "发现新版本",
+        enableWindowDim = false,
         allowDismiss = true,
         enableNestedScroll = true,
-        onDismissRequest = onDismiss
+        onDismissRequest = { BlurState.hide(); onDismiss() }
     ) {
         val dismiss = LocalDismissState.current
         val indicationColor = MiuixTheme.colorScheme.onBackground
@@ -166,12 +171,16 @@ private fun MiuixUpdateProgressSheet(
     onResume: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    androidx.compose.runtime.LaunchedEffect(show) {
+        if (show) BlurState.show() else BlurState.hide()
+    }
     WindowBottomSheet(
         show = show,
         title = "正在更新",
+        enableWindowDim = false,
         allowDismiss = false,
         enableNestedScroll = false,
-        onDismissRequest = onDismiss
+        onDismissRequest = { BlurState.hide(); onDismiss() }
     ) {
         val dismiss = LocalDismissState.current
         val indicationColor = MiuixTheme.colorScheme.onBackground

@@ -7,7 +7,11 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -54,12 +58,21 @@ fun AddOrderBottomSheet(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
 
+    // 同步模糊状态
+    androidx.compose.runtime.LaunchedEffect(show) {
+        if (show) BlurState.show() else BlurState.hide()
+    }
+
     WindowBottomSheet(
         show = show,
         title = "添加记录",
+        enableWindowDim = false,
         allowDismiss = true,
         enableNestedScroll = true,
-        onDismissRequest = onDismiss
+        onDismissRequest = {
+            BlurState.hide()
+            onDismiss()
+        }
     ) {
         val dismiss = LocalDismissState.current
 
