@@ -9,16 +9,29 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.Column
@@ -31,12 +44,17 @@ import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Edit
 import top.yukonga.miuix.kmp.icon.extended.Settings
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -62,10 +80,13 @@ import androidx.navigation3.ui.NavDisplay
 import androidx.navigation3.ui.NavDisplayTransitionEffects
 import com.Badnng.moe.data.db.OrderEntity
 import com.Badnng.moe.data.db.OrderGroup
+import com.Badnng.moe.data.db.OrderDatabase
 import com.Badnng.moe.ui.screen.rememberSaveablePagerState
 import com.Badnng.moe.ui.screen.settings.SettingsPage
 import com.Badnng.moe.viewmodel.OrderViewModel
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import top.yukonga.miuix.kmp.basic.FloatingNavigationBar
 import top.yukonga.miuix.kmp.basic.FloatingNavigationBarItem
 import top.yukonga.miuix.kmp.basic.Icon
@@ -76,6 +97,7 @@ import top.yukonga.miuix.kmp.basic.NavigationBarItem
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.blur.BlendColorEntry
+import top.yukonga.miuix.kmp.blur.BlurBlendMode
 import top.yukonga.miuix.kmp.blur.BlurDefaults
 import top.yukonga.miuix.kmp.blur.isRuntimeShaderSupported
 import top.yukonga.miuix.kmp.blur.layerBackdrop
@@ -89,6 +111,8 @@ import top.yukonga.miuix.kmp.basic.FloatingToolbarDefaults
 sealed interface HomeRoute : NavKey {
     data object Main : HomeRoute
     data class SettingsSubPage(val page: SettingsPage) : HomeRoute
+    data class OrderDetail(val orderId: String) : HomeRoute
+    data class GroupDetail(val groupId: Long) : HomeRoute
 }
 
 @Composable
@@ -129,6 +153,12 @@ fun MiuixHomeScreen(
                     externalPagerState = pagerState,
                     onNavigateToSettingsSubPage = { page ->
                         backStack.add(HomeRoute.SettingsSubPage(page))
+                    },
+                    onNavigateToOrderDetail = { orderId ->
+                        backStack.add(HomeRoute.OrderDetail(orderId))
+                    },
+                    onNavigateToGroupDetail = { groupId ->
+                        backStack.add(HomeRoute.GroupDetail(groupId))
                     }
                 )
             }
@@ -140,6 +170,47 @@ fun MiuixHomeScreen(
                         backStack.add(HomeRoute.SettingsSubPage(page))
                     }
                 )
+            }
+            entry<HomeRoute.OrderDetail> { route ->
+                val context = LocalContext.current
+                val order = remember(route.orderId) {
+                    runBlocking { OrderDatabase.getDatabase(context).orderDao().getOrderById(route.orderId) }
+                }
+                if (order != null) {
+                    com.Badnng.moe.ui.screen.miuix.MiuixOrderDetailScreen(
+                        order = order,
+                        onBack = { backStack.removeLastOrNull() }
+                    )
+                }
+            }
+            entry<HomeRoute.GroupDetail> { route ->
+                val context = LocalContext.current
+                val db = remember { OrderDatabase.getDatabase(context) }
+                val group = remember(route.groupId) {
+                    runBlocking { db.orderGroupDao().getGroupById(route.groupId) }
+                }
+                val orders = remember(route.groupId) {
+                    runBlocking { db.orderGroupDao().getOrdersByGroupId(route.groupId).first() }
+                }
+                val completedCount = orders.count { it.isCompleted }
+                val totalCount = orders.size
+                if (group != null) {
+                    com.Badnng.moe.ui.screen.miuix.MiuixGroupDetailScreen(
+                        group = group,
+                        orders = orders,
+                        completedCount = completedCount,
+                        totalCount = totalCount,
+                        onBack = { backStack.removeLastOrNull() },
+                        onMarkAllCompleted = {
+                            runBlocking {
+                                val now = System.currentTimeMillis()
+                                db.orderGroupDao().markGroupAsCompleted(route.groupId, now)
+                                db.orderGroupDao().markAllOrdersInGroupCompleted(route.groupId, now)
+                            }
+                            backStack.removeLastOrNull()
+                        }
+                    )
+                }
             }
         }
     }
@@ -166,7 +237,9 @@ private fun MiuixMainContent(
     useFloatingNavBar: Boolean,
     navAlignment: String = "center",
     externalPagerState: androidx.compose.foundation.pager.PagerState? = null,
-    onNavigateToSettingsSubPage: (SettingsPage) -> Unit
+    onNavigateToSettingsSubPage: (SettingsPage) -> Unit,
+    onNavigateToOrderDetail: (String) -> Unit = {},
+    onNavigateToGroupDetail: (Long) -> Unit = {}
 ) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
@@ -180,6 +253,13 @@ private fun MiuixMainContent(
     var isScrollingDown by remember { mutableStateOf(false) }
     var isEditMode by remember { mutableStateOf(false) }
     var showBottomSheet by remember { mutableStateOf(false) }
+
+    // 规则页长按菜单状态
+    var rulesMenuPosition by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+    var rulesMenuShow by remember { mutableStateOf(false) }
+    var rulesMenuExport: (() -> Unit)? by remember { mutableStateOf(null) }
+    var rulesMenuRename: (() -> Unit)? by remember { mutableStateOf(null) }
+    var rulesMenuDelete: (() -> Unit)? by remember { mutableStateOf(null) }
 
     val activity = context as? android.app.Activity
 
@@ -233,9 +313,20 @@ private fun MiuixMainContent(
                         onEditModeChange = { isEditMode = it },
                         onAddClick = { showBottomSheet = true },
                         navAlignment = navAlignment,
-                        useFloatingNavBar = useFloatingNavBar
+                        useFloatingNavBar = useFloatingNavBar,
+                        onNavigateToOrderDetail = onNavigateToOrderDetail,
+                        onNavigateToGroupDetail = onNavigateToGroupDetail
                     )
-                    1 -> MiuixRulesScreen(padding = innerPadding)
+                    1 -> MiuixRulesScreen(
+                        padding = innerPadding,
+                        onShowMenu = { position, rename, delete, export ->
+                            rulesMenuPosition = position
+                            rulesMenuRename = rename
+                            rulesMenuDelete = delete
+                            rulesMenuExport = export
+                            rulesMenuShow = true
+                        }
+                    )
                     2 -> MiuixSettingsScreen(
                         padding = innerPadding,
                         onNavigateToSubPage = onNavigateToSettingsSubPage
@@ -359,6 +450,130 @@ private fun MiuixMainContent(
                         icon = MiuixIcons.Regular.Settings,
                         label = "设置"
                     )
+                }
+            }
+        }
+    }
+
+    // 规则页长按菜单（在底栏之后渲染，模糊覆盖底栏）
+    val animatedMenuAlpha by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (rulesMenuShow) 1f else 0f,
+        animationSpec = androidx.compose.animation.core.tween(durationMillis = 300)
+    )
+    val animatedMenuCardAlpha by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (rulesMenuShow) 1f else 0f,
+        animationSpec = androidx.compose.animation.core.tween(durationMillis = 250, delayMillis = 50)
+    )
+    val animatedMenuCardScale by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (rulesMenuShow) 1f else 0.9f,
+        animationSpec = androidx.compose.animation.core.tween(durationMillis = 250, delayMillis = 50)
+    )
+    if (animatedMenuAlpha > 0f) {
+        val density = LocalDensity.current
+        Box(modifier = Modifier.fillMaxSize()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.3f)) // 固定暗色底衬，防止露白
+                    .then(
+                        if (backdrop != null) {
+                            val isInDark = isSystemInDarkTheme()
+                            val baseBrightness = if (isInDark) -0.18f else 0.18f
+                            Modifier.textureBlur(
+                                backdrop = backdrop,
+                                shape = RectangleShape,
+                                blurRadius = 56f * animatedMenuAlpha,
+                                colors = BlurDefaults.blurColors(
+                                    brightness = baseBrightness * animatedMenuAlpha,
+                                    contrast = 1f + 0.2f * animatedMenuAlpha,
+                                    saturation = 1f + 0.08f * animatedMenuAlpha,
+                                ),
+                            )
+                        } else {
+                            Modifier.background(Color.Black.copy(alpha = animatedMenuAlpha * 0.5f))
+                        }
+                    )
+                    .graphicsLayer(alpha = animatedMenuAlpha)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { rulesMenuShow = false }
+            )
+            val configuration = LocalConfiguration.current
+            val screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() }
+            val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
+            val cardMaxHeightPx = with(density) { 160.dp.toPx() }
+
+            var cardWidthMeasured by remember { mutableIntStateOf(0) }
+            val cardXDp = with(density) {
+                rulesMenuPosition.x.coerceIn(0f, screenWidthPx - cardWidthMeasured).toDp()
+            }
+            val cardYDp = with(density) {
+                val rawY = rulesMenuPosition.y
+                if (rawY + cardMaxHeightPx > screenHeightPx) {
+                    (rulesMenuPosition.y - cardMaxHeightPx).coerceAtLeast(0f).toDp()
+                } else {
+                    rawY.toDp()
+                }
+            }
+            top.yukonga.miuix.kmp.basic.Card(
+                modifier = Modifier
+                    .offset(x = cardXDp, y = cardYDp)
+                    .onGloballyPositioned { cardWidthMeasured = it.size.width }
+                    .widthIn(max = 280.dp)
+                    .graphicsLayer {
+                        alpha = animatedMenuCardAlpha
+                        scaleX = animatedMenuCardScale
+                        scaleY = animatedMenuCardScale
+                    },
+                colors = top.yukonga.miuix.kmp.basic.CardDefaults.defaultColors(
+                    MiuixTheme.colorScheme.surface.copy(alpha = 0.9f)
+                )
+            ) {
+                val menuItems = buildList {
+                    if (rulesMenuRename != null) add("rename")
+                    if (rulesMenuExport != null) add("export")
+                    if (rulesMenuDelete != null) add("delete")
+                }
+                Column {
+                    menuItems.forEachIndexed { index, item ->
+                        val isFirst = index == 0
+                        val isLast = index == menuItems.lastIndex
+                        val shape = when {
+                            isFirst && isLast -> RoundedCornerShape(16.dp)
+                            isFirst -> RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+                            isLast -> RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp)
+                            else -> RoundedCornerShape(0.dp)
+                        }
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(shape)
+                                .clickable {
+                                    rulesMenuShow = false
+                                    when (item) {
+                                        "rename" -> rulesMenuRename?.invoke()
+                                        "export" -> rulesMenuExport?.invoke()
+                                        "delete" -> rulesMenuDelete?.invoke()
+                                    }
+                                }
+                        ) {
+                            val (icon, label, color) = when (item) {
+                                "rename" -> Triple(Icons.Default.Edit, "重命名", MiuixTheme.colorScheme.onSurface)
+                                "export" -> Triple(Icons.Default.FileUpload, "导出规则", MiuixTheme.colorScheme.onSurface)
+                                "delete" -> Triple(Icons.Default.Delete, "删除", MiuixTheme.colorScheme.error)
+                                else -> Triple(Icons.Default.Edit, "", Color.Unspecified)
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                top.yukonga.miuix.kmp.basic.Icon(icon, null, tint = color)
+                                Spacer(Modifier.width(12.dp))
+                                top.yukonga.miuix.kmp.basic.Text(label, color = color)
+                            }
+                        }
+                    }
                 }
             }
         }
