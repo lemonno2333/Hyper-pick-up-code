@@ -58,11 +58,7 @@ fun AddOrderBottomSheet(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
 
-    // 同步模糊状态
-    androidx.compose.runtime.LaunchedEffect(show) {
-        if (show) BlurState.show() else BlurState.hide()
-    }
-
+    if (show) BlurState.show()
     WindowBottomSheet(
         show = show,
         title = "添加记录",
