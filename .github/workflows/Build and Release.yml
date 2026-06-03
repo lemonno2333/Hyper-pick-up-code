@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - 'v*'
+    branches:
+      - master
 
 permissions:
   contents: write
@@ -55,6 +57,7 @@ jobs:
         run: ./gradlew assembleRelease --no-daemon --stacktrace --info -Porg.gradle.user.home=$HOME/.gradle
 
       - name: Verify APK signature
+        if: startsWith(github.ref, 'refs/tags/')
         run: |
           echo "=== 验证 APK ==="
           ANDROID_HOME="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
@@ -70,6 +73,7 @@ jobs:
           echo "✅ 签名验证通过"
 
       - name: Check if pre-release
+        if: startsWith(github.ref, 'refs/tags/')
         id: check_prerelease
         run: |
           BRANCH=$(git branch -r --contains ${{ github.sha }} | head -1 | sed 's/.*origin\///' | xargs)
@@ -86,6 +90,7 @@ jobs:
           fi
 
       - name: Read changelog
+        if: startsWith(github.ref, 'refs/tags/')
         id: changelog
         run: |
           if [ -f changelog.txt ]; then
@@ -98,6 +103,7 @@ jobs:
           fi
 
       - name: Generate version JSON
+        if: startsWith(github.ref, 'refs/tags/')
         env:
           TAG_NAME: ${{ github.ref_name }}
           IS_PRERELEASE: ${{ steps.check_prerelease.outputs.is_prerelease }}
@@ -152,6 +158,7 @@ jobs:
           "
 
       - name: Commit JSON to master
+        if: startsWith(github.ref, 'refs/tags/')
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
@@ -188,6 +195,7 @@ jobs:
           git push origin master
 
       - name: Create Release and Upload APK
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: app/build/outputs/apk/release/app-release.apk
