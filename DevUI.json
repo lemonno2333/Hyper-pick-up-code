@@ -1,7 +1,7 @@
 {
-  "versionCode": 2026060325,
-  "versionName": "26.6.3.C05-DevUI",
+  "versionCode": 2026060421,
+  "versionName": "26.6.4.C01-DevUI",
   "releaseNotes": "您正在使用 澎湃记 的测试版本，可能会遇到不稳定，闪退，数据丢失等情况，请谨慎升级\n\n26.5.20.C03-Dev 版本更新如下：\n\n修复 短信识别相关场景在后台过久时出现无法识别问题\n\n优化 设置二级页面退出时的相关动画",
-  "downloadUrl": "https://github.com/badnng/Hyper-pick-up-code/releases/download/v26.6.3.C05-DevUI/app-release.apk",
-  "md5": "a25d70b05c5b8c5c74c920dfa48fb6c6"
+  "downloadUrl": "https://github.com/badnng/Hyper-pick-up-code/releases/download/v26.6.4.C01-DevUI/app-release.apk",
+  "md5": "d95eb4bca5da90d2a0d2cc0e0a16c613"
 }
