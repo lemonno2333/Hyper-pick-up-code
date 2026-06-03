@@ -87,9 +87,7 @@ private fun MiuixUpdateSheet(
     onDismiss: () -> Unit,
     onInstall: () -> Unit
 ) {
-    androidx.compose.runtime.LaunchedEffect(show) {
-        if (show) BlurState.show() else BlurState.hide()
-    }
+    if (show) BlurState.show()
     WindowBottomSheet(
         show = show,
         title = "发现新版本",
@@ -171,9 +169,7 @@ private fun MiuixUpdateProgressSheet(
     onResume: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    androidx.compose.runtime.LaunchedEffect(show) {
-        if (show) BlurState.show() else BlurState.hide()
-    }
+    if (show) BlurState.show()
     WindowBottomSheet(
         show = show,
         title = "正在更新",

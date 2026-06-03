@@ -536,6 +536,33 @@ private fun MiuixAboutPage(
                     }
                 }
             }
+
+        }
+
+        // BottomSheet 模糊背景
+        val animatedBlurAlpha by androidx.compose.animation.core.animateFloatAsState(
+            targetValue = if (com.Badnng.moe.ui.component.BlurState.isAnySheetVisible.value) 1f else 0f,
+            animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.9f, stiffness = 300f)
+        )
+        if (animatedBlurAlpha > 0f && backdrop != null) {
+            val isInDark = isSystemInDarkTheme()
+            val baseBrightness = if (isInDark) -0.18f else 0.18f
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.3f))
+                    .textureBlur(
+                        backdrop = backdrop,
+                        shape = RoundedCornerShape(0.dp),
+                        blurRadius = 56f * animatedBlurAlpha,
+                        colors = top.yukonga.miuix.kmp.blur.BlurDefaults.blurColors(
+                            brightness = baseBrightness * animatedBlurAlpha,
+                            contrast = 1f + 0.2f * animatedBlurAlpha,
+                            saturation = 1f + 0.08f * animatedBlurAlpha,
+                        ),
+                    )
+                    .graphicsLayer(alpha = animatedBlurAlpha)
+            )
         }
     }
 }

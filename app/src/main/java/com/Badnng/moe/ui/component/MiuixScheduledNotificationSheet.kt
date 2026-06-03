@@ -57,9 +57,7 @@ fun MiuixScheduledNotificationSheet(
     var selectedHour by remember { mutableIntStateOf(java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)) }
     var selectedMinute by remember { mutableIntStateOf(java.util.Calendar.getInstance().get(java.util.Calendar.MINUTE)) }
 
-    androidx.compose.runtime.LaunchedEffect(show) {
-        if (show) com.Badnng.moe.ui.component.BlurState.show() else com.Badnng.moe.ui.component.BlurState.hide()
-    }
+    if (show) com.Badnng.moe.ui.component.BlurState.show()
     WindowBottomSheet(
         show = show,
         title = "选择推送时间",
