@@ -13,11 +13,11 @@ import java.io.FileOutputStream
 object BrandIconResolver {
 
     private val BUILTIN_MAPPINGS = mapOf(
-        "麦当劳" to "ic_mcdonalds",
-        "肯德基" to "ic_kfc", "KFC" to "ic_kfc",
-        "瑞幸" to "ic_luckin", "喜茶" to "ic_heytea",
-        "星巴克" to "ic_starbucks", "霸王茶姬" to "ic_chagee",
-        "古茗" to "ic_goodme", "蜜雪冰城" to "ic_mixue"
+        "麦当劳" to R.drawable.ic_mcdonalds,
+        "肯德基" to R.drawable.ic_kfc, "KFC" to R.drawable.ic_kfc,
+        "瑞幸" to R.drawable.ic_luckin, "喜茶" to R.drawable.ic_heytea,
+        "星巴克" to R.drawable.ic_starbucks, "霸王茶姬" to R.drawable.ic_chagee,
+        "古茗" to R.drawable.ic_goodme, "蜜雪冰城" to R.drawable.ic_mixue
     )
 
     private val bitmapCache = android.util.LruCache<String, Bitmap>(50)
@@ -48,10 +48,11 @@ object BrandIconResolver {
 
     fun resolveBuiltinFallbackResId(context: Context, brandName: String?, orderType: String?): Int {
         if (!brandName.isNullOrBlank()) {
-            val builtinResName = BUILTIN_MAPPINGS[brandName]
-            if (builtinResName != null) {
-                val resId = context.resources.getIdentifier(builtinResName, "drawable", context.packageName)
-                if (resId != 0) return resId
+            // 精确匹配
+            BUILTIN_MAPPINGS[brandName]?.let { return it }
+            // 模糊匹配（品牌名包含关键词）
+            for ((key, resId) in BUILTIN_MAPPINGS) {
+                if (brandName.contains(key, ignoreCase = true)) return resId
             }
         }
         return when (orderType) {

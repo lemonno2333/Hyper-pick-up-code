@@ -3,16 +3,17 @@ package com.Badnng.moe.ui.miuix.effect
 import android.os.Build
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
+import android.content.Context
+import android.content.SharedPreferences
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import top.yukonga.miuix.kmp.blur.isRuntimeShaderSupported
@@ -42,7 +43,21 @@ fun BgEffectBackground(
         val surface = MiuixTheme.colorScheme.surface
         val configuration = LocalConfiguration.current
         val deviceType = if (configuration.screenWidthDp >= 600) DeviceType.PAD else DeviceType.PHONE
-        val isDarkTheme = isSystemInDarkTheme()
+        val context = LocalContext.current
+        val appPrefs = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
+        var themeMode by remember { mutableStateOf(appPrefs.getString("theme_mode", "system") ?: "system") }
+        DisposableEffect(appPrefs) {
+            val listener = SharedPreferences.OnSharedPreferenceChangeListener { p, key ->
+                if (key == "theme_mode") themeMode = p.getString(key, "system") ?: "system"
+            }
+            appPrefs.registerOnSharedPreferenceChangeListener(listener)
+            onDispose { appPrefs.unregisterOnSharedPreferenceChangeListener(listener) }
+        }
+        val isDarkTheme = when (themeMode) {
+            "light" -> false
+            "dark" -> true
+            else -> isSystemInDarkTheme()
+        }
         val painter = remember { BgEffectPainter() }
 
         val preset = remember(deviceType, isDarkTheme) {

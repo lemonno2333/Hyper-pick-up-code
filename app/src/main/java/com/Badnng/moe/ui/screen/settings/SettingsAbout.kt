@@ -1,6 +1,7 @@
 package com.Badnng.moe.ui.screen.settings
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -310,7 +311,20 @@ private fun MiuixAboutPage(
                 drawRect(surfaceForBackdrop)
                 drawContent()
             }
-            val isInDark = isSystemInDarkTheme()
+            val appPrefs = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
+            var themeMode by remember { mutableStateOf(appPrefs.getString("theme_mode", "system") ?: "system") }
+            DisposableEffect(appPrefs) {
+                val listener = SharedPreferences.OnSharedPreferenceChangeListener { p, key ->
+                    if (key == "theme_mode") themeMode = p.getString(key, "system") ?: "system"
+                }
+                appPrefs.registerOnSharedPreferenceChangeListener(listener)
+                onDispose { appPrefs.unregisterOnSharedPreferenceChangeListener(listener) }
+            }
+            val isInDark = when (themeMode) {
+                "light" -> false
+                "dark" -> true
+                else -> isSystemInDarkTheme()
+            }
             val logoBlend = remember(isInDark) {
                 if (isInDark) {
                     listOf(
@@ -545,12 +559,25 @@ private fun MiuixAboutPage(
             animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.9f, stiffness = 300f)
         )
         if (animatedBlurAlpha > 0f && backdrop != null) {
-            val isInDark = isSystemInDarkTheme()
-            val baseBrightness = if (isInDark) -0.18f else 0.18f
+            val blurPrefs = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
+            var blurThemeMode by remember { mutableStateOf(blurPrefs.getString("theme_mode", "system") ?: "system") }
+            DisposableEffect(blurPrefs) {
+                val listener = SharedPreferences.OnSharedPreferenceChangeListener { p, key ->
+                    if (key == "theme_mode") blurThemeMode = p.getString(key, "system") ?: "system"
+                }
+                blurPrefs.registerOnSharedPreferenceChangeListener(listener)
+                onDispose { blurPrefs.unregisterOnSharedPreferenceChangeListener(listener) }
+            }
+            val isInDark = when (blurThemeMode) {
+                "light" -> false
+                "dark" -> true
+                else -> isSystemInDarkTheme()
+            }
+            val baseBrightness = if (isInDark) -0.3f else -0.5f
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.3f))
+                    .background(Color.Black.copy(alpha = 0.5f))
                     .textureBlur(
                         backdrop = backdrop,
                         shape = RoundedCornerShape(0.dp),

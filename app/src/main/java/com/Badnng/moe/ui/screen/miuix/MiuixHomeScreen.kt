@@ -9,6 +9,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -249,6 +250,20 @@ private fun MiuixMainContent(
     val haptic = LocalHapticFeedback.current
     val viewModel: OrderViewModel = viewModel()
 
+    var themeMode by remember { mutableStateOf(prefs.getString("theme_mode", "system") ?: "system") }
+    DisposableEffect(prefs) {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { p, key ->
+            if (key == "theme_mode") themeMode = p.getString(key, "system") ?: "system"
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+    val isInDarkTheme = when (themeMode) {
+        "light" -> false
+        "dark" -> true
+        else -> isSystemInDarkTheme()
+    }
+
     var isManaging by remember { mutableStateOf(false) }
     var isScrollingDown by remember { mutableStateOf(false) }
     var isEditMode by remember { mutableStateOf(false) }
@@ -344,29 +359,32 @@ private fun MiuixMainContent(
         onDismiss = { showBottomSheet = false }
     )
 
-    // BottomSheet 全屏模糊背景（和长按菜单同级，在底栏之前）
-    val animatedSheetAlpha by androidx.compose.animation.core.animateFloatAsState(
-        targetValue = if (showBottomSheet || rulesMenuShow || com.Badnng.moe.ui.component.BlurState.isAnySheetVisible.value) 1f else 0f,
-        animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.9f, stiffness = 300f)
+    // BottomSheet/菜单 全屏模糊背景（实时跟随 Sheet 拖拽进度）
+    val sheetProgress = com.Badnng.moe.ui.component.BlurState.progress.floatValue
+    val menuBlurAlpha by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (rulesMenuShow) 1f else 0f,
+        animationSpec = androidx.compose.animation.core.tween(durationMillis = 300),
+        label = "menuBlurAlpha"
     )
-    if (animatedSheetAlpha > 0f && backdrop != null) {
-        val isInDark = isSystemInDarkTheme()
-        val baseBrightness = if (isInDark) -0.18f else 0.18f
+    val blurAlpha = maxOf(sheetProgress, menuBlurAlpha)
+    if (blurAlpha > 0.01f && backdrop != null) {
+        val isInDark = isInDarkTheme
+        val baseBrightness = if (isInDark) -0.3f else -0.5f
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.3f))
+                .background(Color.Black.copy(alpha = 0.5f * blurAlpha))
                 .textureBlur(
                     backdrop = backdrop,
                     shape = RectangleShape,
-                    blurRadius = 56f * animatedSheetAlpha,
+                    blurRadius = 56f * blurAlpha,
                     colors = BlurDefaults.blurColors(
-                        brightness = baseBrightness * animatedSheetAlpha,
-                        contrast = 1f + 0.2f * animatedSheetAlpha,
-                        saturation = 1f + 0.08f * animatedSheetAlpha,
+                        brightness = baseBrightness * blurAlpha,
+                        contrast = 1f + 0.2f * blurAlpha,
+                        saturation = 1f + 0.08f * blurAlpha,
                     ),
                 )
-                .graphicsLayer(alpha = animatedSheetAlpha)
+                .graphicsLayer(alpha = blurAlpha)
         )
     }
 
@@ -430,7 +448,7 @@ private fun MiuixMainContent(
             else -> 0.dp
         }
         val floatingBarColor = if (blurEnabled) Color.Transparent else MiuixTheme.colorScheme.surfaceContainer
-        val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+        val isDark = isInDarkTheme
         val floatingHighlight = remember(isDark) {
             if (isDark) Highlight.GlassStrokeMiddleDark else Highlight.GlassStrokeMiddleLight
         }
@@ -532,9 +550,14 @@ private fun MiuixMainContent(
                         alpha = animatedMenuCardAlpha
                         scaleX = animatedMenuCardScale
                         scaleY = animatedMenuCardScale
-                    },
+                    }
+                    .border(
+                        width = 1.dp,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary.copy(alpha = 0.3f),
+                        shape = RoundedCornerShape(16.dp)
+                    ),
                 colors = top.yukonga.miuix.kmp.basic.CardDefaults.defaultColors(
-                    MiuixTheme.colorScheme.surface.copy(alpha = 0.9f)
+                    MiuixTheme.colorScheme.surface.copy(alpha = 0.95f)
                 )
             ) {
                 val menuItems = buildList {

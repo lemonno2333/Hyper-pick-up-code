@@ -13,6 +13,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.onGloballyPositioned
+import kotlinx.coroutines.launch
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -87,15 +89,66 @@ private fun MiuixUpdateSheet(
     onDismiss: () -> Unit,
     onInstall: () -> Unit
 ) {
-    if (show) BlurState.show()
+    // 模糊进度：Animatable 驱动开/关动画，拖拽时 snapTo 覆盖
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val sheetHeightPx = remember { with(density) { configuration.screenHeightDp.dp.toPx() } }
+    val blurProgress = remember { androidx.compose.animation.core.Animatable(0f) }
+    var dragProgress by remember { androidx.compose.runtime.mutableFloatStateOf(-1f) }
+
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        androidx.compose.runtime.snapshotFlow { blurProgress.value }
+            .collect { BlurState.updateProgress(it) }
+    }
+
+    androidx.compose.runtime.LaunchedEffect(show) {
+        if (show) {
+            BlurState.show()
+            blurProgress.snapTo(0f)
+            blurProgress.animateTo(
+                targetValue = 1f,
+                animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.85f, stiffness = 300f)
+            )
+        } else {
+            blurProgress.snapTo(blurProgress.value)
+            blurProgress.animateTo(
+                targetValue = 0f,
+                animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.85f, stiffness = 300f)
+            )
+        }
+    }
+
+    androidx.compose.runtime.LaunchedEffect(dragProgress) {
+        if (dragProgress in 0f..1f) {
+            blurProgress.snapTo(dragProgress)
+        }
+    }
+
+
     WindowBottomSheet(
         show = show,
         title = "发现新版本",
         enableWindowDim = false,
         allowDismiss = true,
         enableNestedScroll = true,
-        onDismissRequest = { BlurState.hide(); onDismiss() }
+        onDismissRequest = onDismiss,
+        onDismissFinished = { BlurState.hide() }
     ) {
+        // 追踪 Sheet 拖拽位置
+        if (show) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(0.dp)
+                    .onGloballyPositioned { coords ->
+                        if (show) {
+                            val boxTop = coords.localToWindow(androidx.compose.ui.geometry.Offset(0f, 0f)).y
+                            dragProgress = (1f - (boxTop / sheetHeightPx).coerceIn(0f, 1f))
+                        }
+                    }
+            )
+        }
+
         val dismiss = LocalDismissState.current
         val indicationColor = MiuixTheme.colorScheme.onBackground
         val miuixIndication = remember(indicationColor) { MiuixIndication(color = indicationColor) }
@@ -169,15 +222,64 @@ private fun MiuixUpdateProgressSheet(
     onResume: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    if (show) BlurState.show()
+    val density2 = androidx.compose.ui.platform.LocalDensity.current
+    val configuration2 = androidx.compose.ui.platform.LocalConfiguration.current
+    val sheetHeightPx2 = remember { with(density2) { configuration2.screenHeightDp.dp.toPx() } }
+    val blurProgress2 = remember { androidx.compose.animation.core.Animatable(0f) }
+    var dragProgress2 by remember { androidx.compose.runtime.mutableFloatStateOf(-1f) }
+
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        androidx.compose.runtime.snapshotFlow { blurProgress2.value }
+            .collect { BlurState.updateProgress(it) }
+    }
+
+    androidx.compose.runtime.LaunchedEffect(show) {
+        if (show) {
+            BlurState.show()
+            blurProgress2.snapTo(0f)
+            blurProgress2.animateTo(
+                targetValue = 1f,
+                animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.85f, stiffness = 300f)
+            )
+        } else {
+            blurProgress2.snapTo(blurProgress2.value)
+            blurProgress2.animateTo(
+                targetValue = 0f,
+                animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.85f, stiffness = 300f)
+            )
+        }
+    }
+
+    androidx.compose.runtime.LaunchedEffect(dragProgress2) {
+        if (dragProgress2 in 0f..1f) {
+            blurProgress2.snapTo(dragProgress2)
+        }
+    }
+
+
     WindowBottomSheet(
         show = show,
         title = "正在更新",
         enableWindowDim = false,
         allowDismiss = false,
         enableNestedScroll = false,
-        onDismissRequest = { BlurState.hide(); onDismiss() }
+        onDismissRequest = onDismiss,
+        onDismissFinished = { BlurState.hide() }
     ) {
+        if (show) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(0.dp)
+                    .onGloballyPositioned { coords ->
+                        if (show) {
+                            val boxTop = coords.localToWindow(androidx.compose.ui.geometry.Offset(0f, 0f)).y
+                            dragProgress2 = (1f - (boxTop / sheetHeightPx2).coerceIn(0f, 1f))
+                        }
+                    }
+            )
+        }
+
         val dismiss = LocalDismissState.current
         val indicationColor = MiuixTheme.colorScheme.onBackground
         val miuixIndication = remember(indicationColor) { MiuixIndication(color = indicationColor) }

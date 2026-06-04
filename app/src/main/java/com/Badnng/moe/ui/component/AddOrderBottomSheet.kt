@@ -17,6 +17,14 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.QrCodeScanner
@@ -58,18 +66,69 @@ fun AddOrderBottomSheet(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
 
-    if (show) BlurState.show()
+    // 模糊进度：Animatable 驱动开/关动画，拖拽时 snapTo 覆盖
+    val density = LocalDensity.current
+    val configuration = LocalConfiguration.current
+    val sheetHeightPx = remember { with(density) { configuration.screenHeightDp.dp.toPx() } }
+    val blurProgress = remember { androidx.compose.animation.core.Animatable(0f) }
+    var dragProgress by remember { mutableFloatStateOf(-1f) }
+
+    // 持续同步 blurProgress → BlurState（覆盖 animateTo 中间帧）
+    LaunchedEffect(Unit) {
+        androidx.compose.runtime.snapshotFlow { blurProgress.value }
+            .collect { BlurState.updateProgress(it) }
+    }
+
+    LaunchedEffect(show) {
+        if (show) {
+            BlurState.show()
+            blurProgress.snapTo(0f)
+            blurProgress.animateTo(
+                targetValue = 1f,
+                animationSpec = spring(dampingRatio = 0.85f, stiffness = 300f)
+            )
+        } else {
+            blurProgress.snapTo(blurProgress.value)
+            blurProgress.animateTo(
+                targetValue = 0f,
+                animationSpec = spring(dampingRatio = 0.85f, stiffness = 300f)
+            )
+            // BlurState.hide() 由 onDismissFinished 调用
+        }
+    }
+
+    // 拖拽时 snapTo 覆盖
+    LaunchedEffect(dragProgress) {
+        if (dragProgress in 0f..1f) {
+            blurProgress.snapTo(dragProgress)
+        }
+    }
+
+
     WindowBottomSheet(
         show = show,
         title = "添加记录",
         enableWindowDim = false,
         allowDismiss = true,
         enableNestedScroll = true,
-        onDismissRequest = {
-            BlurState.hide()
-            onDismiss()
-        }
+        onDismissRequest = onDismiss,
+        onDismissFinished = { BlurState.hide() }
     ) {
+        // 追踪 Sheet 拖拽位置，更新 dragProgress 由 LaunchedEffect 驱动
+        if (show) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(0.dp)
+                    .onGloballyPositioned { coords ->
+                        if (show) {
+                            val boxTop = coords.localToWindow(androidx.compose.ui.geometry.Offset(0f, 0f)).y
+                            dragProgress = (1f - (boxTop / sheetHeightPx).coerceIn(0f, 1f))
+                        }
+                    }
+            )
+        }
+
         val dismiss = LocalDismissState.current
 
         var text by remember { mutableStateOf("") }
