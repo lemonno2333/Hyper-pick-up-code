@@ -553,12 +553,9 @@ private fun MiuixAboutPage(
 
         }
 
-        // BottomSheet 模糊背景
-        val animatedBlurAlpha by androidx.compose.animation.core.animateFloatAsState(
-            targetValue = if (com.Badnng.moe.ui.component.BlurState.isAnySheetVisible.value) 1f else 0f,
-            animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.9f, stiffness = 300f)
-        )
-        if (animatedBlurAlpha > 0f && backdrop != null) {
+        // BottomSheet 模糊背景（实时跟随 Sheet 拖拽进度）
+        val animatedBlurAlpha = com.Badnng.moe.ui.component.BlurState.progress.floatValue
+        if (animatedBlurAlpha > 0.01f && backdrop != null) {
             val blurPrefs = remember { context.getSharedPreferences("settings", Context.MODE_PRIVATE) }
             var blurThemeMode by remember { mutableStateOf(blurPrefs.getString("theme_mode", "system") ?: "system") }
             DisposableEffect(blurPrefs) {
