@@ -97,8 +97,11 @@ class MainActivity : ComponentActivity() {
             PaddleOcrHelper.getInstance(applicationContext).initAsync()
         }
 
-        // 启动保活服务
-        com.Badnng.moe.service.KeepAliveService.start(this)
+        // 启动保活服务（仅在开启时）
+        val keepAlivePrefs = getSharedPreferences("settings", Context.MODE_PRIVATE)
+        if (keepAlivePrefs.getBoolean("persistent_notification_enabled", false)) {
+            com.Badnng.moe.service.KeepAliveService.start(this)
+        }
 
         projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         intentToProcess = intent

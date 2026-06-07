@@ -817,13 +817,12 @@ fun MiuixRulesScreen(
         )
     }
 
-    // 添加/编辑在线源 WindowBottomSheet
+    // 添加/编辑在线源 WindowBottomSheet（始终在树中，由内部 showSheet 控制生命周期）
     if (showAddSourceDialog || editingSource != null) {
         OnlineSourceWindowSheet(
             source = editingSource,
             performHaptic = performHaptic,
             onDismiss = {
-                performHaptic()
                 showAddSourceDialog = false
                 editingSource = null
             },
@@ -1071,15 +1070,72 @@ private fun OnlineSourceWindowSheet(
     var autoUpdate by remember(source?.id) { mutableStateOf(source?.enabled ?: false) }
     var updateIntervalMinutes by remember(source?.id) { mutableStateOf("${source?.updateIntervalMinutes ?: 1440}") }
 
-    com.Badnng.moe.ui.component.BlurState.show()
+    var showSheet by remember { mutableStateOf(true) }
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val sheetHeightPx = remember { with(density) { configuration.screenHeightDp.dp.toPx() } }
+    val blurProgress = remember { androidx.compose.animation.core.Animatable(0f) }
+    var dragProgress by remember { androidx.compose.runtime.mutableFloatStateOf(-1f) }
+
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        androidx.compose.runtime.snapshotFlow { blurProgress.value }
+            .collect { com.Badnng.moe.ui.component.BlurState.updateProgress(it) }
+    }
+
+    // 打开动画
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        com.Badnng.moe.ui.component.BlurState.show()
+        blurProgress.snapTo(0f)
+        blurProgress.animateTo(
+            targetValue = 1f,
+            animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.85f, stiffness = 300f)
+        )
+    }
+
+    // 拖拽时 snapTo 覆盖
+    androidx.compose.runtime.LaunchedEffect(dragProgress) {
+        if (dragProgress in 0f..1f) {
+            blurProgress.snapTo(dragProgress)
+        }
+    }
+
+    // 关闭时淡出模糊
+    androidx.compose.runtime.LaunchedEffect(showSheet) {
+        if (!showSheet) {
+            blurProgress.snapTo(blurProgress.value)
+            blurProgress.animateTo(
+                targetValue = 0f,
+                animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.85f, stiffness = 300f)
+            )
+        }
+    }
+
     top.yukonga.miuix.kmp.window.WindowBottomSheet(
-        show = true,
+        show = showSheet,
         title = if (source != null) "修改配置" else "添加规则源",
         enableWindowDim = false,
         allowDismiss = true,
         enableNestedScroll = true,
-        onDismissRequest = { com.Badnng.moe.ui.component.BlurState.hide(); onDismiss() }
+        onDismissRequest = {
+            showSheet = false
+        },
+        onDismissFinished = {
+            com.Badnng.moe.ui.component.BlurState.hide()
+            onDismiss()
+        }
     ) {
+        if (showSheet) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(0.dp)
+                    .onGloballyPositioned { coords ->
+                        val boxTop = coords.localToWindow(androidx.compose.ui.geometry.Offset(0f, 0f)).y
+                        dragProgress = (1f - (boxTop / sheetHeightPx).coerceIn(0f, 1f))
+                    }
+            )
+        }
+
         val dismiss = top.yukonga.miuix.kmp.theme.LocalDismissState.current
         val indicationColor = MiuixTheme.colorScheme.onBackground
         val miuixIndication = remember(indicationColor) { top.yukonga.miuix.kmp.utils.MiuixIndication(color = indicationColor) }
@@ -1108,7 +1164,7 @@ private fun OnlineSourceWindowSheet(
                 )
 
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Button(
@@ -1144,6 +1200,7 @@ private fun OnlineSourceWindowSheet(
                         Text("保存")
                     }
                 }
+                Spacer(modifier = Modifier.height(32.dp))
             }
         }
     }

@@ -91,6 +91,9 @@ fun OrderDetailScreen(
                     InfoItem("来源应用", order.sourceApp ?: "无数据")
                     InfoItem("来源包名", order.sourcePackage ?: "暂无记录")
                     InfoItem("识别类型", order.orderType)
+                    if (!order.brandName.isNullOrEmpty()) {
+                        InfoItem("品牌", order.brandName)
+                    }
                 }
             }
 

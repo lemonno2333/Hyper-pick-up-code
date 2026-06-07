@@ -72,8 +72,12 @@ class KeepAliveService : Service() {
             context.stopService(Intent(context, KeepAliveService::class.java))
         }
 
-        // 保留旧接口兼容 MainActivity 调用，前台通知始终显示无需切换
-        fun showNotification(context: Context) {}
-        fun hideNotification(context: Context) {}
+        fun showNotification(context: Context) {
+            start(context)
+        }
+
+        fun hideNotification(context: Context) {
+            stop(context)
+        }
     }
 }

@@ -69,9 +69,12 @@ import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
@@ -88,6 +91,9 @@ import com.Badnng.moe.viewmodel.OrderViewModel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import androidx.window.layout.FoldingFeature
+import androidx.window.layout.WindowInfoTracker
+import androidx.compose.runtime.collectAsState
 import top.yukonga.miuix.kmp.basic.FloatingNavigationBar
 import top.yukonga.miuix.kmp.basic.FloatingNavigationBarItem
 import top.yukonga.miuix.kmp.basic.Icon
@@ -250,14 +256,31 @@ private fun MiuixMainContent(
     val haptic = LocalHapticFeedback.current
     val viewModel: OrderViewModel = viewModel()
 
-    var themeMode by remember { mutableStateOf(prefs.getString("theme_mode", "system") ?: "system") }
+    // 大屏自适应底栏
+    var largeScreenNavAdaptiveEnabled by remember {
+        mutableStateOf(prefs.getBoolean("large_screen_nav_adaptive_enabled", true))
+    }
+    var currentNavAlignment by remember { mutableStateOf(navAlignment) }
     DisposableEffect(prefs) {
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { p, key ->
-            if (key == "theme_mode") themeMode = p.getString(key, "system") ?: "system"
+            if (key == "nav_alignment") currentNavAlignment = p.getString(key, "center") ?: "center"
         }
         prefs.registerOnSharedPreferenceChangeListener(listener)
         onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }
+
+    var themeMode by remember { mutableStateOf(prefs.getString("theme_mode", "system") ?: "system") }
+    DisposableEffect(prefs) {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { p, key ->
+            when (key) {
+                "theme_mode" -> themeMode = p.getString(key, "system") ?: "system"
+                "large_screen_nav_adaptive_enabled" -> largeScreenNavAdaptiveEnabled = p.getBoolean(key, true)
+            }
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+
     val isInDarkTheme = when (themeMode) {
         "light" -> false
         "dark" -> true
@@ -269,6 +292,10 @@ private fun MiuixMainContent(
     var isEditMode by remember { mutableStateOf(false) }
     var showBottomSheet by remember { mutableStateOf(false) }
 
+    val configuration = LocalConfiguration.current
+    val isLargeScreen = configuration.screenWidthDp >= 700
+    val navAdaptiveActive = isLargeScreen && largeScreenNavAdaptiveEnabled && useFloatingNavBar
+
     // 规则页长按菜单状态
     var rulesMenuPosition by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
     var rulesMenuShow by remember { mutableStateOf(false) }
@@ -277,6 +304,12 @@ private fun MiuixMainContent(
     var rulesMenuDelete: (() -> Unit)? by remember { mutableStateOf(null) }
 
     val activity = context as? android.app.Activity
+
+    // 折叠屏检测
+    val windowInfoTracker = remember(context) { WindowInfoTracker.getOrCreate(context) }
+    val layoutInfo by windowInfoTracker.windowLayoutInfo(context).collectAsState(initial = null)
+    val foldingFeature = layoutInfo?.displayFeatures?.filterIsInstance<FoldingFeature>()?.firstOrNull()
+    val isFolded = foldingFeature?.state == FoldingFeature.State.HALF_OPENED
 
     // 主页面按返回键时，从最近任务移除卡片
     androidx.activity.compose.BackHandler(enabled = !isEditMode && !isManaging) {
@@ -289,7 +322,7 @@ private fun MiuixMainContent(
         }
     }
 
-    val targetBottomBarBias = when (navAlignment) {
+    val targetBottomBarBias = when (currentNavAlignment) {
         "left" -> -1f
         "right" -> 1f
         else -> 0f
@@ -299,182 +332,220 @@ private fun MiuixMainContent(
         animationSpec = spring(dampingRatio = 0.92f, stiffness = 260f),
         label = "bottomBarBias"
     )
+    val targetFloatingBarOffsetX = when (currentNavAlignment) {
+        "left" -> (-5).dp
+        "right" -> 5.dp
+        else -> 0.dp
+    }
+    val animatedFloatingBarOffsetX by androidx.compose.animation.core.animateDpAsState(
+        targetValue = targetFloatingBarOffsetX,
+        animationSpec = spring(dampingRatio = 0.92f, stiffness = 260f),
+        label = "floatingBarOffsetX"
+    )
 
     // 模糊效果
     val backdrop = com.Badnng.moe.ui.miuix.rememberMiuixBackdrop()
     val blurEnabled = backdrop != null
 
     Box(modifier = modifier.fillMaxSize()) {
-    // 将 backdrop 应用到 Scaffold，这样底栏才能采样到背后的内容
-    val scaffoldModifier = if (backdrop != null) {
-        Modifier.fillMaxSize().layerBackdrop(backdrop)
-    } else {
-        Modifier.fillMaxSize()
-    }
-
-    Scaffold(
-        modifier = scaffoldModifier,
-    ) { innerPadding ->
-        HorizontalPager(
-            state = pagerState,
+        // Scaffold 内容层（layerBackdrop 只应用到内容，不包含底栏）
+        Scaffold(
             modifier = Modifier.fillMaxSize(),
-            beyondViewportPageCount = 1 // 预加载相邻页面，减少切换时重组
-        ) { page ->
-            androidx.compose.runtime.key(page) {
-                when (page) {
-                    0 -> MiuixCaptureScreen(
-                        padding = innerPadding,
-                        onScrollStateChange = { isScrollingDown = it },
-                        onEditModeChange = { isEditMode = it },
-                        onAddClick = { showBottomSheet = true },
-                        navAlignment = navAlignment,
-                        useFloatingNavBar = useFloatingNavBar,
-                        onNavigateToOrderDetail = onNavigateToOrderDetail,
-                        onNavigateToGroupDetail = onNavigateToGroupDetail
-                    )
-                    1 -> MiuixRulesScreen(
-                        padding = innerPadding,
-                        onShowMenu = { position, rename, delete, export ->
-                            rulesMenuPosition = position
-                            rulesMenuRename = rename
-                            rulesMenuDelete = delete
-                            rulesMenuExport = export
-                            rulesMenuShow = true
+        ) { innerPadding ->
+            Box(modifier = (if (backdrop != null) Modifier.fillMaxSize().layerBackdrop(backdrop) else Modifier.fillMaxSize())
+                .pointerInput(navAdaptiveActive, pagerState.currentPage) {
+                    if (!navAdaptiveActive) return@pointerInput
+                    var downX = 0f
+                    var downY = 0f
+                    var downZone = "center"
+                    var gestureDirection = 0
+                    var directionLocked = false
+                    val directionThresholdPx = 14f
+                    val axisRatio = 1.2f
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                            if (pagerState.currentPage != 0) {
+                                gestureDirection = 0; directionLocked = false; continue
+                            }
+                            val change = event.changes.firstOrNull() ?: continue
+                            val x = change.position.x
+                            val y = change.position.y
+                            val width = size.width.toFloat().coerceAtLeast(1f)
+                            val zoneAtX = when {
+                                x < width / 3f -> "left"
+                                x > width * 2f / 3f -> "right"
+                                else -> "center"
+                            }
+                            if (change.pressed && !change.previousPressed) {
+                                gestureDirection = 0; directionLocked = false
+                                downX = x; downY = y; downZone = zoneAtX
+                            }
+                            if (change.pressed && !directionLocked) {
+                                val dx = x - downX; val dy = y - downY
+                                val absDx = kotlin.math.abs(dx); val absDy = kotlin.math.abs(dy)
+                                if (absDx >= directionThresholdPx || absDy >= directionThresholdPx) {
+                                    val verticalDominant = absDy > absDx * axisRatio
+                                    val horizontalDominant = absDx > absDy * axisRatio
+                                    if (!verticalDominant && !horizontalDominant) continue
+                                    gestureDirection = if (verticalDominant) 1 else -1
+                                    directionLocked = true
+                                    if (gestureDirection == 1 && navAdaptiveActive) {
+                                        if (currentNavAlignment != downZone) {
+                                            currentNavAlignment = downZone
+                                            prefs.edit().putString("nav_alignment", downZone).apply()
+                                        }
+                                    }
+                                }
+                            }
+                            if (!change.pressed && change.previousPressed || event.changes.none { it.pressed }) {
+                                gestureDirection = 0; directionLocked = false
+                            }
                         }
+                    }
+                }
+            ) {
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.fillMaxSize(),
+                    beyondViewportPageCount = 1 // 预加载相邻页面，减少切换时重组
+                ) { page ->
+                    androidx.compose.runtime.key(page) {
+                        when (page) {
+                            0 -> MiuixCaptureScreen(
+                                padding = innerPadding,
+                                onScrollStateChange = { isScrollingDown = it },
+                                onEditModeChange = { isEditMode = it },
+                                onAddClick = { showBottomSheet = true },
+                                navAlignment = navAlignment,
+                                useFloatingNavBar = useFloatingNavBar,
+                                onNavigateToOrderDetail = onNavigateToOrderDetail,
+                                onNavigateToGroupDetail = onNavigateToGroupDetail
+                            )
+                            1 -> MiuixRulesScreen(
+                                padding = innerPadding,
+                                onShowMenu = { position, rename, delete, export ->
+                                    rulesMenuPosition = position
+                                    rulesMenuRename = rename
+                                    rulesMenuDelete = delete
+                                    rulesMenuExport = export
+                                    rulesMenuShow = true
+                                }
+                            )
+                            2 -> MiuixSettingsScreen(
+                                padding = innerPadding,
+                                onNavigateToSubPage = onNavigateToSettingsSubPage
+                            )
+                        }
+                    }
+                }
+            } // Box layerBackdrop
+        }
+
+        // 底栏：覆盖在 Scaffold 上方，支持模糊效果
+        // 标准底栏（非悬浮）
+        AnimatedVisibility(
+            visible = !isEditMode && !isManaging && !useFloatingNavBar,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.BottomCenter)
+        ) {
+            val barColor = if (blurEnabled) Color.Transparent else MiuixTheme.colorScheme.surface
+            Box(
+                modifier = if (blurEnabled && backdrop != null) {
+                    Modifier.fillMaxWidth().textureBlur(
+                        backdrop = backdrop,
+                        shape = RectangleShape,
+                        blurRadius = 25f,
+                        colors = BlurDefaults.blurColors(
+                            blendColors = listOf(
+                                BlendColorEntry(color = MiuixTheme.colorScheme.surface.copy(0.8f)),
+                            ),
+                        ),
                     )
-                    2 -> MiuixSettingsScreen(
-                        padding = innerPadding,
-                        onNavigateToSubPage = onNavigateToSettingsSubPage
+                } else {
+                    Modifier.fillMaxWidth()
+                }
+            ) {
+                NavigationBar(modifier = Modifier.fillMaxWidth(), color = barColor) {
+                    NavigationBarItem(
+                        selected = currentPage == 0,
+                        onClick = { performHaptic(); coroutineScope.launch { pagerState.animateScrollToPage(0) } },
+                        icon = Icons.Default.Home,
+                        label = "主页"
+                    )
+                    NavigationBarItem(
+                        selected = currentPage == 1,
+                        onClick = { performHaptic(); coroutineScope.launch { pagerState.animateScrollToPage(1) } },
+                        icon = MiuixIcons.Regular.Edit,
+                        label = "规则"
+                    )
+                    NavigationBarItem(
+                        selected = currentPage == 2,
+                        onClick = { performHaptic(); coroutineScope.launch { pagerState.animateScrollToPage(2) } },
+                        icon = MiuixIcons.Regular.Settings,
+                        label = "设置"
                     )
                 }
             }
         }
-    }
 
-    // 添加记录底部弹窗
-    val addOrderViewModel: OrderViewModel = viewModel()
-    com.Badnng.moe.ui.component.AddOrderBottomSheet(
-        show = showBottomSheet,
-        viewModel = addOrderViewModel,
-        onDismiss = { showBottomSheet = false }
-    )
-
-    // BottomSheet/菜单 全屏模糊背景（实时跟随 Sheet 拖拽进度）
-    val sheetProgress = com.Badnng.moe.ui.component.BlurState.progress.floatValue
-    val menuBlurAlpha by androidx.compose.animation.core.animateFloatAsState(
-        targetValue = if (rulesMenuShow) 1f else 0f,
-        animationSpec = androidx.compose.animation.core.tween(durationMillis = 300),
-        label = "menuBlurAlpha"
-    )
-    val blurAlpha = maxOf(sheetProgress, menuBlurAlpha)
-    if (blurAlpha > 0.01f && backdrop != null) {
-        val isInDark = isInDarkTheme
-        val baseBrightness = if (isInDark) -0.3f else -0.5f
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.5f * blurAlpha))
-                .textureBlur(
+        // 悬浮底栏
+        AnimatedVisibility(
+            visible = !isEditMode && !isManaging && useFloatingNavBar && !isFolded,
+            enter = fadeIn(),
+            exit = fadeOut()
+        ) {
+            val floatingBarColor = if (blurEnabled) Color.Transparent else MiuixTheme.colorScheme.surfaceContainer
+            val isDark = isInDarkTheme
+            val floatingHighlight = remember(isDark) {
+                if (isDark) Highlight.GlassStrokeMiddleDark else Highlight.GlassStrokeMiddleLight
+            }
+            val floatingBarModifier = if (blurEnabled && backdrop != null) {
+                Modifier.textureBlur(
                     backdrop = backdrop,
-                    shape = RectangleShape,
-                    blurRadius = 56f * blurAlpha,
-                    colors = BlurDefaults.blurColors(
-                        brightness = baseBrightness * blurAlpha,
-                        contrast = 1f + 0.2f * blurAlpha,
-                        saturation = 1f + 0.08f * blurAlpha,
-                    ),
-                )
-                .graphicsLayer(alpha = blurAlpha)
-        )
-    }
-
-    // 底栏：覆盖在 Scaffold 上方，支持 Start/Center/End 位置
-    // 标准底栏（非悬浮）
-    AnimatedVisibility(
-        visible = !isEditMode && !isManaging && !useFloatingNavBar,
-        enter = fadeIn(),
-        exit = fadeOut(),
-        modifier = Modifier.align(Alignment.BottomCenter)
-    ) {
-        val barColor = if (blurEnabled) Color.Transparent else MiuixTheme.colorScheme.surface
-        Box(
-            modifier = if (blurEnabled && backdrop != null) {
-                Modifier.fillMaxWidth().textureBlur(
-                    backdrop = backdrop,
-                    shape = RectangleShape,
+                    shape = RoundedCornerShape(FloatingToolbarDefaults.CornerRadius),
                     blurRadius = 25f,
                     colors = BlurDefaults.blurColors(
                         blendColors = listOf(
-                            BlendColorEntry(color = MiuixTheme.colorScheme.surface.copy(0.8f)),
+                            BlendColorEntry(color = MiuixTheme.colorScheme.surfaceContainer.copy(0.6f)),
                         ),
                     ),
+                    highlight = floatingHighlight,
                 )
             } else {
-                Modifier.fillMaxWidth()
+                Modifier
             }
-        ) {
-            NavigationBar(modifier = Modifier.fillMaxWidth(), color = barColor) {
-                NavigationBarItem(
-                    selected = currentPage == 0,
-                    onClick = { performHaptic(); coroutineScope.launch { pagerState.animateScrollToPage(0) } },
-                    icon = Icons.Default.Home,
-                    label = "主页"
-                )
-                NavigationBarItem(
-                    selected = currentPage == 1,
-                    onClick = { performHaptic(); coroutineScope.launch { pagerState.animateScrollToPage(1) } },
-                    icon = MiuixIcons.Regular.Edit,
-                    label = "规则"
-                )
-                NavigationBarItem(
-                    selected = currentPage == 2,
-                    onClick = { performHaptic(); coroutineScope.launch { pagerState.animateScrollToPage(2) } },
-                    icon = MiuixIcons.Regular.Settings,
-                    label = "设置"
-                )
+            val animatedHorizontalAlignment = remember(animatedBottomBarBias) {
+                object : Alignment.Horizontal {
+                    override fun align(size: Int, space: Int, layoutDirection: LayoutDirection): Int {
+                        val start = 0
+                        val center = (space - size) / 2
+                        val end = space - size
+                        return when {
+                            animatedBottomBarBias < 0f -> (center + (center - start) * animatedBottomBarBias).toInt()
+                            animatedBottomBarBias > 0f -> (center + (end - center) * animatedBottomBarBias).toInt()
+                            else -> center
+                        }
+                    }
+                }
             }
-        }
-    }
-
-    // 悬浮底栏
-    AnimatedVisibility(
-        visible = !isEditMode && !isManaging && useFloatingNavBar,
-        enter = fadeIn(),
-        exit = fadeOut()
-    ) {
-        val barOffsetX = when (navAlignment) {
-            "left" -> (-80).dp
-            "right" -> 80.dp
-            else -> 0.dp
-        }
-        val floatingBarColor = if (blurEnabled) Color.Transparent else MiuixTheme.colorScheme.surfaceContainer
-        val isDark = isInDarkTheme
-        val floatingHighlight = remember(isDark) {
-            if (isDark) Highlight.GlassStrokeMiddleDark else Highlight.GlassStrokeMiddleLight
-        }
-        val floatingBarModifier = if (blurEnabled && backdrop != null) {
-            Modifier.textureBlur(
-                backdrop = backdrop,
-                shape = RoundedCornerShape(FloatingToolbarDefaults.CornerRadius),
-                blurRadius = 25f,
-                colors = BlurDefaults.blurColors(
-                    blendColors = listOf(
-                        BlendColorEntry(color = MiuixTheme.colorScheme.surfaceContainer.copy(0.6f)),
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))
+                    .padding(horizontal = 24.dp)
+                    .offset(
+                        x = animatedFloatingBarOffsetX,
+                        y = 10.dp
                     ),
-                ),
-                highlight = floatingHighlight,
-            )
-        } else {
-            Modifier
-        }
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.BottomCenter
-        ) {
-            Box(modifier = Modifier.offset(x = barOffsetX)) {
+                contentAlignment = Alignment.BottomCenter
+            ) {
                 FloatingNavigationBar(
                     modifier = floatingBarModifier,
-                    color = floatingBarColor
+                    color = floatingBarColor,
+                    horizontalAlignment = animatedHorizontalAlignment,
+                    horizontalOutSidePadding = 24.dp
                 ) {
                     FloatingNavigationBarItem(
                         selected = currentPage == 0,
@@ -497,117 +568,153 @@ private fun MiuixMainContent(
                 }
             }
         }
-    }
 
-    // 规则页长按菜单（模糊由上方共享处理）
-    val animatedMenuAlpha by androidx.compose.animation.core.animateFloatAsState(
-        targetValue = if (rulesMenuShow) 1f else 0f,
-        animationSpec = androidx.compose.animation.core.tween(durationMillis = 300)
-    )
-    val animatedMenuCardAlpha by androidx.compose.animation.core.animateFloatAsState(
-        targetValue = if (rulesMenuShow) 1f else 0f,
-        animationSpec = androidx.compose.animation.core.tween(durationMillis = 250, delayMillis = 50)
-    )
-    val animatedMenuCardScale by androidx.compose.animation.core.animateFloatAsState(
-        targetValue = if (rulesMenuShow) 1f else 0.9f,
-        animationSpec = androidx.compose.animation.core.tween(durationMillis = 250, delayMillis = 50)
-    )
-    if (animatedMenuAlpha > 0f) {
-        val density = LocalDensity.current
-        Box(modifier = Modifier.fillMaxSize()) {
-            // 点击遮罩关闭菜单
+        // 添加记录底部弹窗
+        val addOrderViewModel: OrderViewModel = viewModel()
+        com.Badnng.moe.ui.component.AddOrderBottomSheet(
+            show = showBottomSheet,
+            viewModel = addOrderViewModel,
+            onDismiss = { showBottomSheet = false }
+        )
+
+        // BottomSheet/菜单 全屏模糊背景（实时跟随 Sheet 拖拽进度）
+        val sheetProgress = com.Badnng.moe.ui.component.BlurState.progress.floatValue
+        val menuBlurAlpha by androidx.compose.animation.core.animateFloatAsState(
+            targetValue = if (rulesMenuShow) 1f else 0f,
+            animationSpec = androidx.compose.animation.core.tween(durationMillis = 300),
+            label = "menuBlurAlpha"
+        )
+        val blurAlpha = maxOf(sheetProgress, menuBlurAlpha)
+        if (blurAlpha > 0.01f && backdrop != null) {
+            val isInDark = isInDarkTheme
+            val baseBrightness = if (isInDark) -0.3f else -0.5f
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) { rulesMenuShow = false }
+                    .background(Color.Black.copy(alpha = 0.5f * blurAlpha))
+                    .textureBlur(
+                        backdrop = backdrop,
+                        shape = RectangleShape,
+                        blurRadius = 56f * blurAlpha,
+                        colors = BlurDefaults.blurColors(
+                            brightness = baseBrightness * blurAlpha,
+                            contrast = 1f + 0.2f * blurAlpha,
+                            saturation = 1f + 0.08f * blurAlpha,
+                        ),
+                    )
+                    .graphicsLayer(alpha = blurAlpha)
             )
-            val configuration = LocalConfiguration.current
-            val screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() }
-            val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
-            val cardMaxHeightPx = with(density) { 160.dp.toPx() }
+        }
 
-            var cardWidthMeasured by remember { mutableIntStateOf(0) }
-            val cardXDp = with(density) {
-                rulesMenuPosition.x.coerceIn(0f, screenWidthPx - cardWidthMeasured).toDp()
-            }
-            val cardYDp = with(density) {
-                val rawY = rulesMenuPosition.y
-                if (rawY + cardMaxHeightPx > screenHeightPx) {
-                    (rulesMenuPosition.y - cardMaxHeightPx).coerceAtLeast(0f).toDp()
-                } else {
-                    rawY.toDp()
-                }
-            }
-            top.yukonga.miuix.kmp.basic.Card(
-                modifier = Modifier
-                    .offset(x = cardXDp, y = cardYDp)
-                    .onGloballyPositioned { cardWidthMeasured = it.size.width }
-                    .widthIn(max = 280.dp)
-                    .graphicsLayer {
-                        alpha = animatedMenuCardAlpha
-                        scaleX = animatedMenuCardScale
-                        scaleY = animatedMenuCardScale
-                    }
-                    .border(
-                        width = 1.dp,
-                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary.copy(alpha = 0.3f),
-                        shape = RoundedCornerShape(16.dp)
-                    ),
-                colors = top.yukonga.miuix.kmp.basic.CardDefaults.defaultColors(
-                    MiuixTheme.colorScheme.surface.copy(alpha = 0.95f)
+        // 规则页长按菜单（模糊由上方共享处理）
+        val animatedMenuAlpha by androidx.compose.animation.core.animateFloatAsState(
+            targetValue = if (rulesMenuShow) 1f else 0f,
+            animationSpec = androidx.compose.animation.core.tween(durationMillis = 300)
+        )
+        val animatedMenuCardAlpha by androidx.compose.animation.core.animateFloatAsState(
+            targetValue = if (rulesMenuShow) 1f else 0f,
+            animationSpec = androidx.compose.animation.core.tween(durationMillis = 250, delayMillis = 50)
+        )
+        val animatedMenuCardScale by androidx.compose.animation.core.animateFloatAsState(
+            targetValue = if (rulesMenuShow) 1f else 0.9f,
+            animationSpec = androidx.compose.animation.core.tween(durationMillis = 250, delayMillis = 50)
+        )
+        if (animatedMenuAlpha > 0f) {
+            val density = LocalDensity.current
+            Box(modifier = Modifier.fillMaxSize()) {
+                // 点击遮罩关闭菜单
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) { rulesMenuShow = false }
                 )
-            ) {
-                val menuItems = buildList {
-                    if (rulesMenuRename != null) add("rename")
-                    if (rulesMenuExport != null) add("export")
-                    if (rulesMenuDelete != null) add("delete")
+                val configuration = LocalConfiguration.current
+                val screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() }
+                val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
+                val cardMaxHeightPx = with(density) { 160.dp.toPx() }
+
+                var cardWidthMeasured by remember { mutableIntStateOf(0) }
+                val cardXDp = with(density) {
+                    rulesMenuPosition.x.coerceIn(0f, screenWidthPx - cardWidthMeasured).toDp()
                 }
-                Column {
-                    menuItems.forEachIndexed { index, item ->
-                        val isFirst = index == 0
-                        val isLast = index == menuItems.lastIndex
-                        val shape = when {
-                            isFirst && isLast -> RoundedCornerShape(16.dp)
-                            isFirst -> RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
-                            isLast -> RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp)
-                            else -> RoundedCornerShape(0.dp)
+                val cardYDp = with(density) {
+                    val rawY = rulesMenuPosition.y
+                    if (rawY + cardMaxHeightPx > screenHeightPx) {
+                        (rulesMenuPosition.y - cardMaxHeightPx).coerceAtLeast(0f).toDp()
+                    } else {
+                        rawY.toDp()
+                    }
+                }
+                top.yukonga.miuix.kmp.basic.Card(
+                    modifier = Modifier
+                        .offset(x = cardXDp, y = cardYDp)
+                        .onGloballyPositioned { cardWidthMeasured = it.size.width }
+                        .widthIn(max = 280.dp)
+                        .graphicsLayer {
+                            alpha = animatedMenuCardAlpha
+                            scaleX = animatedMenuCardScale
+                            scaleY = animatedMenuCardScale
                         }
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(shape)
-                                .clickable {
-                                    rulesMenuShow = false
-                                    when (item) {
-                                        "rename" -> rulesMenuRename?.invoke()
-                                        "export" -> rulesMenuExport?.invoke()
-                                        "delete" -> rulesMenuDelete?.invoke()
-                                    }
-                                }
-                        ) {
-                            val (icon, label, color) = when (item) {
-                                "rename" -> Triple(Icons.Default.Edit, "重命名", MiuixTheme.colorScheme.onSurface)
-                                "export" -> Triple(Icons.Default.FileUpload, "导出规则", MiuixTheme.colorScheme.onSurface)
-                                "delete" -> Triple(Icons.Default.Delete, "删除", MiuixTheme.colorScheme.error)
-                                else -> Triple(Icons.Default.Edit, "", Color.Unspecified)
+                        .border(
+                            width = 1.dp,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary.copy(alpha = 0.3f),
+                            shape = RoundedCornerShape(16.dp)
+                        ),
+                    colors = top.yukonga.miuix.kmp.basic.CardDefaults.defaultColors(
+                        MiuixTheme.colorScheme.surface.copy(alpha = 0.95f)
+                    )
+                ) {
+                    val menuItems = buildList {
+                        if (rulesMenuRename != null) add("rename")
+                        if (rulesMenuExport != null) add("export")
+                        if (rulesMenuDelete != null) add("delete")
+                    }
+                    Column {
+                        menuItems.forEachIndexed { index, item ->
+                            val isFirst = index == 0
+                            val isLast = index == menuItems.lastIndex
+                            val shape = when {
+                                isFirst && isLast -> RoundedCornerShape(16.dp)
+                                isFirst -> RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+                                isLast -> RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp)
+                                else -> RoundedCornerShape(0.dp)
                             }
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(shape)
+                                    .clickable {
+                                        rulesMenuShow = false
+                                        when (item) {
+                                            "rename" -> rulesMenuRename?.invoke()
+                                            "export" -> rulesMenuExport?.invoke()
+                                            "delete" -> rulesMenuDelete?.invoke()
+                                        }
+                                    }
                             ) {
-                                top.yukonga.miuix.kmp.basic.Icon(icon, null, tint = color)
-                                Spacer(Modifier.width(12.dp))
-                                top.yukonga.miuix.kmp.basic.Text(label, color = color)
+                                val (icon, label, color) = when (item) {
+                                    "rename" -> Triple(Icons.Default.Edit, "重命名", MiuixTheme.colorScheme.onSurface)
+                                    "export" -> Triple(Icons.Default.FileUpload, "导出规则", MiuixTheme.colorScheme.onSurface)
+                                    "delete" -> Triple(Icons.Default.Delete, "删除", MiuixTheme.colorScheme.error)
+                                    else -> Triple(Icons.Default.Edit, "", Color.Unspecified)
+                                }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    top.yukonga.miuix.kmp.basic.Icon(icon, null, tint = color)
+                                    Spacer(Modifier.width(12.dp))
+                                    top.yukonga.miuix.kmp.basic.Text(label, color = color)
+                                }
                             }
                         }
                     }
                 }
             }
         }
-    }
     } // Box
 }
 

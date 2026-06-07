@@ -720,6 +720,7 @@ fun MiuixCaptureScreen(
                     Icon(
                         imageVector = Icons.Default.Add,
                         contentDescription = "添加",
+                        tint = Color.White
                     )
                 }
                 IconButton(onClick = { performHaptic(); openTaobaoIdentityEntry(context) }) {
@@ -760,6 +761,7 @@ fun MiuixCaptureScreen(
                         Icon(
                             imageVector = Icons.Default.Add,
                             contentDescription = "添加",
+                            tint = Color.White
                         )
                     }
                     IconButton(onClick = { performHaptic(); openTaobaoIdentityEntry(context) }) {
