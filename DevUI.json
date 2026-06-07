@@ -1,7 +1,7 @@
 {
-  "versionCode": 2026060522,
-  "versionName": "26.6.5.C02-DevUI",
-  "releaseNotes": "您正在使用 澎湃记 的UI测试版本，可能会遇到不稳定（特别是），功能无法使用，闪退，数据丢失等情况，请谨慎升级\n\n26.6.5.C01-DevUI 版本更新如下：\n\n优化 Bottomsheet 的显示效果\n优化 部分场景可见度\n\n修复 若干已知问题\n\n（终于写日志了是么？？？？）",
-  "downloadUrl": "https://github.com/badnng/Hyper-pick-up-code/releases/download/v26.6.5.C02-DevUI/app-release.apk",
-  "md5": "6a75d96b616ec1b902f0faa55986f80f"
+  "versionCode": 2026060821,
+  "versionName": "26.6.8.C01-DevUI",
+  "releaseNotes": "您正在使用 澎湃记 的UI测试版本，可能会遇到不稳定（特别是UI），功能无法使用，闪退，数据丢失等情况，请谨慎升级\n\n26.6.8.C01-DevUI 版本更新如下：\n\n优化 底栏的相关效果\n优化 底栏在大屏设备上的优化效果\n\n适配 底栏自适应\n适配 识别详情\n\n修复 若干已知问题",
+  "downloadUrl": "https://github.com/badnng/Hyper-pick-up-code/releases/download/v26.6.8.C01-DevUI/app-release.apk",
+  "md5": "8092c64d67337a862c4933e24903eb22"
 }
