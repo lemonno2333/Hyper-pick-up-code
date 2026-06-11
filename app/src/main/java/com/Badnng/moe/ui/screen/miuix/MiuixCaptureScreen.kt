@@ -728,6 +728,7 @@ fun MiuixCaptureScreen(
                         Icon(
                             imageVector = Icons.Default.QrCode,
                             contentDescription = "淘宝身份码",
+                            tint = Color.White
                         )
                         Box(
                             modifier = Modifier
@@ -742,6 +743,7 @@ fun MiuixCaptureScreen(
                         Icon(
                             imageVector = Icons.Default.QrCode,
                             contentDescription = "拼多多身份码",
+                            tint = Color.White
                         )
                         Box(
                             modifier = Modifier
@@ -769,6 +771,7 @@ fun MiuixCaptureScreen(
                             Icon(
                                 imageVector = Icons.Default.QrCode,
                                 contentDescription = "淘宝身份码",
+                                tint = Color.White
                             )
                             Box(
                                 modifier = Modifier
@@ -783,6 +786,7 @@ fun MiuixCaptureScreen(
                             Icon(
                                 imageVector = Icons.Default.QrCode,
                                 contentDescription = "拼多多身份码",
+                                tint = Color.White
                             )
                             Box(
                                 modifier = Modifier

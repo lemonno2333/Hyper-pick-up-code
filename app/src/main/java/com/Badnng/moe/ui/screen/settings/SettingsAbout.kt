@@ -110,13 +110,12 @@ fun AboutSettingsContent(performHaptic: () -> Unit, topPadding: androidx.compose
             if (info != null) {
                 val localVersion = UpdateHelper.getCurrentVersionCode(context)
                 if (info.versionCode > localVersion) {
-                    if (UpdateHelper.isDownloading) {
-                        updateInfo = info
+                    updateInfo = info
+                    if (UpdateHelper.isDownloading && UpdateHelper.currentDownloadingVersion?.versionCode == info.versionCode) {
                         showProgressDialog = true
                     } else if (UpdateHelper.downloadedFile != null && UpdateHelper.downloadedFile!!.exists()) {
                         UpdateHelper.installUpdate(context, UpdateHelper.downloadedFile!!)
                     } else {
-                        updateInfo = info
                         showUpdateDialog = true
                     }
                 } else {

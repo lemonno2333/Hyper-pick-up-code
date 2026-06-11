@@ -67,7 +67,7 @@ import com.kyant.backdrop.effects.vibrancy
 import com.kyant.backdrop.effects.lens
 import top.yukonga.miuix.kmp.blur.BlendColorEntry
 import top.yukonga.miuix.kmp.blur.BlurColors
-import top.yukonga.miuix.kmp.blur.isRenderEffectSupported
+import top.yukonga.miuix.kmp.shader.isRenderEffectSupported
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop as rememberMiuixBackdrop
 import top.yukonga.miuix.kmp.blur.layerBackdrop as miuixLayerBackdrop
 import top.yukonga.miuix.kmp.blur.textureBlur

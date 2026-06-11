@@ -963,12 +963,12 @@ private fun RuleSourceRow(
                     text = name,
                     style = MiuixTheme.textStyles.body1,
                     fontWeight = FontWeight.Medium,
-                    color = MiuixTheme.colorScheme.onSurface
+                    color = if (isActive) MiuixTheme.colorScheme.onPrimaryContainer else MiuixTheme.colorScheme.onSurface
                 )
                 Text(
                     text = subtitle,
                     style = MiuixTheme.textStyles.body2,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    color = if (isActive) MiuixTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f) else MiuixTheme.colorScheme.onSurfaceVariantSummary,
                     maxLines = 1
                 )
             }
