@@ -27,12 +27,12 @@ jobs:
           distribution: 'temurin'
 
       - name: Cache Gradle dependencies
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-cache
+          key: Linux-gradle-cache
 
       - name: Decode Keystore
         env:
@@ -53,6 +53,32 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
         run: ./gradlew assembleRelease --no-daemon --stacktrace --info -Porg.gradle.user.home=$HOME/.gradle
+
+      - name: Clear all caches
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "清理所有已有缓存..."
+          CACHE_IDS=$(gh api repos/${{ github.repository }}/actions/caches --paginate --jq '.actions_caches[].id' 2>/dev/null || echo "")
+          if [ -n "$CACHE_IDS" ]; then
+            echo "$CACHE_IDS" | while read id; do
+              echo "删除缓存 ID: $id"
+              gh api -X DELETE repos/${{ github.repository }}/actions/caches/$id || true
+            done
+            echo "所有缓存已清理"
+          else
+            echo "没有需要清理的缓存"
+          fi
+
+      - name: Save Gradle cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: Linux-gradle-cache
 
       - name: Attest build provenance
         if: startsWith(github.ref, 'refs/tags/')
