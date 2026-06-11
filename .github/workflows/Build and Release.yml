@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - 'v*'
+    branches:
+      - master
 
 permissions:
   contents: write
@@ -26,7 +28,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Cache Gradle dependencies
+      - name: Restore Gradle cache
         uses: actions/cache/restore@v4
         with:
           path: |
@@ -35,6 +37,7 @@ jobs:
           key: Linux-gradle-cache
 
       - name: Decode Keystore
+        if: startsWith(github.ref, 'refs/tags/')
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: echo "$KEYSTORE_BASE64" | base64 -d > release.jks
@@ -47,6 +50,7 @@ jobs:
         continue-on-error: true
 
       - name: Build Release APK
+        if: startsWith(github.ref, 'refs/tags/')
         env:
           KEY_STORE_PATH: release.jks
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
@@ -54,8 +58,12 @@ jobs:
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
         run: ./gradlew assembleRelease --no-daemon --stacktrace --info -Porg.gradle.user.home=$HOME/.gradle
 
+      - name: Build Debug APK (master)
+        if: "!startsWith(github.ref, 'refs/tags/')"
+        run: ./gradlew assembleDebug --no-daemon -Porg.gradle.user.home=$HOME/.gradle
+
       - name: Clear all caches
-        if: always()
+        if: github.ref == 'refs/heads/master'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -72,13 +80,15 @@ jobs:
           fi
 
       - name: Save Gradle cache
-        if: always()
+        if: github.ref == 'refs/heads/master'
         uses: actions/cache/save@v4
         with:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
           key: Linux-gradle-cache
+
+      # ─── 以下仅 tag 推送时执行 ───
 
       - name: Attest build provenance
         if: startsWith(github.ref, 'refs/tags/')
@@ -142,7 +152,6 @@ jobs:
           python3 -c "
           import re, json, os, hashlib
 
-          # 计算 APK MD5
           apk_path = 'app/build/outputs/apk/release/app-release.apk'
           if os.path.exists(apk_path):
               with open(apk_path, 'rb') as f:
@@ -202,22 +211,18 @@ jobs:
             FILES="Stable.json Dev.json"
           fi
 
-          # 保存 JSON 文件到临时目录
           mkdir -p /tmp/json_files
           for f in $FILES; do
             cp $f /tmp/json_files/
           done
 
-          # 切换到 master 分支
           git checkout -f master
 
-          # 用临时目录的文件覆盖 master 分支
           for f in $FILES; do
             cp /tmp/json_files/$f $f
             git add $f
           done
 
-          # 提交
           echo "=== 暂存区文件 ==="
           git diff --cached --stat
 
