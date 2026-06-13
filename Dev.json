@@ -1,7 +1,7 @@
 {
-  "versionCode": 2026061201,
-  "versionName": "26.6.12.C01",
-  "releaseNotes": "欢迎使用 澎湃记 的正式版本，如您在测试频道上收到此消息，可以无缝更新到最新正式版进行使用\n正式版和测试版的内容和更新基本无异，但部分情况下测试版的功能在正式版可能会出现移除的情况，敬请谅解\n\nUI大变，如遇到MD3E与Miuix的组件突然喝醉酒一样/UI错误，请提issue\n识别功能可能还是会出现错误（底层26.5.20.C03-Dev）\n\n再次感谢Miuix for Compose（@YuKongA）的大力支持和各位群内交流的帮助！！\nMiuix for Compose 是一个基于 Compose Multiplatform 的类HyperOS的多平台UI库，能够在多平台（Desktop/iOS/MacOS/Android/WebJS）进行UI部署！\n\n26.6.12.C01 版本更新如下：\n\n添加 UI切换功能\n添加 常规底栏/悬浮底栏（Miuix）\n添加 bottomsheet背景模糊（Miuix）\n\n更新 关于页面UI（Miuix）\n更新 下载相关UI（Miuix）\n更新 偏好设置相关UI（Miuix）\n更新 权限与保活相关UI（Miuix）\n更新 截图方式相关UI（Miuix）\n\n修复 若干 UI Bug",
-  "downloadUrl": "https://github.com/badnng/Hyper-pick-up-code/releases/download/v26.6.12.C01/app-release.apk",
-  "md5": "41a0adebca1d7d50caa260d1cbad38bc"
+  "versionCode": 2026061301,
+  "versionName": "26.6.13.C01",
+  "releaseNotes": "欢迎使用 澎湃记 的正式版本，如您在测试频道上收到此消息，可以无缝更新到最新正式版进行使用\n正式版和测试版的内容和更新基本无异，但部分情况下测试版的功能在正式版可能会出现移除的情况，敬请谅解\n\nUI大变，如遇到MD3E与Miuix的组件突然喝醉酒一样/UI错误，请提issue\n\n26.6.12.C01 版本更新如下：\n\n修复 已取页面多选可以完成的问题\n修复 部分UI已知问题\n修复 部分识别问题\n\n优化 瑞幸咖啡的识别逻辑\n优化 保活通知的显示位置\n优化 部分UI的显示效果（Miuix）\n优化 规则json相关实现",
+  "downloadUrl": "https://github.com/badnng/Hyper-pick-up-code/releases/download/v26.6.13.C01/app-release.apk",
+  "md5": "4d7be8e34a1827ddd68d0b332e5608bb"
 }
