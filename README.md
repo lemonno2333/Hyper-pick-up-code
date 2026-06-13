@@ -37,6 +37,89 @@
 
 ---
 
+## 🌳 项目结构
+
+```
+app/src/main/
+├── java/com/Badnng/moe/
+│   ├── HyperNoteApp.kt                    # Application 入口
+│   ├── activity/
+│   │   ├── MainActivity.kt                # 主 Activity
+│   │   ├── OrderQuickViewActivity.kt      # 通知点击快速查看
+│   │   ├── PermissionActivity.kt          # 权限/截图触发
+│   │   ├── ProcessTextActivity.kt         # 划词识别入口
+│   │   └── ShareReceiverActivity.kt       # 分享接收入口
+│   ├── data/
+│   │   ├── db/
+│   │   │   ├── OrderEntity.kt             # 订单实体
+│   │   │   ├── OrderGroup.kt              # 订单组实体
+│   │   │   ├── OrderDao.kt                # 订单 DAO
+│   │   │   ├── OrderGroupDao.kt           # 组 DAO
+│   │   │   └── OrderDatabase.kt           # Room 数据库
+│   │   └── repository/
+│   │       ├── OrderRepository.kt         # 订单仓库
+│   │       └── OrderGroupRepository.kt    # 组仓库
+│   ├── helper/
+│   │   ├── BrandIconResolver.kt           # 品牌图标解析
+│   │   ├── NotificationHelper.kt          # 通知构建
+│   │   ├── NotificationScheduler.kt       # 定时通知调度
+│   │   ├── ScreenshotHelper.kt            # 截图辅助
+│   │   ├── ShizukuScreenshotHelper.kt     # Shizuku 特权截图
+│   │   ├── SuperIslandHelper.kt           # 小米超级岛
+│   │   ├── UpdateHelper.kt                # 应用更新
+│   │   └── BackupHelper.kt                # 备份恢复
+│   ├── ocr/
+│   │   ├── PaddleOcrHelper.kt             # PaddleOCR ncnn 封装
+│   │   └── TextRecognitionHelper.kt       # 核心识别逻辑
+│   ├── receiver/
+│   │   ├── SmsRecognitionReceiver.kt      # 短信广播接收
+│   │   └── ScheduledNotificationReceiver.kt
+│   ├── rules/
+│   │   ├── RecognitionRuleEngine.kt       # 规则引擎核心
+│   │   ├── RuleModels.kt                  # 规则数据模型
+│   │   ├── RuleRepository.kt              # 规则仓库
+│   │   └── RuleOnlineUpdater.kt           # 在线规则更新
+│   ├── service/
+│   │   ├── KeepAliveService.kt            # 前台保活服务
+│   │   ├── ScreenCaptureService.kt        # 屏幕截图服务
+│   │   ├── SmsRecognitionService.kt       # 短信识别服务
+│   │   ├── CaptureTileService.kt          # 快捷设置磁贴
+│   │   ├── NotificationListenerRecognitionService.kt
+│   │   └── VolumeShortcutAccessibilityService.kt
+│   ├── ui/
+│   │   ├── AppUi.kt                       # UI 兼容层接口
+│   │   ├── Md3eAppUi.kt                   # MD3E 实现
+│   │   ├── MiuixAppUi.kt                  # Miuix 实现
+│   │   ├── component/
+│   │   │   ├── SettingsComponents.kt      # 设置组件
+│   │   │   └── UpdateDialog.kt            # 更新弹窗
+│   │   ├── screen/
+│   │   │   ├── HomeScreen.kt              # 主页（Pager 容器）
+│   │   │   ├── CaptureScreen.kt           # 识别记录页
+│   │   │   ├── RulesScreen.kt             # 规则管理页
+│   │   │   ├── GroupDetailScreen.kt       # 组详情页
+│   │   │   ├── OrderDetailScreen.kt       # 订单详情页
+│   │   │   └── settings/                  # 设置子页面
+│   │   │       ├── SettingsScreen.kt      # 设置主页
+│   │   │       ├── SettingsPreference.kt  # 偏好设置
+│   │   │       ├── SettingsPermission.kt  # 权限管理
+│   │   │       └── ...
+│   │   ├── miuix/                         # Miuix UI 实现
+│   │   │   ├── MiuixHomeScreen.kt
+│   │   │   ├── MiuixCaptureScreen.kt
+│   │   │   └── ...
+│   │   └── theme/
+│   │       ├── Theme.kt                   # 主题定义
+│   │       ├── ColorGenerator.kt          # 种子色→色调盘生成
+│   │       └── Color.kt                   # 预设色定义
+│   └── viewmodel/
+│       └── OrderViewModel.kt              # ViewModel
+├── assets/
+│   └── default_rules.json                 # 内置识别规则
+└── res/
+    └── ...
+```
+
 ## ✨ 核心特性
 
 ### 🔍 智能识别

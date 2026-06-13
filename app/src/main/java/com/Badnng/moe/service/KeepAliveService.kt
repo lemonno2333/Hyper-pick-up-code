@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
+import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 import com.Badnng.moe.R
 import com.Badnng.moe.activity.MainActivity
@@ -50,13 +51,17 @@ class KeepAliveService : Service() {
             Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
+        val customView = RemoteViews(packageName, R.layout.notification_keep_alive).apply {
+            setTextViewText(R.id.notification_title, "澎湃记正在后台运行")
+            setTextViewText(R.id.notification_text, "保持短信读取、磁贴识别等功能可用")
+        }
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("澎湃记正在后台运行")
-            .setContentText("保持短信读取、磁贴识别等功能可用")
             .setSmallIcon(R.mipmap.ic_launcher)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setContentIntent(contentIntent)
+            .setStyle(NotificationCompat.DecoratedCustomViewStyle())
+            .setCustomContentView(customView)
             .build()
     }
 

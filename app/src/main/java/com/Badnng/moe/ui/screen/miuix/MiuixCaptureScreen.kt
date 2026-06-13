@@ -338,6 +338,10 @@ fun MiuixCaptureScreen(
                                     performHaptic()
                                     viewModel.markGroupAsCompleted(group.id)
                                 },
+                                onDeleteGroup = {
+                                    performHaptic()
+                                    viewModel.deleteGroup(group)
+                                },
                                 isEditMode = isEditMode,
                                 modifier = Modifier.weight(1f)
                             )
@@ -617,8 +621,7 @@ fun MiuixCaptureScreen(
                     onClick = { showDeleteConfirm = false },
                     modifier = Modifier.weight(1f)
                 )
-                TextButton(
-                    text = "删除",
+                Button(
                     onClick = {
                         performHaptic()
                         selectedIds.forEach { id ->
@@ -634,8 +637,10 @@ fun MiuixCaptureScreen(
                         showDeleteConfirm = false
                     },
                     modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.textButtonColorsPrimary()
-                )
+                    colors = ButtonDefaults.buttonColors()
+                ) {
+                    Text("删除", color = MiuixTheme.colorScheme.error)
+                }
             }
         }
     }
@@ -655,18 +660,20 @@ fun MiuixCaptureScreen(
                 modifier = Modifier.padding(8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                IconButton(onClick = {
-                    performHaptic()
-                    selectedIds.forEach { viewModel.markAsCompleted(it) }
-                    selectedGroupIds.forEach { viewModel.markGroupAsCompleted(it) }
-                    selectedIds = emptySet()
-                    selectedGroupIds = emptySet()
-                }) {
-                    Icon(
-                        imageVector = Icons.Default.Done,
-                        contentDescription = "完成",
-                        tint = Color.White,
-                    )
+                if (selectedTab != 1) {
+                    IconButton(onClick = {
+                        performHaptic()
+                        selectedIds.forEach { viewModel.markAsCompleted(it) }
+                        selectedGroupIds.forEach { viewModel.markGroupAsCompleted(it) }
+                        selectedIds = emptySet()
+                        selectedGroupIds = emptySet()
+                    }) {
+                        Icon(
+                            imageVector = Icons.Default.Done,
+                            contentDescription = "完成",
+                            tint = Color.White,
+                        )
+                    }
                 }
                 IconButton(onClick = {
                     performHaptic()
@@ -977,101 +984,95 @@ private fun MiuixOrderGroupCard(
 
             // 操作按钮（非编辑模式下显示）
             if (!isEditMode) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    if (!isCompleted) {
-                        Button(
-                            onClick = onMarkAllCompleted,
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColorsPrimary()
-                        ) {
-                            Text(
-                                text = "全部完成",
-                                modifier = Modifier.fillMaxWidth(),
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                            )
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        if (!isCompleted) {
+                            Button(
+                                onClick = onMarkAllCompleted,
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColorsPrimary()
+                            ) {
+                                Text(
+                                    text = "全部完成",
+                                    modifier = Modifier.fillMaxWidth(),
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                )
+                            }
                         }
-                    }
-                    if (isCompleted) {
                         Button(
                             onClick = onDeleteGroup,
                             modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(
-                                color = MiuixTheme.colorScheme.errorContainer,
-                                contentColor = MiuixTheme.colorScheme.onErrorContainer
-                            )
+                            colors = ButtonDefaults.buttonColors()
                         ) {
                             Text(
                                 text = "删除组",
+                                color = MiuixTheme.colorScheme.error,
                                 modifier = Modifier.fillMaxWidth(),
                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
                             )
                         }
-                    } else {
-                        TextButton(
-                            text = "删除组",
-                            onClick = onDeleteGroup,
-                        )
                     }
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-                // 再次推送实时通知 + 定时按钮
-                val notificationHelper = com.Badnng.moe.helper.NotificationHelper(context)
-                Row(
-                    modifier = Modifier.fillMaxWidth().height(44.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Button(
-                        onClick = {
-                            performHaptic()
-                            notificationHelper.showGroupNotification(group, groupOrders)
-                        },
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(
-                            color = MiuixTheme.colorScheme.secondaryContainer,
-                            contentColor = MiuixTheme.colorScheme.onSecondaryContainer
-                        )
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.NotificationAdd,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "再次推送实时通知",
-                            fontSize = 14.sp,
-                            maxLines = 1
-                        )
-                    }
-                    Box(
-                        modifier = Modifier
-                            .height(44.dp)
-                            .width(44.dp)
-                            .background(
-                                if (isScheduled) MiuixTheme.colorScheme.errorContainer else MiuixTheme.colorScheme.secondaryContainer,
-                                androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
-                            )
-                            .clickable {
-                                performHaptic()
-                                if (isScheduled) {
-                                    com.Badnng.moe.helper.NotificationScheduler.cancel(context, groupRequestCode)
-                                    isScheduled = false
-                                    android.widget.Toast.makeText(context, "已取消定时", android.widget.Toast.LENGTH_SHORT).show()
-                                } else {
-                                    showTimePicker = true
-                                }
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Alarm,
-                            contentDescription = "定时",
-                            modifier = Modifier.size(20.dp),
-                            tint = if (isScheduled) MiuixTheme.colorScheme.onErrorContainer else MiuixTheme.colorScheme.onSecondaryContainer
-                        )
+
+                    // 再次推送实时通知 + 定时按钮
+                    if (!isCompleted) {
+                        val notificationHelper = com.Badnng.moe.helper.NotificationHelper(context)
+                        Row(
+                            modifier = Modifier.fillMaxWidth().height(44.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(
+                                onClick = {
+                                    performHaptic()
+                                    notificationHelper.showGroupNotification(group, groupOrders)
+                                },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColorsPrimary()
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.NotificationAdd,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                    tint = Color.White
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "再次推送实时通知",
+                                    color = Color.White,
+                                    fontSize = 14.sp,
+                                    maxLines = 1
+                                )
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .height(44.dp)
+                                    .width(44.dp)
+                                    .background(
+                                        if (isScheduled) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.primary,
+                                        androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
+                                    )
+                                    .clickable {
+                                        performHaptic()
+                                        if (isScheduled) {
+                                            com.Badnng.moe.helper.NotificationScheduler.cancel(context, groupRequestCode)
+                                            isScheduled = false
+                                            android.widget.Toast.makeText(context, "已取消定时", android.widget.Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            showTimePicker = true
+                                        }
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Alarm,
+                                    contentDescription = "定时",
+                                    modifier = Modifier.size(20.dp),
+                                    tint = Color.White
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -1243,13 +1244,11 @@ private fun MiuixOrderCard(
                     Button(
                         onClick = onDelete,
                         modifier = Modifier.weight(1f).height(44.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            color = MiuixTheme.colorScheme.errorContainer,
-                            contentColor = MiuixTheme.colorScheme.onErrorContainer
-                        )
+                        colors = ButtonDefaults.buttonColors()
                     ) {
                         Text(
                             text = "删除",
+                            color = MiuixTheme.colorScheme.error,
                             fontSize = 14.sp,
                             modifier = Modifier.fillMaxWidth(),
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -1266,19 +1265,18 @@ private fun MiuixOrderCard(
                     Button(
                         onClick = { notificationHelper.showPromotedLiveUpdate(order) },
                         modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(
-                            color = MiuixTheme.colorScheme.secondaryContainer,
-                            contentColor = MiuixTheme.colorScheme.onSecondaryContainer
-                        )
+                        colors = ButtonDefaults.buttonColorsPrimary()
                     ) {
                         Icon(
                             imageVector = Icons.Default.NotificationAdd,
                             contentDescription = null,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(18.dp),
+                            tint = Color.White
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = "再次推送实时通知",
+                            color = Color.White,
                             fontSize = 14.sp,
                             maxLines = 1
                         )
@@ -1288,7 +1286,7 @@ private fun MiuixOrderCard(
                             .height(44.dp)
                             .width(44.dp)
                             .background(
-                                if (isScheduled) MiuixTheme.colorScheme.errorContainer else MiuixTheme.colorScheme.secondaryContainer,
+                                if (isScheduled) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.primary,
                                 androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
                             )
                             .clickable {
@@ -1307,7 +1305,7 @@ private fun MiuixOrderCard(
                             imageVector = Icons.Default.Alarm,
                             contentDescription = "定时",
                             modifier = Modifier.size(20.dp),
-                            tint = if (isScheduled) MiuixTheme.colorScheme.onErrorContainer else MiuixTheme.colorScheme.onSecondaryContainer
+                            tint = Color.White
                         )
                     }
                 }

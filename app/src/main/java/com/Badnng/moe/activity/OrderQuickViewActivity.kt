@@ -8,6 +8,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -287,13 +289,13 @@ private fun LandscapeContent(
 ) {
     Column(modifier = Modifier.padding(20.dp)) {
         Row(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(24.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // 左边：取餐信息
             Column(
-                modifier = Modifier.weight(1f).fillMaxHeight(),
+                modifier = Modifier.weight(1f),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
@@ -309,14 +311,14 @@ private fun LandscapeContent(
 
             // 分隔线
             if (isMiuix) {
-                VerticalDivider(modifier = Modifier.fillMaxHeight(), color = MiuixTheme.colorScheme.outline.copy(alpha = 0.5f))
+                VerticalDivider(modifier = Modifier.height(200.dp), color = MiuixTheme.colorScheme.outline.copy(alpha = 0.5f))
             } else {
-                VerticalDivider(modifier = Modifier.fillMaxHeight(), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                VerticalDivider(modifier = Modifier.height(200.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
             }
 
             // 右边：二维码或截图
             Column(
-                modifier = Modifier.weight(1f).fillMaxHeight(),
+                modifier = Modifier.weight(1f),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
@@ -326,11 +328,11 @@ private fun LandscapeContent(
         }
 
         if (isExpress) {
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             IdentityButtons(isMiuix)
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
         ActionButtons(markCompleted, onDismiss, isMiuix)
     }
 }
@@ -354,34 +356,39 @@ private fun PortraitContent(
         modifier = Modifier.padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        BrandInfo(order, brandIcon, onSurfaceColor, isMiuix)
-        Spacer(modifier = Modifier.height(16.dp))
-        CodeLabel(label, secondaryTextColor, isMiuix)
-        Spacer(modifier = Modifier.height(4.dp))
-        TakeoutCode(order, primaryColor, 28.sp, isMiuix)
-        PickupLocation(order, primaryColor, secondaryTextColor, isMiuix)
-        Spacer(modifier = Modifier.height(8.dp))
-        HintText(hintTextColor, isMiuix)
+        Column(
+            modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            BrandInfo(order, brandIcon, onSurfaceColor, isMiuix)
+            Spacer(modifier = Modifier.height(16.dp))
+            CodeLabel(label, secondaryTextColor, isMiuix)
+            Spacer(modifier = Modifier.height(4.dp))
+            TakeoutCode(order, primaryColor, 28.sp, isMiuix)
+            PickupLocation(order, primaryColor, secondaryTextColor, isMiuix)
+            Spacer(modifier = Modifier.height(8.dp))
+            HintText(hintTextColor, isMiuix)
 
-        // 分隔线
-        if (isMiuix) {
-            top.yukonga.miuix.kmp.basic.HorizontalDivider(
-                modifier = Modifier.padding(vertical = 12.dp),
-                color = MiuixTheme.colorScheme.outline.copy(alpha = 0.5f)
-            )
-        } else {
-            HorizontalDivider(
-                modifier = Modifier.padding(vertical = 12.dp),
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-            )
-        }
+            // 分隔线
+            if (isMiuix) {
+                top.yukonga.miuix.kmp.basic.HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 12.dp),
+                    color = MiuixTheme.colorScheme.outline.copy(alpha = 0.5f)
+                )
+            } else {
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 12.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                )
+            }
 
-        QrSectionTitle(order, primaryColor, isMiuix)
-        QrContent(order, qrBackgroundColor, isMiuix)
+            QrSectionTitle(order, primaryColor, isMiuix)
+            QrContent(order, qrBackgroundColor, isMiuix)
 
-        if (isExpress) {
-            Spacer(modifier = Modifier.height(12.dp))
-            IdentityButtons(isMiuix)
+            if (isExpress) {
+                Spacer(modifier = Modifier.height(12.dp))
+                IdentityButtons(isMiuix)
+            }
         }
 
         Spacer(modifier = Modifier.height(12.dp))

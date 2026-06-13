@@ -100,7 +100,7 @@ class TextRecognitionHelper(private val context: Context) {
         val homePageElementCount = homePageKeywords.count { mergedText.contains(it) }
         // 快递页面不做首页判断（快递页不存在首页误判问题，强行跳过会漏掉取件码）
         // 同时提高阈值到3，避免"我的包裹"这类文字误触发
-        val isLikelyHomePage = homePageElementCount >= 3
+        val isLikelyHomePage = homePageElementCount >= engine.rules.homepageDetection.threshold
 
         var qrCode = barcodeResult?.firstOrNull()?.rawValue
         if (qrCode != null && (qrCode.contains("http://", ignoreCase = true) || qrCode.contains("https://", ignoreCase = true))) {
@@ -111,6 +111,19 @@ class TextRecognitionHelper(private val context: Context) {
         var pickupLocation: String? = null
 
         var detectedBrand: String? = sourcePkg?.let { engine.getBrandByPackage(it) }
+
+        // QR 码模式匹配品牌（如瑞幸的 Base64 短码）
+        if (detectedBrand == null && qrCode != null) {
+            Log.d("RecognitionMonitor", "QR品牌匹配: qrCode=$qrCode, 品牌数=${engine.getAllBrands().size}")
+            for (brandDef in engine.getAllBrands()) {
+                Log.d("RecognitionMonitor", "  品牌=${brandDef.name}, qrPattern=${brandDef.qrPattern}")
+                if (brandDef.qrPattern != null && Regex(brandDef.qrPattern).matches(qrCode)) {
+                    detectedBrand = brandDef.name
+                    Log.d("RecognitionMonitor", "  QR品牌命中: ${brandDef.name}")
+                    break
+                }
+            }
+        }
 
         // 检测到啡快口令，品牌直接设为星巴克
         val starbucksPattern = engine.rules.codeExtraction.food.starbucksPattern
@@ -257,13 +270,20 @@ class TextRecognitionHelper(private val context: Context) {
         return candidates.firstOrNull()?.first
     }
 
-    private fun isInvalidExpressCode(value: String): Boolean {
+    private fun isInvalidExpressCode(value: String, context: String = ""): Boolean {
         val vc = engine.rules.validation.expressCode
         if (vc.rejectAllLetters && value.all { it.isLetter() }) return true
         if (Regex(vc.rejectPhonePattern).matches(value)) return true
         if (value.startsWith(vc.rejectYearPrefix) && value.length == vc.rejectYearLength) return true
         if (Regex(vc.rejectDatePattern).matches(value)) return true
         if (value.length > vc.maxLength) return true
+        // 时间相关拒绝
+        if (context.isNotEmpty()) {
+            if (vc.rejectTimeContexts.any { context.contains(it) }) {
+                if (value.all { it.isDigit() || it == ':' || it == '：' }) return true
+            }
+            if (vc.rejectTimeKeywords.any { context.contains(it) }) return true
+        }
         // 三段式取件码第三段必须符合配置的长度和模式
         val tsConfig = vc.threeSegment
         if (tsConfig != null && Regex(tsConfig.pattern).matches(value)) {
@@ -455,7 +475,7 @@ class TextRecognitionHelper(private val context: Context) {
                 val text = applyCorrections(block.text).replace(" ", "").replace("\n", "")
                 if (standalonePattern.matches(text) && !isInvalidFoodCode(text, text, detectedBrand)) {
                     val dist = Math.abs((box.top + box.bottom) / 2 - (targetKeywordRect!!.top + targetKeywordRect!!.bottom) / 2)
-                    if (dist < 400) text to dist else null
+                    if (dist < foodConfig.nearbyBlockDistance) text to dist else null
                 } else null
             }.sortedBy { it.second }
             candidates.firstOrNull()?.first?.let { return it to "standalone_code" }
@@ -470,9 +490,9 @@ class TextRecognitionHelper(private val context: Context) {
             val text = applyCorrections(block.text).replace(" ", "").replace("\n", "")
             fallbackPattern.findAll(text).mapNotNull { match ->
                 val value = match.groupValues.getOrElse(1) { match.value }
-                if (value.length == 3 && value.all { it.isDigit() }) {
-                    val aroundStart = (match.range.first - 6).coerceAtLeast(0)
-                    val aroundEnd = (match.range.last + 6).coerceAtMost(text.lastIndex)
+                if (value.length == foodConfig.shortCodeLength && value.all { it.isDigit() }) {
+                    val aroundStart = (match.range.first - foodConfig.keywordContextRange).coerceAtLeast(0)
+                    val aroundEnd = (match.range.last + foodConfig.keywordContextRange).coerceAtMost(text.lastIndex)
                     val around = text.substring(aroundStart, aroundEnd + 1)
                     val nearKeyword = foodKeywords.any { around.contains(it) }
                     if (!nearKeyword) return@mapNotNull null
@@ -530,10 +550,11 @@ class TextRecognitionHelper(private val context: Context) {
             return false
         }
 
+        val locScoring = plConfig.scoring
         fun locationScore(location: String): Int {
             var score = location.length
             for (keyword in targetKeywords) {
-                if (location.contains(keyword)) score += 20
+                if (location.contains(keyword)) score += locScoring.targetKeywordBonus
             }
             return score
         }
@@ -544,21 +565,21 @@ class TextRecognitionHelper(private val context: Context) {
         val addressMatch = addressPattern.find(mergedText)
         if (addressMatch != null) {
             val loc = truncateLocation(addressMatch.groupValues[1])
-            if (!isGarbageMatch(loc)) candidates.add(loc to locationScore(loc) + 1000)
+            if (!isGarbageMatch(loc)) candidates.add(loc to locationScore(loc) + locScoring.addressBonus)
         }
         val addressFallback = Regex("地址[:：\\s]*([^,，。！!?；;.\\n]{4,60})")
         val fallbackMatch = addressFallback.find(mergedText)
         if (fallbackMatch != null) {
             val candidate = truncateLocation(fallbackMatch.groupValues[1])
-            if (candidate.length > 8 && !isGarbageMatch(candidate)) {
-                candidates.add(candidate to locationScore(candidate) + 500)
+            if (candidate.length > locScoring.addressFallbackMinLength && !isGarbageMatch(candidate)) {
+                candidates.add(candidate to locationScore(candidate) + locScoring.addressFallbackBonus)
             }
         }
 
         val locWithTargetPattern = Regex("(?:${startKeywords.joinToString("|")})([^,，。！!?;？\\s]{2,60}?(?:${targetKeywords.joinToString("|")}))")
         for (match in locWithTargetPattern.findAll(mergedText)) {
             val loc = truncateLocation(match.groupValues[1])
-            if (!isGarbageMatch(loc)) candidates.add(loc to locationScore(loc) + 100)
+            if (!isGarbageMatch(loc)) candidates.add(loc to locationScore(loc) + locScoring.locWithTargetBonus)
         }
 
         val locToVerbPattern = Regex(
@@ -575,6 +596,18 @@ class TextRecognitionHelper(private val context: Context) {
             if (targetKeywords.any { text.contains(it) }) {
                 val loc = truncateLocation(text)
                 if (!isGarbageMatch(loc)) candidates.add(loc to locationScore(loc))
+            }
+        }
+
+        // 优先提取短店名（超市/便利店等），避免返回长地址
+        val storeKeywords = plConfig.storeNameKeywords
+        val storeBonus = plConfig.storeNameBonus
+        val storeMaxLen = plConfig.storeNameMaxLen
+        val storePattern = Regex("[\\u4e00-\\u9fa5]{1,8}(?:${storeKeywords.joinToString("|")})")
+        for (match in storePattern.findAll(mergedText)) {
+            val storeName = match.value
+            if (storeName.length <= storeMaxLen && !isGarbageMatch(storeName)) {
+                candidates.add(storeName to locationScore(storeName) + storeBonus - storeName.length)
             }
         }
 
@@ -614,6 +647,14 @@ class TextRecognitionHelper(private val context: Context) {
         for (stop in stopKeywords) {
             val index = result.indexOf(stop)
             if (index != -1) result = result.substring(0, index)
+        }
+        // 从第一个地名前缀标记开始截取（去掉前面的杂字）
+        val prefixMarkers = engine.rules.pickupLocation.locationPrefixMarkers
+        if (prefixMarkers.isNotEmpty()) {
+            val firstMarkerIdx = result.indexOfAny(prefixMarkers)
+            if (firstMarkerIdx > 0) {
+                result = result.substring(firstMarkerIdx)
+            }
         }
         return result.replace(trailingPunctuation, "")
     }
@@ -857,11 +898,12 @@ class TextRecognitionHelper(private val context: Context) {
         val fallbackPattern = engine.getCompiledPattern("food_fallback") ?: return null to null
         val foodScoring = engine.rules.scoring.foodCode
         val brandScoring = foodScoring.brandOverrides[detectedBrand]
+        val foodConfig = engine.rules.codeExtraction.food
         val candidates = fallbackPattern.findAll(mergedText).mapNotNull { match ->
             val value = match.value
-            if (value.length == 3 && value.all { it.isDigit() }) {
-                val aroundStart = (match.range.first - 6).coerceAtLeast(0)
-                val aroundEnd = (match.range.last + 6).coerceAtMost(mergedText.lastIndex)
+            if (value.length == foodConfig.shortCodeLength && value.all { it.isDigit() }) {
+                val aroundStart = (match.range.first - foodConfig.keywordContextRange).coerceAtLeast(0)
+                val aroundEnd = (match.range.last + foodConfig.keywordContextRange).coerceAtMost(mergedText.lastIndex)
                 val around = mergedText.substring(aroundStart, aroundEnd + 1)
                 val nearKeyword = foodKeywords.any { around.contains(it) }
                 if (!nearKeyword) return@mapNotNull null
@@ -931,7 +973,10 @@ class TextRecognitionHelper(private val context: Context) {
         val orders = mutableListOf<RecognitionResult>()
 
         fun addOrderIfValid(code: String, range: IntRange) {
-            val invalid = isInvalidExpressCode(code)
+            val contextStart = maxOf(0, range.first - 20)
+            val contextEnd = minOf(mergedText.length, range.last + 20)
+            val nearbyContext = mergedText.substring(contextStart, contextEnd)
+            val invalid = isInvalidExpressCode(code, nearbyContext)
             val phoneTail = isLikelyPhoneTail(code, mergedText)
             Log.d("RecognitionMonitor", "[addOrder] code=$code, invalid=$invalid, phoneTail=$phoneTail")
             if (!invalid && !phoneTail) {
@@ -996,7 +1041,7 @@ class TextRecognitionHelper(private val context: Context) {
                 val beforeText = mergedText.substring(reverseSearchStart, kwIdx)
                     .trimEnd(':', '：', ' ')
                 for (pattern in enginePatterns) {
-                    if (pattern.priority > 3) continue // 跳过低优先级模式
+                    if (pattern.priority > engine.rules.recognitionParams.patternPrioritySkip) continue // 跳过低优先级模式
                     val compiled = engine.getCompiledPattern(pattern.id) ?: continue
                     val match = compiled.findAll(beforeText).lastOrNull() ?: continue
                     val code = match.groupValues.getOrElse(1) { match.value }
@@ -1023,15 +1068,16 @@ class TextRecognitionHelper(private val context: Context) {
                 val brandNames = listOf(brandDef.name) + brandDef.aliases
                 val matchedName = brandNames.firstOrNull { mergedText.contains(it) } ?: continue
                 val brandIndex = mergedText.indexOf(matchedName)
+                val brandWindow = engine.rules.recognitionParams.brandContextWindow
                 val nearbyText = mergedText.substring(
-                    maxOf(0, brandIndex - 50),
-                    minOf(mergedText.length, brandIndex + matchedName.length + 100)
+                    maxOf(0, brandIndex - brandWindow / 2),
+                    minOf(mergedText.length, brandIndex + matchedName.length + brandWindow)
                 )
                 for (pattern in enginePatterns) {
                     val compiled = engine.getCompiledPattern(pattern.id) ?: continue
                     val codeMatch = compiled.find(nearbyText) ?: continue
                     val code = codeMatch.groupValues.getOrElse(1) { codeMatch.value }
-                    if (!isInvalidExpressCode(code) && !isLikelyPhoneTail(code, mergedText)) {
+                    if (!isInvalidExpressCode(code, nearbyText) && !isLikelyPhoneTail(code, mergedText)) {
                         val pickupLocation = findPickupLocation(mergedText, textBlocks)
                         orders.add(RecognitionResult(
                             code = code, qr = null, type = "快递",
@@ -1051,7 +1097,9 @@ class TextRecognitionHelper(private val context: Context) {
             if (fallbackPattern != null) {
                 for (m in fallbackPattern.findAll(mergedText)) {
                     val code = m.groupValues.getOrElse(1) { m.value }
-                    if (isInvalidExpressCode(code)) continue
+                    val ctxStart = maxOf(0, m.range.first - 20)
+                    val ctxEnd = minOf(mergedText.length, m.range.last + 20)
+                    if (isInvalidExpressCode(code, mergedText.substring(ctxStart, ctxEnd))) continue
                     if (isLikelyPhoneTail(code, mergedText)) continue
                     val brand = findBrandForCode(code, mergedText, m.range)
                     orders.add(RecognitionResult(
@@ -1078,8 +1126,9 @@ class TextRecognitionHelper(private val context: Context) {
      */
     private fun findBrandForCode(code: String, text: String, codeRange: IntRange = 0..text.length): String? {
         val expressBrands = engine.getExpressBrands()
-        val startIndex = maxOf(0, codeRange.first - 200)
-        val endIndex = minOf(text.length, codeRange.last + 200)
+        val codeWindow = engine.rules.recognitionParams.codeContextWindow
+        val startIndex = maxOf(0, codeRange.first - codeWindow)
+        val endIndex = minOf(text.length, codeRange.last + codeWindow)
         val nearbyText = text.substring(startIndex, endIndex)
 
         // 优先匹配品牌名

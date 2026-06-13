@@ -806,7 +806,8 @@ fun MiuixRulesScreen(
                             showResetDialog = false
                             Toast.makeText(context, "已恢复默认规则", Toast.LENGTH_SHORT).show()
                         }
-                    }
+                    },
+                    colors = androidx.compose.material3.ButtonDefaults.textButtonColors(contentColor = MiuixTheme.colorScheme.error)
                 ) { Text("确定") }
             },
             dismissButton = {
@@ -1040,12 +1041,9 @@ private fun ActionButton(
         Button(
             onClick = onClick,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
-            colors = ButtonDefaults.buttonColors(
-                color = MiuixTheme.colorScheme.error,
-                contentColor = MiuixTheme.colorScheme.onError
-            )
+            colors = ButtonDefaults.buttonColors()
         ) {
-            Text(text)
+            Text(text, color = MiuixTheme.colorScheme.error)
         }
     } else {
         Button(

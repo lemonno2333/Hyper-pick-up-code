@@ -25,6 +25,7 @@
         ],
         "category": "饮品",
         "package_name": "com.lucky.luckyclient",
+        "qr_pattern": "^a.{7}AA.=$",
         "special_rules": {
           "require_qr_code": true
         }
@@ -40,7 +41,10 @@
       {
         "name": "蜜雪冰城",
         "category": "饮品",
-        "package_name": "com.mxbc.mxsa"
+        "package_name": "com.mxbc.mxsa",
+        "keywords": [
+          "雪王"
+        ]
       },
       {
         "name": "古茗",
@@ -406,7 +410,10 @@
         ],
         "trigger_brand": "星巴克",
         "description": "星巴克啡快口令（17.超常发挥）"
-      }
+      },
+      "nearby_block_distance": 400,
+      "keyword_context_range": 6,
+      "short_code_length": 3
     }
   },
   "category_detection": {
@@ -431,6 +438,7 @@
     }
   },
   "homepage_detection": {
+    "threshold": 3,
     "keywords": [
       "我的",
       "首页",
@@ -499,6 +507,8 @@
       "reject_year_prefix": "202",
       "reject_year_length": 4,
       "reject_date_pattern": "^(0?[1-9]|1[0-2])-(0?[1-9]|[12]\\d|3[01])$",
+      "reject_time_contexts": [":", "："],
+      "reject_time_keywords": ["时间", "日期", "时", "分", "秒", "KB/s", "kb/s"],
       "phone_tail": {
         "length": 4,
         "digits_only": true,
@@ -551,6 +561,11 @@
       ],
       "distraction_range": 2
     }
+  },
+  "recognition_params": {
+    "pattern_priority_skip": 3,
+    "brand_context_window": 100,
+    "code_context_window": 200
   },
   "scoring": {
     "brand_detection": {
@@ -609,7 +624,11 @@
       "智能柜",
       "门面",
       "邮政大厅",
-      "大厅"
+      "大厅",
+      "超市",
+      "便利店",
+      "商店",
+      "小卖部"
     ],
     "stop_keywords": [
       "领取",
@@ -633,6 +652,17 @@
       "代收点（",
       "\\d{10,}"
     ],
-    "proximity_threshold": 400
+    "proximity_threshold": 400,
+    "store_name_keywords": ["超市", "便利店", "商店", "小卖部", "驿站", "服务站"],
+    "store_name_bonus": 800,
+    "store_name_max_len": 12,
+    "location_prefix_markers": ["学院", "小区", "大厦", "花园", "广场", "商场", "市场", "医院", "学校", "大学", "中学", "小学", "幼儿园", "酒店", "宾馆", "饭店", "餐厅", "超市", "便利店", "驿站", "服务站"],
+    "scoring": {
+      "target_keyword_bonus": 20,
+      "address_bonus": 1000,
+      "address_fallback_bonus": 500,
+      "address_fallback_min_length": 8,
+      "loc_with_target_bonus": 100
+    }
   }
 }

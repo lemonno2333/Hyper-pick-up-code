@@ -153,6 +153,26 @@ data class RuleSystemConfig(
 
 // ─────────── Top Level ───────────
 
+data class RecognitionParams(
+    val patternPrioritySkip: Int = 3,
+    val brandContextWindow: Int = 100,
+    val codeContextWindow: Int = 200
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("pattern_priority_skip", patternPrioritySkip)
+        put("brand_context_window", brandContextWindow)
+        put("code_context_window", codeContextWindow)
+    }
+
+    companion object {
+        fun fromJson(json: JSONObject): RecognitionParams = RecognitionParams(
+            patternPrioritySkip = json.optInt("pattern_priority_skip", 3),
+            brandContextWindow = json.optInt("brand_context_window", 100),
+            codeContextWindow = json.optInt("code_context_window", 200)
+        )
+    }
+}
+
 data class RecognitionRules(
     val schemaVersion: Int = 1,
     val appVersion: String = "",
@@ -166,7 +186,8 @@ data class RecognitionRules(
     val textCleaning: TextCleaningConfig = TextCleaningConfig(),
     val validation: ValidationConfig = ValidationConfig(),
     val scoring: ScoringConfig = ScoringConfig(),
-    val pickupLocation: PickupLocationConfig = PickupLocationConfig()
+    val pickupLocation: PickupLocationConfig = PickupLocationConfig(),
+    val recognitionParams: RecognitionParams = RecognitionParams()
 ) {
     /** 原始 JSON 文本，用于导出时不丢失原始格式 */
     @Transient
@@ -198,6 +219,7 @@ data class RecognitionRules(
         put("validation", validation.toJson())
         put("scoring", scoring.toJson())
         put("pickup_location", pickupLocation.toJson())
+        put("recognition_params", recognitionParams.toJson())
     }
 
     companion object {
@@ -218,7 +240,8 @@ data class RecognitionRules(
                 textCleaning = json.optJSONObject("text_cleaning")?.let { TextCleaningConfig.fromJson(it) } ?: TextCleaningConfig(),
                 validation = json.optJSONObject("validation")?.let { ValidationConfig.fromJson(it) } ?: ValidationConfig(),
                 scoring = json.optJSONObject("scoring")?.let { ScoringConfig.fromJson(it) } ?: ScoringConfig(),
-                pickupLocation = json.optJSONObject("pickup_location")?.let { PickupLocationConfig.fromJson(it) } ?: PickupLocationConfig()
+                pickupLocation = json.optJSONObject("pickup_location")?.let { PickupLocationConfig.fromJson(it) } ?: PickupLocationConfig(),
+                recognitionParams = json.optJSONObject("recognition_params")?.let { RecognitionParams.fromJson(it) } ?: RecognitionParams()
             ).also { it.rawJson = rawJson }
         }
     }
@@ -252,6 +275,7 @@ data class BrandDefinition(
     val category: String = "餐食",
     val packageName: String? = null,
     val keywords: List<String> = emptyList(),
+    val qrPattern: String? = null,
     val scoringOverrides: Map<String, Int> = emptyMap(),
     val specialRules: Map<String, Boolean> = emptyMap(),
     val enabled: Boolean = true
@@ -262,6 +286,7 @@ data class BrandDefinition(
         put("category", category)
         packageName?.let { put("package_name", it) }
         if (keywords.isNotEmpty()) put("keywords", JSONArray(keywords))
+        qrPattern?.let { put("qr_pattern", it) }
         if (scoringOverrides.isNotEmpty()) {
             val obj = JSONObject()
             scoringOverrides.forEach { (k, v) -> obj.put(k, v) }
@@ -282,6 +307,7 @@ data class BrandDefinition(
             category = json.optString("category", "餐食"),
             packageName = json.optString("package_name", null),
             keywords = json.optJSONArray("keywords")?.let { arr -> (0 until arr.length()).map { arr.getString(it) } } ?: emptyList(),
+            qrPattern = json.opt("qr_pattern") as? String,
             scoringOverrides = json.optJSONObject("scoring_overrides")?.let { obj ->
                 obj.keys().asSequence().associateWith { obj.getInt(it) }
             } ?: emptyMap(),
@@ -350,7 +376,10 @@ data class FoodExtraction(
     val genericCodePattern: String = "[A-Z0-9]{3,10}",
     val standaloneCodePattern: String = "^[A-Z0-9]{3,10}$",
     val patterns: FoodPatterns = FoodPatterns(),
-    val starbucksPattern: StarbucksPattern? = null
+    val starbucksPattern: StarbucksPattern? = null,
+    val nearbyBlockDistance: Int = 400,
+    val keywordContextRange: Int = 6,
+    val shortCodeLength: Int = 3
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("trigger_keywords", JSONArray(triggerKeywords))
@@ -361,6 +390,9 @@ data class FoodExtraction(
         put("standalone_code_pattern", standaloneCodePattern)
         put("patterns", patterns.toJson())
         starbucksPattern?.let { put("starbucks_pattern", it.toJson()) }
+        put("nearby_block_distance", nearbyBlockDistance)
+        put("keyword_context_range", keywordContextRange)
+        put("short_code_length", shortCodeLength)
     }
 
     fun mergeWithBuiltIn(builtIn: FoodExtraction): FoodExtraction = copy(
@@ -377,7 +409,10 @@ data class FoodExtraction(
             genericCodePattern = json.optString("generic_code_pattern", "[A-Z0-9]{3,10}"),
             standaloneCodePattern = json.optString("standalone_code_pattern", "^[A-Z0-9]{3,10}$"),
             patterns = json.optJSONObject("patterns")?.let { FoodPatterns.fromJson(it) } ?: FoodPatterns(),
-            starbucksPattern = json.optJSONObject("starbucks_pattern")?.let { StarbucksPattern.fromJson(it) }
+            starbucksPattern = json.optJSONObject("starbucks_pattern")?.let { StarbucksPattern.fromJson(it) },
+            nearbyBlockDistance = json.optInt("nearby_block_distance", 400),
+            keywordContextRange = json.optInt("keyword_context_range", 6),
+            shortCodeLength = json.optInt("short_code_length", 3)
         )
     }
 }
@@ -686,6 +721,8 @@ data class ExpressValidation(
     val rejectYearPrefix: String = "202",
     val rejectYearLength: Int = 4,
     val rejectDatePattern: String = "^(0?[1-9]|1[0-2])-(0?[1-9]|[12]\\d|3[01])$",
+    val rejectTimeContexts: List<String> = listOf(":", "："),
+    val rejectTimeKeywords: List<String> = listOf("时间", "日期", "时", "分", "秒", "KB/s", "kb/s"),
     val phoneTail: PhoneTailConfig = PhoneTailConfig(),
     val threeSegment: ThreeSegmentConfig? = null
 ) {
@@ -699,6 +736,8 @@ data class ExpressValidation(
         put("reject_year_prefix", rejectYearPrefix)
         put("reject_year_length", rejectYearLength)
         put("reject_date_pattern", rejectDatePattern)
+        put("reject_time_contexts", org.json.JSONArray(rejectTimeContexts))
+        put("reject_time_keywords", org.json.JSONArray(rejectTimeKeywords))
         put("phone_tail", phoneTail.toJson())
         threeSegment?.let { put("three_segment", it.toJson()) }
     }
@@ -716,6 +755,12 @@ data class ExpressValidation(
             rejectYearPrefix = json.optString("reject_year_prefix", "202"),
             rejectYearLength = json.optInt("reject_year_length", 4),
             rejectDatePattern = json.optString("reject_date_pattern", "^(0?[1-9]|1[0-2])-(0?[1-9]|[12]\\d|3[01])$"),
+            rejectTimeContexts = json.optJSONArray("reject_time_contexts")?.let { arr ->
+                (0 until arr.length()).map { arr.getString(it) }
+            } ?: listOf(":", "："),
+            rejectTimeKeywords = json.optJSONArray("reject_time_keywords")?.let { arr ->
+                (0 until arr.length()).map { arr.getString(it) }
+            } ?: listOf("时间", "日期", "时", "分", "秒", "KB/s", "kb/s"),
             phoneTail = json.optJSONObject("phone_tail")?.let { PhoneTailConfig.fromJson(it) } ?: PhoneTailConfig(),
             threeSegment = json.optJSONObject("three_segment")?.let { ThreeSegmentConfig.fromJson(it) }
         )
@@ -902,12 +947,43 @@ data class BrandFoodScoring(
 
 // ─────────── Pickup Location ───────────
 
+data class PickupLocationScoringConfig(
+    val targetKeywordBonus: Int = 20,
+    val addressBonus: Int = 1000,
+    val addressFallbackBonus: Int = 500,
+    val addressFallbackMinLength: Int = 8,
+    val locWithTargetBonus: Int = 100
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("target_keyword_bonus", targetKeywordBonus)
+        put("address_bonus", addressBonus)
+        put("address_fallback_bonus", addressFallbackBonus)
+        put("address_fallback_min_length", addressFallbackMinLength)
+        put("loc_with_target_bonus", locWithTargetBonus)
+    }
+
+    companion object {
+        fun fromJson(json: JSONObject): PickupLocationScoringConfig = PickupLocationScoringConfig(
+            targetKeywordBonus = json.optInt("target_keyword_bonus", 20),
+            addressBonus = json.optInt("address_bonus", 1000),
+            addressFallbackBonus = json.optInt("address_fallback_bonus", 500),
+            addressFallbackMinLength = json.optInt("address_fallback_min_length", 8),
+            locWithTargetBonus = json.optInt("loc_with_target_bonus", 100)
+        )
+    }
+}
+
 data class PickupLocationConfig(
     val startKeywords: List<String> = listOf("已到", "已至", "到达", "到了", "在", "于", "己到", "前往", "送到", "前住", "至"),
     val targetKeywords: List<String> = listOf("服务站", "驿站", "菜鸟驿", "菜鸟驿站", "自提点", "快递站", "菜鸟站", "代收点", "代点", "丰巢柜", "快递柜", "智能柜", "门面", "邮政大厅", "大厅"),
     val stopKeywords: List<String> = listOf("领取", "取件", "查看", "请凭", "靖凭", "如有", "如有疑问", "取您的", "复制"),
     val garbagePatterns: List<String> = listOf("代收点(", "代收点（", "\\d{10,}"),
-    val proximityThreshold: Int = 400
+    val proximityThreshold: Int = 400,
+    val storeNameKeywords: List<String> = listOf("超市", "便利店", "商店", "小卖部", "驿站", "服务站"),
+    val storeNameBonus: Int = 800,
+    val storeNameMaxLen: Int = 12,
+    val locationPrefixMarkers: List<String> = listOf("学院", "小区", "大厦", "花园", "广场", "商场", "市场", "医院", "学校", "大学", "中学", "小学", "幼儿园", "酒店", "宾馆", "饭店", "餐厅", "超市", "便利店", "驿站", "服务站"),
+    val scoring: PickupLocationScoringConfig = PickupLocationScoringConfig()
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("start_keywords", JSONArray(startKeywords))
@@ -915,6 +991,11 @@ data class PickupLocationConfig(
         put("stop_keywords", JSONArray(stopKeywords))
         put("garbage_patterns", JSONArray(garbagePatterns))
         put("proximity_threshold", proximityThreshold)
+        put("store_name_keywords", JSONArray(storeNameKeywords))
+        put("store_name_bonus", storeNameBonus)
+        put("store_name_max_len", storeNameMaxLen)
+        put("location_prefix_markers", JSONArray(locationPrefixMarkers))
+        put("scoring", scoring.toJson())
     }
 
     companion object {
@@ -923,7 +1004,12 @@ data class PickupLocationConfig(
             targetKeywords = json.optJSONArray("target_keywords")?.let { arr -> (0 until arr.length()).map { arr.getString(it) } } ?: listOf("服务站", "驿站", "菜鸟驿", "菜鸟驿站", "自提点", "快递站", "菜鸟站", "代收点", "代点", "丰巢柜", "快递柜", "智能柜", "门面", "邮政大厅", "大厅"),
             stopKeywords = json.optJSONArray("stop_keywords")?.let { arr -> (0 until arr.length()).map { arr.getString(it) } } ?: listOf("领取", "取件", "查看", "请凭", "靖凭", "如有", "如有疑问", "取您的", "复制"),
             garbagePatterns = json.optJSONArray("garbage_patterns")?.let { arr -> (0 until arr.length()).map { arr.getString(it) } } ?: listOf("代收点(", "代收点（", "\\d{10,}"),
-            proximityThreshold = json.optInt("proximity_threshold", 400)
+            proximityThreshold = json.optInt("proximity_threshold", 400),
+            storeNameKeywords = json.optJSONArray("store_name_keywords")?.let { arr -> (0 until arr.length()).map { arr.getString(it) } } ?: listOf("超市", "便利店", "商店", "小卖部", "驿站", "服务站"),
+            storeNameBonus = json.optInt("store_name_bonus", 800),
+            storeNameMaxLen = json.optInt("store_name_max_len", 12),
+            locationPrefixMarkers = json.optJSONArray("location_prefix_markers")?.let { arr -> (0 until arr.length()).map { arr.getString(it) } } ?: listOf("学院", "小区", "大厦", "花园", "广场", "商场", "市场", "医院", "学校", "大学", "中学", "小学", "幼儿园", "酒店", "宾馆", "饭店", "餐厅", "超市", "便利店", "驿站", "服务站"),
+            scoring = json.optJSONObject("scoring")?.let { PickupLocationScoringConfig.fromJson(it) } ?: PickupLocationScoringConfig()
         )
     }
 }
