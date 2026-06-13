@@ -4,8 +4,6 @@ on:
   push:
     tags:
       - 'v*'
-    branches:
-      - master
 
 permissions:
   contents: write
@@ -63,7 +61,7 @@ jobs:
         run: ./gradlew assembleDebug --no-daemon -Porg.gradle.user.home=$HOME/.gradle
 
       - name: Clear all caches
-        if: github.ref == 'refs/heads/master'
+        if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -80,7 +78,7 @@ jobs:
           fi
 
       - name: Save Gradle cache
-        if: github.ref == 'refs/heads/master'
+        if: startsWith(github.ref, 'refs/tags/')
         uses: actions/cache/save@v4
         with:
           path: |
